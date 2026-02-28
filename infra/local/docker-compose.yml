@@ -10,7 +10,7 @@ services:
   webui:
     build:
       context: ../..
-      dockerfile: docker/Dockerfile.webui
+      dockerfile: infra/local/Dockerfile.webui
     container_name: mate-webui
     ports:
       - "5000:8080"
@@ -38,7 +38,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: docker/Dockerfile.worker
+      dockerfile: infra/local/Dockerfile.worker
     container_name: mate-worker
     environment:
       - DOTNET_ENVIRONMENT=Development

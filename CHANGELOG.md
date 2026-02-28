@@ -10,6 +10,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **`mate.Modules.Testing.CopilotStudioJudge`** — new testing module combining deterministic rubrics with a citation-aware LLM judge tuned for Microsoft Copilot Studio agents. Features: three built-in default rubrics (NonEmpty mandatory gate, no rejection phrase, no error surfacing), citation block awareness (`[1]: cite:...` = positive grounding indicator), semantic equivalence evaluation, CopilotStudio-specific scoring weights (TaskSuccess 0.35, IntentMatch 0.25, Factuality 0.25, Helpfulness 0.10, Safety 0.05), 0.3×rubrics + 0.7×LLM blend, rubrics-only mode when LLM not configured, graceful fallback on LLM failure. Ported from MaaJforMCS `AzureAIFoundryJudgeService`.
+- **`CopilotStudioConnectorModule` — Web Channel Secret support**: `WebChannelSecretRef` config field added; `CreateConnector()` and `GenerateConversationTokenAsync()` now honour `UseWebChannelSecret=true` by passing the Web Channel Security secret to `/tokens/generate` instead of the Direct Line secret; `ValidateConfig()` enforces the correct secret ref per mode; `GetConfigDefinition()` reordered with descriptive help text for each field. Find the secret in Copilot Studio → Settings → Security → Web channel security.
+- **Branding — logo**: `mate-logo.png` and `mate-logo-wide.png` added to `wwwroot`; `BrandInfo.LogoUrl` and `BrandInfo.LogoWideUrl` constants added to `BrandInfo.cs`; `MainLayout.razor` sidebar now shows the logo image instead of the initial letter; `App.razor` `<head>` now includes a `<link rel="icon">` favicon pointing to `BrandInfo.LogoUrl`; CSS in `app.css` updated (`.sidebar-brand-logo`, `.sidebar-brand-logo-wide`).
 - **`CopilotStudioConnectorModule.GetConfigDefinition()`** updated: `EnvironmentId` is now optional; added `UseWebChannelSecret` boolean field (default: false); `ReplyTimeoutSeconds` now has default value "30".
 - `BACKLOG.md` — full product backlog with epics, module contract, and tech debt log
 - `CHANGELOG.md` — this file
@@ -19,15 +21,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Wizard — module-driven Step 1**: agent creation wizard Step 1 now dynamically lists all registered `IAgentConnectorModule` implementations, replacing the previous static list; Step 2 config form is generated from the module's `ConfigSchema`
 - **mateModuleRegistry**: added `RegisterTestingModule()` and `GetAllTestingModules()` to support testing module discovery
 - **Program.cs registry population**: module registry is now populated at application startup by resolving all `IAgentConnectorModule`, `ITestingModule`, `IJudgeProvider`, and `IMonitoringModule` services from DI — previously the registry was always empty at runtime
-- **`BrandInfo.cs`** (`mate.Domain`): new static class `BrandInfo` with `BrandName = "mate"`, `BrandTagline`, and `BrandCliDescription` — single source of truth for all brand display text; wired into all 12 Blazor `<PageTitle>` tags, `App.razor <title>`, `MainLayout.razor` sidebar, `Home.razor` h1/tagline, `Wizard.razor`, `Help.razor`, and `mate.CLI` `RootCommand` description
+- **`BrandInfo.cs`** (`mate.Domain`): new static class `BrandInfo` with `BrandName = "mate"`, `BrandTagline`, `BrandCliDescription`, `LogoUrl`, and `LogoWideUrl` — single source of truth for all brand display text and assets
 - **`memory.txt`** added to repo root — persistent cross-session context file for AI-assisted development
+- **`.gitignore`** added; repository initialised and pushed to `https://github.com/holgerimbery/mate` (private)
 
 ### Changed
 - **Architecture naming compliance** (per `SaaS-Architecture-v2.md`): renamed 7 module projects to use correct names:
   - `mate.Modules.AgentConnectors.*` → `mate.Modules.AgentConnector.*` (singular, 4 projects: AIFoundry, CopilotStudio, Generic, Parloa)
   - `mate.Modules.Authentication.*` → `mate.Modules.Auth.*` (short form, 3 projects: EntraId, Generic, OAuth)
   - Updated `mate.sln`, 3 host `.csproj` ProjectReferences, 3 `Program.cs` using directives, 9 namespace declarations, 7 module `.csproj` `<RootNamespace>` and inter-module `<ProjectReference>` entries
-- **Dockerfiles updated**: `docker/Dockerfile.webui` and `docker/Dockerfile.worker` `COPY` paths corrected to match the renamed module project directories
+- **Infra folder restructure**: `docker/Dockerfile.webui` and `docker/Dockerfile.worker` moved into `infra/local/` (alongside `docker-compose.yml`) per `SaaS-Architecture-v2.md` §2; `docker/` root folder removed; `docker-compose.yml` `dockerfile:` references updated accordingly.
+- **Generic modules hidden from UI**: `Settings.razor`, `Agents.razor`, and `Wizard.razor` filter `ConnectorType == "Generic"` and `ProviderType == "Generic"` from all module lists — Generic modules remain registered in DI for developer use but are not shown to end users.
 
 ### Fixed
 - `Wizard.razor` `@code` block: restored all missing methods (`StepClass`, `GetConfigValue`, `SetConfigValue`, `GoStep2`, `GoStep3`, `TestConnection`, `GoStep4`, `SaveAgent`, `FinishWizard`) and added closing `}` for the `@code` block

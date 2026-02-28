@@ -61,6 +61,8 @@ GetCapabilities() : List<string>             — declares what the module can do
 - [x] **E1-05** Add `.env.template` file documenting all required environment variables
 - [ ] **E1-06** Add `dotnet user-secrets` setup instructions to README
 - [x] **E1-07** Verify `mate.sln` includes ALL projects (check for missing module projects)
+- [x] **E1-08** Restructure `infra/local/` — Dockerfiles moved from `docker/` root into `infra/local/`; `docker-compose.yml` references updated; `docker/` folder removed
+- [x] **E1-09** Git repository initialised; `.gitignore` added; pushed to `https://github.com/holgerimbery/mate` (private)
 
 ### v0.2.0
 
@@ -118,7 +120,7 @@ GetCapabilities() : List<string>             — declares what the module can do
 
 Implement the same collapsible icon sidebar as MaaJforMCS:
 
-- [ ] **E4-01** **MainLayout** — collapsible left sidebar, same Bootstrap Icons + look & feel
+- [x] **E4-01** **MainLayout** — collapsible left sidebar with logo, Bootstrap Icons, branding from `BrandInfo`
 - [ ] **E4-02** **Home / Welcome page** — quick-start cards, links to wizard, recent activity feed
 - [ ] **E4-03** **Setup Wizard** — combined tenant + agent onboarding wizard (E2-06 + E3-01 merged)
 - [ ] **E4-04** **Test Suites page** — CRUD, test case management, run execution button
@@ -192,8 +194,8 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 #### CopilotStudio Connector
 - [x] **E7-01** Implement `IAgentConnectorModule` for `mate.Modules.AgentConnector.CopilotStudio`
-- [x] **E7-02** Config fields: BotId, EnvironmentId, DirectLineSecretRef, ReplyTimeoutSeconds, UseWebChannelSecret
-- [x] **E7-03** `CreateConnector()` → `CopilotStudioConnector` via Direct Line v3 (polling, watermark, exponential backoff)
+- [x] **E7-02** Config fields: BotId, EnvironmentId, DirectLineSecretRef, WebChannelSecretRef, ReplyTimeoutSeconds, UseWebChannelSecret
+- [x] **E7-03** `CreateConnector()` → `CopilotStudioConnector` via Direct Line v3 (polling, watermark, exponential backoff); both Direct Line and Web Channel Security secret paths implemented
 - [ ] **E7-04** Health check: attempt token fetch from DirectLine endpoint
 
 #### AIFoundry Connector

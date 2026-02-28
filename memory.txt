@@ -1,8 +1,131 @@
 ================================================================================
   mate — Session Memory File
   Purpose: Persistent cross-session state, completed milestones, open backlog
-  Updated: 2026-02-28 (M10 added)
+  Updated: 2026-02-28 (M11–M14 added)
 ================================================================================
+
+--------------------------------------------------------------------------------
+NOTABLE MILESTONES
+--------------------------------------------------------------------------------
+
+[M1] ✅ 2026-02-28 — Clean solution build: 0 errors, 27/27 unit tests pass
+     All projects compile. Module system, domain, data layer, WebUI, Worker, CLI.
+
+[M2] ✅ 2026-02-28 — Architecture naming scheme enforced
+     Renamed 7 module projects to match SaaS-Architecture-v2.md:
+       AgentConnectors.*  →  AgentConnector.*  (singular, 4 projects)
+       Authentication.*   →  Auth.*            (short form, 3 projects)
+     Updated: mate.sln, 3 host .csproj files, 3 Program.cs files,
+     9 namespace declarations.
+
+[M3] ✅ 2026-02-28 — BrandInfo: single source of truth for brand display text
+     New: src/Core/mate.Domain/BrandInfo.cs
+       BrandName       = "mate"
+       BrandTagline    = "Multi-Agent Testing Environment — AI agent quality testing platform"
+       BrandCliDescription = "quality testing tool for conversational AI agents"
+       LogoUrl         = "/mate-logo.png"
+       LogoWideUrl     = "/mate-logo-wide.png"
+     Wired into: all 12 Blazor PageTitle tags, App.razor <title>+favicon,
+     MainLayout.razor sidebar (logo images), Home.razor, Wizard.razor, Help.razor,
+     mate.CLI RootCommand.
+     Rule: NEVER hardcode "mate" in UI text — always use @BrandInfo.BrandName.
+
+[M4] ✅ 2026-02-28 — WebUI new pages complete
+     Discover.razor (/discover), Rubrics.razor (/rubrics),
+     Help.razor (/help), AuditLogPage.razor (/audit-log)
+
+[M5] ✅ 2026-02-28 — Settings → Modules tab
+     Lists all registered IAgentConnectorModule, ITestingModule, IMonitoringModule
+     implementations with ConfigSchema fields and links to creation wizard.
+     Generic modules filtered out from UI (ConnectorType/ProviderType == "Generic").
+
+[M6] ✅ 2026-02-28 — Wizard: module-driven Step 1
+     Step 1 dynamically lists all registered IAgentConnectorModule implementations
+     (Generic filtered out). Step 2 config form generated from module's ConfigSchema.
+
+[M7] ✅ 2026-02-28 — mateModuleRegistry: testing module support added
+     Added RegisterTestingModule() + GetAllTestingModules().
+
+[M8] ✅ 2026-02-28 — Registry population at startup (critical bug fix)
+     Program.cs now resolves all IAgentConnectorModule, ITestingModule,
+     IJudgeProvider, IMonitoringModule from DI and registers them.
+
+[M10] ✅ 2026-02-28 — Containers running, health confirmed
+     - Fixed Dockerfile.webui + Dockerfile.worker COPY paths
+     - Build: 0 errors, 0 warnings
+     - mate-webui: ✅ Up, healthy — http://localhost:5000
+     - mate-worker: ✅ Up
+
+[M11] ✅ 2026-02-28 — CopilotStudio Web Channel Secret implemented
+     WebChannelSecretRef field added to CopilotStudioConnectorConfig.
+     CreateConnector() resolves correct secret per UseWebChannelSecret flag.
+     GenerateConversationTokenAsync() passes Web Channel or Direct Line secret
+     to /tokens/generate — same endpoint, different bearer token.
+     ValidateConfig() enforces correct secret ref per mode.
+     GetConfigDefinition() reordered with descriptive help text.
+     Where to find Web Channel secret: Copilot Studio → Settings → Security
+     → Web channel security.
+
+[M12] ✅ 2026-02-28 — Logo branding
+     Source: MaaJforMCS assets. Files: wwwroot/mate-logo.png + mate-logo-wide.png.
+     BrandInfo.LogoUrl / BrandInfo.LogoWideUrl constants in mate.Domain.
+     MainLayout sidebar: logo image replaces initial letter.
+     App.razor: favicon <link rel="icon"> added.
+     app.css: .sidebar-brand-logo + .sidebar-brand-logo-wide classes.
+
+[M13] ✅ 2026-02-28 — Generic modules hidden from UI
+     Settings.razor, Agents.razor, Wizard.razor all filter ConnectorType != "Generic"
+     and ProviderType != "Generic" at load time.
+     Generic modules remain in DI for developer/framework use only.
+
+[M14] ✅ 2026-02-28 — Infra folder restructured + GitHub repo created
+     Dockerfiles moved from docker/ (root) → infra/local/ (alongside compose).
+     docker/ folder removed. docker-compose.yml dockerfile: paths updated.
+     .gitignore added. Git initialised, initial commit made.
+     Remote: https://github.com/holgerimbery/mate (private).
+
+--------------------------------------------------------------------------------
+CURRENT STATUS
+--------------------------------------------------------------------------------
+
+Build   : ✅ 0 errors, 0 warnings  (dotnet build mate.sln)
+Tests   : ✅ 27/27 pass
+Containers: ✅ mate-webui (http://localhost:5000) + mate-worker — both Up/healthy
+GitHub  : ✅ https://github.com/holgerimbery/mate (private, main branch)
+Version : v0.1.0 (unreleased)
+
+--------------------------------------------------------------------------------
+ARCHITECTURE RULES (from SaaS-Architecture-v2.md)
+--------------------------------------------------------------------------------
+
+- Code identifiers: always "mate" (namespaces, project names, DI keys)
+- UI/display text: always BrandInfo.BrandName (never hardcode "mate")
+- Logo/assets: always BrandInfo.LogoUrl / BrandInfo.LogoWideUrl
+- Module project naming:
+    mate.Modules.AgentConnector.*   (SINGULAR — no 's')
+    mate.Modules.Auth.*             (SHORT — not "Authentication")
+    mate.Modules.Testing.*
+    mate.Modules.Monitoring.*
+- Generic modules: registered in DI, NEVER shown in UI
+- Blazor: Classic Server mode — NO @rendermode InteractiveServer on pages
+- Format specifiers in Razor: use .ToString("P0"), not @(value:P0)
+- Infra: all Docker files live in infra/local/ (Dockerfiles + docker-compose.yml)
+
+--------------------------------------------------------------------------------
+KEY TECHNICAL NOTES
+--------------------------------------------------------------------------------
+
+- ConfigFieldDefinition positional ctor order:
+    (Key, Label, Description, FieldType, IsRequired, DefaultValue?, SelectOptions?)
+- ValidateConfig(string configJson) — takes string, not AgentConnectionConfig
+- JudgeVerdict is a record (supports "with {}" copy expression)
+- API key middleware: runs after standard auth, SHA256 hash lookup in ApiKeys table
+- Run execution: creates Run entity + enqueues TestRunJob to IMessageQueue "test-runs" queue
+- CSV export: uses window.downloadCsvFromBase64 JS interop (defined in App.razor)
+- EF tools startup project: src\Core\mate.Data (not WebUI — needs Design package)
+- _Imports.razor includes @using mate.Data and @using mate.Domain globally
+- CopilotStudio Web Channel + Direct Line: both use same /tokens/generate endpoint;
+  difference is only which secret (WebChannelSecret vs DirectLineSecret) is the Bearer token
 
 --------------------------------------------------------------------------------
 NOTABLE MILESTONES
