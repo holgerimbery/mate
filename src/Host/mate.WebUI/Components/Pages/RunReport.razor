@@ -1,0 +1,292 @@
+@page "/runs/{RunId:guid}"
+@using mate.Data
+@using mate.Domain.Entities
+@using Microsoft.EntityFrameworkCore
+@using System.Text
+@inject mateDbContext Db
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Run Report — @BrandInfo.BrandName</PageTitle>
+
+@if (_run is null && !_loading)
+{
+    <p>Run not found. <a href="/">← Back to Dashboard</a></p>
+}
+else if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <div class="page-header">
+        <a href="/" class="back-link">← Dashboard</a>
+        <h1>Run Report</h1>
+    </div>
+
+    <div class="run-header">
+        <div class="run-meta">
+            <span><strong>Suite:</strong> @_run!.Suite?.Name</span>
+            <span><strong>Agent:</strong> @_run.Agent?.Name</span>
+            <span><strong>Status:</strong> <span class="badge badge-@_run.Status">@_run.Status</span></span>
+            <span><strong>Started:</strong> @_run.StartedAt.ToString("yyyy-MM-dd HH:mm:ss")</span>
+            @if (_run.CompletedAt.HasValue)
+            {
+                <span><strong>Completed:</strong> @_run.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss")</span>
+            }
+            <span><strong>Requested by:</strong> @_run.RequestedBy</span>
+        </div>
+
+        <div class="kpi-grid compact">
+            <div class="kpi-card">
+                <div class="kpi-value">@_run.TotalTestCases</div>
+                <div class="kpi-label">Total</div>
+            </div>
+            <div class="kpi-card kpi-pass">
+                <div class="kpi-value">@_run.PassedCount</div>
+                <div class="kpi-label">Passed</div>
+            </div>
+            <div class="kpi-card kpi-fail">
+                <div class="kpi-value">@_run.FailedCount</div>
+                <div class="kpi-label">Failed</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">@_run.SkippedCount</div>
+                <div class="kpi-label">Skipped</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">@(_run.TotalTestCases > 0 ? $"{(double)_run.PassedCount / _run.TotalTestCases:P0}" : "—")</div>
+                <div class="kpi-label">Pass Rate</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">@($"{_run.AverageLatencyMs:N0} ms")</div>
+                <div class="kpi-label">Avg Latency</div>
+            </div>
+        </div>
+    </div>
+
+    @if (_run.Status == "running")
+    {
+        <div class="alert alert-info">
+            This run is currently in progress. Refresh the page for updated results.
+        </div>
+    }
+
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+        <button class="btn btn-primary" @onclick="ExportCsv">⬇ Export CSV</button>
+    </div>
+
+    <h2>Results</h2>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Test Case</th>
+                <th>Verdict</th>
+                <th>Overall</th>
+                <th>Task</th>
+                <th>Intent</th>
+                <th>Factual</th>
+                <th>Helpful</th>
+                <th>Safety</th>
+                <th>Latency</th>
+                <th>Human Verdict</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in _results)
+            {
+                <tr>
+                    <td>@r.TestCase?.Name</td>
+                    <td><span class="badge badge-@r.Verdict">@r.Verdict</span></td>
+                    <td>@r.OverallScore.ToString("F2")</td>
+                    <td>@r.TaskSuccessScore.ToString("F2")</td>
+                    <td>@r.IntentMatchScore.ToString("F2")</td>
+                    <td>@r.FactualityScore.ToString("F2")</td>
+                    <td>@r.HelpfulnessScore.ToString("F2")</td>
+                    <td>@r.SafetyScore.ToString("F2")</td>
+                    <td>@r.LatencyMs ms</td>
+                    <td>
+                        @if (r.HumanVerdict is not null)
+                        {
+                            <span class="badge badge-@r.HumanVerdict">@r.HumanVerdict</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => ShowTranscript(r)">Transcript</button>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenVerdict(r)">Review</button>
+                    </td>
+                </tr>
+            }
+            @if (!_results.Any())
+            {
+                <tr><td colspan="11" class="empty-row">No results yet.</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@* ── Transcript modal ─────────────────────────────────────────────────────── *@
+@if (_transcriptResult is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _transcriptResult = null">
+        <div class="modal-box wide-modal" @onclick:stopPropagation>
+            <h2>Transcript — @_transcriptResult.TestCase?.Name</h2>
+            <div class="transcript">
+                @foreach (var msg in _transcript)
+                {
+                    <div class="transcript-msg transcript-@msg.Role">
+                        <span class="transcript-role">@msg.Role.ToUpper()</span>
+                        <span class="transcript-content">@msg.Content</span>
+                        <span class="transcript-latency">@msg.LatencyMs ms</span>
+                    </div>
+                }
+                @if (!_transcript.Any())
+                {
+                    <p class="empty-row">No transcript messages recorded.</p>
+                }
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_transcriptResult.Rationale))
+            {
+                <div class="rationale-box">
+                    <strong>AI Rationale:</strong> @_transcriptResult.Rationale
+                </div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @onclick="() => _transcriptResult = null">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Human verdict modal ──────────────────────────────────────────────────── *@
+@if (_verdictResult is not null)
+{
+    <div class="modal-backdrop" @onclick="CloseVerdict">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Human Review — @_verdictResult.TestCase?.Name</h2>
+
+            <label>Verdict</label>
+            <select class="form-control" @bind="_verdictValue">
+                <option value="">— select —</option>
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+            </select>
+
+            <label>Note</label>
+            <textarea class="form-control" rows="3" @bind="_verdictNote" placeholder="Optional reviewer note"></textarea>
+
+            <label>Reviewer Name</label>
+            <input class="form-control" @bind="_verdictBy" placeholder="Your name" />
+
+            @if (!string.IsNullOrWhiteSpace(_verdictError))
+            {
+                <div class="alert alert-error">@_verdictError</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveVerdict">Save</button>
+                <button class="btn btn-secondary" @onclick="CloseVerdict">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid RunId { get; set; }
+
+    private bool _loading = true;
+    private Run? _run;
+    private List<Result> _results = [];
+
+    private Result? _transcriptResult;
+    private List<TranscriptMessage> _transcript = [];
+
+    private Result? _verdictResult;
+    private string _verdictValue = string.Empty;
+    private string _verdictNote = string.Empty;
+    private string _verdictBy = string.Empty;
+    private string _verdictError = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _run = await Db.Runs
+            .Include(r => r.Suite)
+            .Include(r => r.Agent)
+            .FirstOrDefaultAsync(r => r.Id == RunId);
+
+        if (_run is not null)
+        {
+            _results = await Db.Results
+                .Include(r => r.TestCase)
+                .Where(r => r.RunId == RunId)
+                .ToListAsync();
+        }
+        _loading = false;
+    }
+
+    private async Task ShowTranscript(Result r)
+    {
+        _transcriptResult = r;
+        _transcript = await Db.TranscriptMessages
+            .Where(m => m.ResultId == r.Id)
+            .OrderBy(m => m.TurnIndex)
+            .ToListAsync();
+    }
+
+    private void OpenVerdict(Result r)
+    {
+        _verdictResult = r;
+        _verdictValue = r.HumanVerdict ?? string.Empty;
+        _verdictNote = r.HumanVerdictNote ?? string.Empty;
+        _verdictBy = r.HumanVerdictBy ?? string.Empty;
+        _verdictError = string.Empty;
+    }
+
+    private void CloseVerdict()
+    {
+        _verdictResult = null;
+        _verdictError = string.Empty;
+    }
+
+    private async Task SaveVerdict()
+    {
+        if (_verdictResult is null) return;
+        if (_verdictValue is not ("pass" or "fail"))
+        {
+            _verdictError = "Please select pass or fail.";
+            return;
+        }
+        var result = await Db.Results.FindAsync(_verdictResult.Id);
+        if (result is null) return;
+        result.HumanVerdict = _verdictValue;
+        result.HumanVerdictNote = _verdictNote;
+        result.HumanVerdictAt = DateTime.UtcNow;
+        result.HumanVerdictBy = string.IsNullOrWhiteSpace(_verdictBy) ? "reviewer" : _verdictBy;
+        await Db.SaveChangesAsync();
+        // Update in-memory copy
+        var idx = _results.FindIndex(r => r.Id == result.Id);
+        if (idx >= 0) _results[idx] = result;
+        CloseVerdict();
+    }
+
+    private async Task ExportCsv()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("TestCase,Verdict,OverallScore,TaskSuccess,IntentMatch,Factuality,Helpfulness,Safety,LatencyMs,HumanVerdict,HumanVerdictNote");
+        foreach (var r in _results)
+        {
+            var name = r.TestCase?.Name?.Replace(",", ";") ?? "";
+            var rationale = r.Rationale?.Replace(",", ";")?.Replace("\n", " ") ?? "";
+            sb.AppendLine($"{name},{r.Verdict},{r.OverallScore:F4},{r.TaskSuccessScore:F4},{r.IntentMatchScore:F4},{r.FactualityScore:F4},{r.HelpfulnessScore:F4},{r.SafetyScore:F4},{r.LatencyMs},{r.HumanVerdict ?? ""},{r.HumanVerdictNote?.Replace(",", ";") ?? ""}");
+        }
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadCsvFromBase64", base64, $"run-{RunId:N}.csv");
+    }
+}

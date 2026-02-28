@@ -1,0 +1,143 @@
+@page "/help"
+
+<PageTitle>Help — @BrandInfo.BrandName</PageTitle>
+
+<div class="mate-header">
+    <h1>Help &amp; Documentation</h1>
+    <p>Guides, keyboard shortcuts, and quick reference for @BrandInfo.BrandName.</p>
+</div>
+<div class="mate-page">
+
+<div class="row g-4">
+
+    <!-- Quick Start -->
+    <div class="col-md-6">
+        <div class="section-card">
+            <h2 class="section-title"><i class="bi bi-rocket-takeoff me-2" style="color:var(--primary)"></i>Quick Start</h2>
+            <ol style="padding-left:20px;line-height:2">
+                <li>Run the <strong>Setup Wizard</strong> to connect your first agent</li>
+                <li>Upload test documents on the <strong>Documents</strong> page, or add test cases manually</li>
+                <li>Create a <strong>Test Suite</strong> and assign your agent</li>
+                <li>Configure a <strong>Judge</strong> (model-as-judge or rubrics) in Settings</li>
+                <li>Run the suite and view results on the <strong>Dashboard</strong></li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Navigation Reference -->
+    <div class="col-md-6">
+        <div class="section-card">
+            <h2 class="section-title"><i class="bi bi-map me-2" style="color:var(--primary)"></i>Page Reference</h2>
+            <table class="data-table">
+                <tbody>
+                    <tr><td><strong><a href="/">Home</a></strong></td><td>Platform status and quick navigation</td></tr>
+                    <tr><td><strong><a href="/wizard">Wizard</a></strong></td><td>Create an agent + test suite in 5 steps</td></tr>
+                    <tr><td><strong><a href="/test-suites">Test Suites</a></strong></td><td>Manage test suites, cases, and run tests</td></tr>
+                    <tr><td><strong><a href="/documents">Documents</a></strong></td><td>Upload source documents for test-case generation</td></tr>
+                    <tr><td><strong><a href="/agents">Agents</a></strong></td><td>Register and manage agent connections</td></tr>
+                    <tr><td><strong><a href="/discover">Discover</a></strong></td><td>Auto-discover Copilot Studio agents via Power Platform</td></tr>
+                    <tr><td><strong><a href="/dashboard">Dashboard</a></strong></td><td>View run history, scores, and transcripts</td></tr>
+                    <tr><td><strong><a href="/rubrics">Rubrics</a></strong></td><td>Define weighted deterministic evaluation criteria</td></tr>
+                    <tr><td><strong><a href="/audit-log">Audit Log</a></strong></td><td>Immutable record of all mutating operations</td></tr>
+                    <tr><td><strong><a href="/api-keys">API Keys</a></strong></td><td>Generate and manage machine-to-machine access keys</td></tr>
+                    <tr><td><strong><a href="/settings">Settings</a></strong></td><td>AI judge, question generation, auth configuration</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Agent Connector Types -->
+    <div class="col-md-6">
+        <div class="section-card">
+            <h2 class="section-title"><i class="bi bi-robot me-2" style="color:var(--primary)"></i>Connector Types</h2>
+            <div class="d-flex flex-column gap-3">
+                <div>
+                    <span class="connector-badge me-2">CopilotStudio</span>
+                    <div style="font-size:13px;margin-top:4px">Connects via Direct Line v3. Requires <code>TokenEndpoint</code> from Copilot Studio. Use <a href="/discover">Discover</a> for auto-import.</div>
+                </div>
+                <div>
+                    <span class="connector-badge me-2">AIFoundry</span>
+                    <div style="font-size:13px;margin-top:4px">Connects to Azure AI Foundry agents via the Azure AI Agents REST API. Requires <code>Endpoint</code>, <code>ApiKey</code>, <code>AgentId</code>.</div>
+                </div>
+                <div>
+                    <span class="connector-badge me-2">Generic</span>
+                    <div style="font-size:13px;margin-top:4px">Configurable HTTP connector for any REST-based chatbot. Requires <code>BaseUrl</code> and optional auth headers.</div>
+                </div>
+                <div>
+                    <span class="connector-badge me-2">Parloa</span>
+                    <div style="font-size:13px;margin-top:4px">Connects to Parloa conversation services. Requires <code>ApiEndpoint</code> and <code>ApiKey</code>.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Judge Types -->
+    <div class="col-md-6">
+        <div class="section-card">
+            <h2 class="section-title"><i class="bi bi-award me-2" style="color:var(--primary)"></i>Judge Types</h2>
+            <div class="d-flex flex-column gap-3">
+                <div>
+                    <span class="badge badge-pass me-2">Generic</span>
+                    <div style="font-size:13px;margin-top:4px">Simple keyword matching. Fast, deterministic. Good for smoke tests.</div>
+                </div>
+                <div>
+                    <span class="badge badge-pending me-2">ModelAsJudge</span>
+                    <div style="font-size:13px;margin-top:4px">Uses an LLM to score responses. Configure endpoint + model in Settings → AI Judge.</div>
+                </div>
+                <div>
+                    <span class="badge badge-fail me-2">Rubrics</span>
+                    <div style="font-size:13px;margin-top:4px">Weighted pattern matching. No LLM call. Define criteria in <a href="/rubrics">Rubrics</a>.</div>
+                </div>
+                <div>
+                    <span class="badge badge-running me-2">Hybrid</span>
+                    <div style="font-size:13px;margin-top:4px">Combines Rubrics (fast pass/fail gate) with ModelAsJudge (nuanced scoring).</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts -->
+    <div class="col-md-6">
+        <div class="section-card">
+            <h2 class="section-title"><i class="bi bi-keyboard me-2" style="color:var(--primary)"></i>Keyboard Shortcuts</h2>
+            <table class="data-table">
+                <tbody>
+                    <tr><td><kbd>?</kbd></td><td>Open this help page</td></tr>
+                    <tr><td><kbd>G</kbd> <kbd>H</kbd></td><td>Go to Home</td></tr>
+                    <tr><td><kbd>G</kbd> <kbd>W</kbd></td><td>Go to Wizard</td></tr>
+                    <tr><td><kbd>G</kbd> <kbd>T</kbd></td><td>Go to Test Suites</td></tr>
+                    <tr><td><kbd>G</kbd> <kbd>D</kbd></td><td>Go to Dashboard</td></tr>
+                    <tr><td><kbd>G</kbd> <kbd>A</kbd></td><td>Go to Agents</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Close modal / cancel</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="col-md-6">
+        <div class="section-card">
+            <h2 class="section-title"><i class="bi bi-question-circle me-2" style="color:var(--primary)"></i>FAQ</h2>
+            <div class="d-flex flex-column gap-3" style="font-size:13px">
+                <div>
+                    <strong>Why is my agent returning "Not implemented"?</strong>
+                    <p class="text-muted mt-1 mb-0">The connector module for this agent type may not be fully configured. Check Settings for required fields.</p>
+                </div>
+                <div>
+                    <strong>How do I reset the database?</strong>
+                    <p class="text-muted mt-1 mb-0">Delete <code>data/mate-local.db</code> and restart the application. EF Core will recreate the schema.</p>
+                </div>
+                <div>
+                    <strong>What does "Pass Threshold" mean?</strong>
+                    <p class="text-muted mt-1 mb-0">A decimal between 0–1. A run passes if the ratio of passed test cases meets or exceeds this value (e.g. 0.7 = 70%).</p>
+                </div>
+                <div>
+                    <strong>How are API keys stored?</strong>
+                    <p class="text-muted mt-1 mb-0">Only a SHA-256 hash of the key is stored. The raw key is shown once on creation — copy it immediately.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+</div>

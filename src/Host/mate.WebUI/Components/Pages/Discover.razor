@@ -1,0 +1,303 @@
+@page "/discover"
+@using mate.Domain.Contracts
+@using mate.Domain.Entities
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@inject mate.Data.mateDbContext Db
+@inject IPowerPlatformDiscoveryService DiscoveryService
+@inject NavigationManager Navigation
+
+<PageTitle>Discover — @BrandInfo.BrandName</PageTitle>
+
+<div class="mate-header">
+    <h1>Discover</h1>
+    <p>Browse Power Platform environments and import Copilot Studio agents automatically.</p>
+</div>
+<div class="mate-page">
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_error <button type="button" class="btn-close float-end" @onclick="() => _error = string.Empty"></button></div>
+}
+
+@if (!string.IsNullOrEmpty(_successMsg))
+{
+    <div class="alert alert-success"><i class="bi bi-check-circle"></i> @_successMsg <button type="button" class="btn-close float-end" @onclick="() => _successMsg = string.Empty"></button></div>
+}
+
+<div class="section-card mb-4">
+    <h2 class="section-title">Authentication</h2>
+    <p class="text-muted mb-3">Enter your Microsoft bearer token to discover environments. <a href="/settings" target="_blank">Configure auth in Settings.</a></p>
+    <div class="d-flex gap-2 align-items-end">
+        <div class="form-group flex-grow-1 mb-0">
+            <label class="form-label">Bearer Token</label>
+            <input type="password" class="form-control" @bind="_bearerToken" placeholder="eyJ0eXAiOiJKV1QiLCJhb..." />
+        </div>
+        <button class="btn btn-primary" @onclick="LoadEnvironments" disabled="@(_loading || string.IsNullOrWhiteSpace(_bearerToken))">
+            @if (_loading && _loadingStage == "envs") { <span class="spinner me-2"></span> } else { <i class="bi bi-cloud-download me-1"></i> }
+            Load Environments
+        </button>
+    </div>
+</div>
+
+@if (_environments.Any())
+{
+    <div class="section-card mb-4">
+        <h2 class="section-title">Environments (@_environments.Count)</h2>
+        <div class="row g-3">
+            @foreach (var env in _environments)
+            {
+                var isSelected = _selectedEnvironment?.EnvironmentId == env.EnvironmentId;
+                <div class="col-md-6 col-lg-4">
+                    <div class="section-card @(isSelected ? "border-primary" : "")"
+                         style="cursor:pointer;transition:all 0.2s;@(isSelected ? "border-color:var(--primary);box-shadow:0 0 0 2px rgba(0,102,204,0.2)" : "")"
+                         @onclick="() => SelectEnvironment(env)">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <div class="fw-600">@env.DisplayName</div>
+                                <div style="font-size:11px;color:var(--text-secondary)">@env.EnvironmentId</div>
+                            </div>
+                            <span class="badge @(env.State == "Ready" ? "badge-pass" : "badge-pending")">@env.State</span>
+                        </div>
+                        <div class="d-flex gap-2" style="font-size:12px;color:var(--text-secondary)">
+                            <span><i class="bi bi-geo-alt"></i> @env.Region</span>
+                            <span><i class="bi bi-tag"></i> @env.EnvironmentType</span>
+                        </div>
+                        @if (isSelected) { <div class="mt-2"><i class="bi bi-check-circle-fill" style="color:var(--primary)"></i> Selected</div> }
+                    </div>
+                </div>
+            }
+        </div>
+        @if (_selectedEnvironment is not null)
+        {
+            <div class="mt-3">
+                <button class="btn btn-secondary" @onclick="LoadAgents" disabled="@(_loading && _loadingStage == "agents")">
+                    @if (_loading && _loadingStage == "agents") { <span class="spinner me-2"></span> } else { <i class="bi bi-robot me-1"></i> }
+                    Discover Agents in "@_selectedEnvironment.DisplayName"
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@if (_discoveredAgents.Any())
+{
+    <div class="section-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="section-title mb-0">Copilot Studio Agents (@_discoveredAgents.Count)</h2>
+            <input class="form-control" style="max-width:260px" @bind="_agentFilter" @bind:event="oninput" placeholder="Filter agents…" />
+        </div>
+        <div class="data-table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Schema Name</th>
+                        <th>Published</th>
+                        <th>Last Modified</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var agent in FilteredAgents)
+                    {
+                        <tr>
+                            <td><strong>@agent.DisplayName</strong></td>
+                            <td><code style="font-size:11px">@agent.SchemaName</code></td>
+                            <td>
+                                @if (agent.IsPublished)
+                                { <span class="badge badge-pass"><i class="bi bi-check"></i> Published</span> }
+                                else
+                                { <span class="badge badge-pending">Draft</span> }
+                            </td>
+                            <td>@(agent.LastModifiedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                            <td>
+                                @if (_importedBotIds.Contains(agent.BotId))
+                                {
+                                    <span class="badge badge-pass"><i class="bi bi-check-circle"></i> Imported</span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-primary btn-sm" @onclick="() => ImportAgent(agent)"
+                                            disabled="@(_importingBotId == agent.BotId)">
+                                        @if (_importingBotId == agent.BotId) { <span class="spinner me-1"></span> }
+                                        <i class="bi bi-download"></i> Import
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (!FilteredAgents.Any())
+        {
+            <div class="empty-state"><i class="bi bi-search"></i><p>No agents match the filter.</p></div>
+        }
+    </div>
+}
+
+@if (!_environments.Any() && !_loading)
+{
+    <div class="empty-state">
+        <i class="bi bi-cloud-slash"></i>
+        <h3>No environments loaded</h3>
+        <p>Enter a bearer token and click "Load Environments" to discover your Power Platform environments.</p>
+    </div>
+}
+
+</div>
+
+@code {
+    private string _bearerToken = string.Empty;
+    private bool _loading;
+    private string _loadingStage = string.Empty;
+    private string _error = string.Empty;
+    private string _successMsg = string.Empty;
+    private string _agentFilter = string.Empty;
+
+    private List<PowerPlatformEnvironment> _environments = [];
+    private PowerPlatformEnvironment? _selectedEnvironment;
+    private List<DiscoveredAgent> _discoveredAgents = [];
+    private HashSet<string> _importedBotIds = [];
+    private string _importingBotId = string.Empty;
+
+    private IEnumerable<DiscoveredAgent> FilteredAgents =>
+        string.IsNullOrWhiteSpace(_agentFilter)
+            ? _discoveredAgents
+            : _discoveredAgents.Where(a =>
+                a.DisplayName.Contains(_agentFilter, StringComparison.OrdinalIgnoreCase) ||
+                a.SchemaName.Contains(_agentFilter, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Pre-load already-imported botIds to show import state
+        _importedBotIds = (await Db.AgentConnectorConfigs
+            .Where(c => c.ConnectorType == "CopilotStudio")
+            .Select(c => c.ConfigJson)
+            .ToListAsync())
+            .Select(json => TryExtractBotId(json))
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .ToHashSet();
+    }
+
+    private async Task LoadEnvironments()
+    {
+        _error = string.Empty;
+        _loading = true;
+        _loadingStage = "envs";
+        _environments = [];
+        _discoveredAgents = [];
+        _selectedEnvironment = null;
+        try
+        {
+            var result = await DiscoveryService.GetEnvironmentsAsync(_bearerToken);
+            _environments = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load environments: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            _loadingStage = string.Empty;
+        }
+    }
+
+    private void SelectEnvironment(PowerPlatformEnvironment env)
+    {
+        _selectedEnvironment = env;
+        _discoveredAgents = [];
+    }
+
+    private async Task LoadAgents()
+    {
+        if (_selectedEnvironment is null) return;
+        _error = string.Empty;
+        _loading = true;
+        _loadingStage = "agents";
+        try
+        {
+            var result = await DiscoveryService.GetAgentsAsync(_selectedEnvironment.EnvironmentId, _bearerToken);
+            _discoveredAgents = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load agents: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            _loadingStage = string.Empty;
+        }
+    }
+
+    private async Task ImportAgent(DiscoveredAgent discovered)
+    {
+        _importingBotId = discovered.BotId;
+        _error = string.Empty;
+        try
+        {
+            CopilotStudioConnectionInfo connInfo = await DiscoveryService.GetConnectionInfoAsync(
+                discovered.EnvironmentId, discovered.BotId, _bearerToken);
+
+            var configJson = JsonSerializer.Serialize(new
+            {
+                TokenEndpoint = connInfo.TokenEndpoint,
+                DirectLineEndpoint = connInfo.DirectLineEndpoint,
+                BotIdentifier = connInfo.BotIdentifier,
+                BotId = discovered.BotId,
+                EnvironmentId = discovered.EnvironmentId
+            });
+
+            var agent = new Agent
+            {
+                Id = Guid.NewGuid(),
+                TenantId = Guid.Empty,
+                Name = discovered.DisplayName,
+                Description = $"Imported from Power Platform environment {discovered.EnvironmentId}",
+                Environment = _selectedEnvironment?.EnvironmentType?.ToLower() ?? "development",
+                Tags = ["discovered", "copilot-studio"],
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            agent.ConnectorConfigs.Add(new AgentConnectorConfig
+            {
+                Id = Guid.NewGuid(),
+                AgentId = agent.Id,
+                TenantId = agent.TenantId,
+                ConnectorType = "CopilotStudio",
+                ConfigJson = configJson,
+                IsActive = true
+            });
+            Db.Agents.Add(agent);
+            await Db.SaveChangesAsync();
+            _importedBotIds.Add(discovered.BotId);
+            _successMsg = $"Agent \"{discovered.DisplayName}\" imported successfully.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            _importingBotId = string.Empty;
+        }
+    }
+
+    private static string? TryExtractBotId(string? configJson)
+    {
+        if (string.IsNullOrEmpty(configJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(configJson);
+            if (doc.RootElement.TryGetProperty("BotId", out var prop))
+                return prop.GetString();
+        }
+        catch { }
+        return null;
+    }
+}

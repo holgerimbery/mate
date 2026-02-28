@@ -1,0 +1,518 @@
+@page "/test-suites"
+@using mate.Data
+@using mate.Domain.Contracts.Infrastructure
+@using mate.Domain.Entities
+@using Microsoft.EntityFrameworkCore
+@inject mateDbContext Db
+@inject IMessageQueue Queue
+@inject NavigationManager Nav
+
+<PageTitle>Test Suites — @BrandInfo.BrandName</PageTitle>
+
+<h1>Test Suites</h1>
+
+<button class="btn btn-primary" @onclick="OpenCreateSuite">+ New Suite</button>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Cases</th>
+                <th>Pass Threshold</th>
+                <th>Active</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var suite in _suites)
+            {
+                <tr>
+                    <td>
+                        <strong>@suite.Name</strong><br />
+                        <small>@suite.Description</small>
+                    </td>
+                    <td>@suite.TestCases.Count</td>
+                    <td>@suite.PassThreshold.ToString("P0")</td>
+                    <td>@(suite.IsActive ? "✓" : "✗")</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => ExpandSuite(suite)">
+                            @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
+                        </button>
+                        <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)">▶ Run</button>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
+                    </td>
+                </tr>
+                @if (_expandedSuiteId == suite.Id)
+                {
+                    <tr>
+                        <td colspan="5" style="padding: 0 1rem 1rem 1rem; background: #f9f9f9;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                                <strong>Test Cases</strong>
+                                <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">+ Add Case</button>
+                            </div>
+                            <table class="data-table sub-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Name</th>
+                                        <th>Input(s)</th>
+                                        <th>Active</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
+                                    {
+                                        <tr>
+                                            <td>@tc.SortOrder</td>
+                                            <td>@tc.Name<br /><small>@tc.Description</small></td>
+                                            <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
+                                            <td>@(tc.IsActive ? "✓" : "✗")</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
+                                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (!suite.TestCases.Any())
+                                    {
+                                        <tr><td colspan="5" class="empty-row">No test cases yet.</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                }
+            }
+            @if (!_suites.Any())
+            {
+                <tr><td colspan="5" class="empty-row">No test suites yet.</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@* ── Suite form modal ─────────────────────────────────────────────────────── *@
+@if (_showSuiteForm)
+{
+    <div class="modal-backdrop" @onclick="CloseSuiteForm">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>@(_editSuite is null ? "New Test Suite" : "Edit Test Suite")</h2>
+
+            <label>Name</label>
+            <input class="form-control" @bind="_suiteForm.Name" placeholder="Suite name" />
+
+            <label>Description</label>
+            <input class="form-control" @bind="_suiteForm.Description" placeholder="Optional description" />
+
+            <label>Pass Threshold (0–1)</label>
+            <input class="form-control" type="number" min="0" max="1" step="0.05" @bind="_suiteForm.PassThreshold" />
+
+            @if (!string.IsNullOrWhiteSpace(_suiteFormError))
+            {
+                <div class="alert alert-error">@_suiteFormError</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveSuite">Save</button>
+                <button class="btn btn-secondary" @onclick="CloseSuiteForm">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Test case form modal ──────────────────────────────────────────────────── *@
+@if (_showCaseForm)
+{
+    <div class="modal-backdrop" @onclick="CloseCaseForm">
+        <div class="modal-box wide-modal" @onclick:stopPropagation>
+            <h2>@(_editCase is null ? "Add Test Case" : "Edit Test Case")</h2>
+
+            <label>Name</label>
+            <input class="form-control" @bind="_caseForm.Name" placeholder="Case name" />
+
+            <label>Description</label>
+            <input class="form-control" @bind="_caseForm.Description" placeholder="Optional description" />
+
+            <label>User Input (one message per line; multi-turn = multiple lines)</label>
+            <textarea class="form-control" rows="4" @bind="_caseForm.UserInputRaw" placeholder="What can you help me with?"></textarea>
+
+            <label>Acceptance Criteria</label>
+            <textarea class="form-control" rows="3" @bind="_caseForm.AcceptanceCriteria" placeholder="The bot should…"></textarea>
+
+            <label>Expected Intent</label>
+            <input class="form-control" @bind="_caseForm.ExpectedIntent" placeholder="Optional" />
+
+            <label>Expected Entities (comma-separated)</label>
+            <input class="form-control" @bind="_caseForm.ExpectedEntitiesRaw" placeholder="city, date" />
+
+            <label>Reference Answer</label>
+            <textarea class="form-control" rows="3" @bind="_caseForm.ReferenceAnswer" placeholder="Optional golden answer"></textarea>
+
+            <label>Sort Order</label>
+            <input class="form-control" type="number" @bind="_caseForm.SortOrder" />
+
+            @if (!string.IsNullOrWhiteSpace(_caseFormError))
+            {
+                <div class="alert alert-error">@_caseFormError</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveCase">Save</button>
+                <button class="btn btn-secondary" @onclick="CloseCaseForm">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Run modal ────────────────────────────────────────────────────────────── *@
+@if (_runSuite is not null)
+{
+    <div class="modal-backdrop" @onclick="CloseRunModal">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Run: @_runSuite.Name</h2>
+
+            <label>Select Agent</label>
+            <select class="form-control" @bind="_selectedAgentId">
+                <option value="">— choose agent —</option>
+                @foreach (var agent in _agents)
+                {
+                    <option value="@agent.Id">@agent.Name (@agent.Environment)</option>
+                }
+            </select>
+
+            @if (_runInProgress)
+            {
+                <div class="progress-section">
+                    <p>Queuing run… <em>@_runStatus</em></p>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_runError))
+            {
+                <div class="alert alert-error">@_runError</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" disabled="@_runInProgress" @onclick="StartRun">▶ Start Run</button>
+                <button class="btn btn-secondary" @onclick="CloseRunModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Delete confirmations ──────────────────────────────────────────────────── *@
+@if (_deleteSuite is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteSuite = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Delete Suite</h2>
+            <p>Delete <strong>@_deleteSuite.Name</strong> and all its test cases?</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="DeleteSuite">Delete</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteSuite = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteCase is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteCase = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Delete Test Case</h2>
+            <p>Delete <strong>@_deleteCase.Name</strong>?</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="DeleteCase">Delete</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteCase = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private List<TestSuite> _suites = [];
+    private List<Agent> _agents = [];
+    private Guid? _expandedSuiteId;
+
+    // Suite form
+    private bool _showSuiteForm;
+    private TestSuite? _editSuite;
+    private TestSuite? _deleteSuite;
+    private string _suiteFormError = string.Empty;
+    private SuiteFormModel _suiteForm = new();
+
+    // Case form
+    private bool _showCaseForm;
+    private TestCase? _editCase;
+    private TestCase? _deleteCase;
+    private TestSuite? _caseParentSuite;
+    private string _caseFormError = string.Empty;
+    private CaseFormModel _caseForm = new();
+
+    // Run
+    private TestSuite? _runSuite;
+    private string _selectedAgentId = string.Empty;
+    private bool _runInProgress;
+    private string _runStatus = string.Empty;
+    private string _runError = string.Empty;
+
+    private class SuiteFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public double PassThreshold { get; set; } = 0.7;
+    }
+
+    private class CaseFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string UserInputRaw { get; set; } = string.Empty;
+        public string AcceptanceCriteria { get; set; } = string.Empty;
+        public string? ExpectedIntent { get; set; }
+        public string ExpectedEntitiesRaw { get; set; } = string.Empty;
+        public string? ReferenceAnswer { get; set; }
+        public int SortOrder { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _suites = await Db.TestSuites
+            .Include(s => s.TestCases)
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+        _agents = await Db.Agents.Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync();
+        _loading = false;
+    }
+
+    private void ExpandSuite(TestSuite s) =>
+        _expandedSuiteId = _expandedSuiteId == s.Id ? null : s.Id;
+
+    // ── Suite CRUD ────────────────────────────────────────────────────────────
+
+    private void OpenCreateSuite()
+    {
+        _editSuite = null;
+        _suiteForm = new();
+        _suiteFormError = string.Empty;
+        _showSuiteForm = true;
+    }
+
+    private void OpenEditSuite(TestSuite s)
+    {
+        _editSuite = s;
+        _suiteForm = new() { Name = s.Name, Description = s.Description, PassThreshold = s.PassThreshold };
+        _suiteFormError = string.Empty;
+        _showSuiteForm = true;
+    }
+
+    private async Task SaveSuite()
+    {
+        if (string.IsNullOrWhiteSpace(_suiteForm.Name)) { _suiteFormError = "Name is required."; return; }
+        if (_suiteForm.PassThreshold is < 0 or > 1) { _suiteFormError = "Pass threshold must be 0–1."; return; }
+
+        if (_editSuite is null)
+        {
+            var suite = new TestSuite
+            {
+                Id = Guid.NewGuid(),
+                TenantId = Guid.Empty,
+                Name = _suiteForm.Name,
+                Description = _suiteForm.Description,
+                PassThreshold = _suiteForm.PassThreshold,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            Db.TestSuites.Add(suite);
+        }
+        else
+        {
+            _editSuite.Name = _suiteForm.Name;
+            _editSuite.Description = _suiteForm.Description;
+            _editSuite.PassThreshold = _suiteForm.PassThreshold;
+            _editSuite.UpdatedAt = DateTime.UtcNow;
+        }
+        await Db.SaveChangesAsync();
+        CloseSuiteForm();
+        await LoadAsync();
+    }
+
+    private void CloseSuiteForm() => _showSuiteForm = false;
+
+    private void ConfirmDeleteSuite(TestSuite s) => _deleteSuite = s;
+
+    private async Task DeleteSuite()
+    {
+        if (_deleteSuite is null) return;
+        Db.TestSuites.Remove(_deleteSuite);
+        await Db.SaveChangesAsync();
+        _deleteSuite = null;
+        await LoadAsync();
+    }
+
+    // ── TestCase CRUD ─────────────────────────────────────────────────────────
+
+    private void OpenAddCase(TestSuite parent)
+    {
+        _caseParentSuite = parent;
+        _editCase = null;
+        _caseForm = new() { SortOrder = parent.TestCases.Count + 1 };
+        _caseFormError = string.Empty;
+        _showCaseForm = true;
+    }
+
+    private void OpenEditCase(TestCase tc)
+    {
+        _caseParentSuite = null;
+        _editCase = tc;
+        _caseForm = new()
+        {
+            Name = tc.Name,
+            Description = tc.Description,
+            UserInputRaw = string.Join("\n", tc.UserInput),
+            AcceptanceCriteria = tc.AcceptanceCriteria,
+            ExpectedIntent = tc.ExpectedIntent,
+            ExpectedEntitiesRaw = string.Join(", ", tc.ExpectedEntities),
+            ReferenceAnswer = tc.ReferenceAnswer,
+            SortOrder = tc.SortOrder,
+            IsActive = tc.IsActive
+        };
+        _caseFormError = string.Empty;
+        _showCaseForm = true;
+    }
+
+    private async Task SaveCase()
+    {
+        if (string.IsNullOrWhiteSpace(_caseForm.Name)) { _caseFormError = "Name is required."; return; }
+        var inputs = _caseForm.UserInputRaw
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (inputs.Length == 0) { _caseFormError = "At least one user input is required."; return; }
+
+        var entities = _caseForm.ExpectedEntitiesRaw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (_editCase is null)
+        {
+            var tc = new TestCase
+            {
+                Id = Guid.NewGuid(),
+                SuiteId = _caseParentSuite!.Id,
+                TenantId = _caseParentSuite!.TenantId,
+                Name = _caseForm.Name,
+                Description = _caseForm.Description,
+                UserInput = inputs,
+                AcceptanceCriteria = _caseForm.AcceptanceCriteria,
+                ExpectedIntent = _caseForm.ExpectedIntent,
+                ExpectedEntities = entities,
+                ReferenceAnswer = _caseForm.ReferenceAnswer,
+                SortOrder = _caseForm.SortOrder,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            Db.TestCases.Add(tc);
+        }
+        else
+        {
+            _editCase.Name = _caseForm.Name;
+            _editCase.Description = _caseForm.Description;
+            _editCase.UserInput = inputs;
+            _editCase.AcceptanceCriteria = _caseForm.AcceptanceCriteria;
+            _editCase.ExpectedIntent = _caseForm.ExpectedIntent;
+            _editCase.ExpectedEntities = entities;
+            _editCase.ReferenceAnswer = _caseForm.ReferenceAnswer;
+            _editCase.SortOrder = _caseForm.SortOrder;
+            _editCase.IsActive = _caseForm.IsActive;
+            _editCase.UpdatedAt = DateTime.UtcNow;
+        }
+        await Db.SaveChangesAsync();
+        CloseCaseForm();
+        await LoadAsync();
+    }
+
+    private void CloseCaseForm() => _showCaseForm = false;
+
+    private void ConfirmDeleteCase(TestCase tc) => _deleteCase = tc;
+
+    private async Task DeleteCase()
+    {
+        if (_deleteCase is null) return;
+        Db.TestCases.Remove(_deleteCase);
+        await Db.SaveChangesAsync();
+        _deleteCase = null;
+        await LoadAsync();
+    }
+
+    // ── Run ───────────────────────────────────────────────────────────────────
+
+    private void OpenRun(TestSuite suite)
+    {
+        _runSuite = suite;
+        _selectedAgentId = string.Empty;
+        _runError = string.Empty;
+        _runInProgress = false;
+    }
+
+    private void CloseRunModal()
+    {
+        _runSuite = null;
+        _runInProgress = false;
+        _runError = string.Empty;
+    }
+
+    private async Task StartRun()
+    {
+        if (_runSuite is null) return;
+        if (!Guid.TryParse(_selectedAgentId, out var agentId))
+        {
+            _runError = "Please select an agent.";
+            return;
+        }
+        _runInProgress = true;
+        _runError = string.Empty;
+        _runStatus = "Creating run…";
+        StateHasChanged();
+
+        var run = new Run
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _runSuite.TenantId,
+            SuiteId = _runSuite.Id,
+            AgentId = agentId,
+            Status = "pending",
+            TotalTestCases = _runSuite.TestCases.Count(tc => tc.IsActive),
+            RequestedBy = "web-ui",
+            StartedAt = DateTime.UtcNow
+        };
+        Db.Runs.Add(run);
+        await Db.SaveChangesAsync();
+
+        var job = new TestRunJob(
+            JobId: Guid.NewGuid(),
+            TenantId: run.TenantId,
+            RunId: run.Id,
+            SuiteId: _runSuite.Id,
+            AgentId: agentId,
+            RequestedBy: "web-ui",
+            TestCaseIds: null);
+        await Queue.EnqueueAsync("test-runs", job);
+
+        _runStatus = "Run queued successfully.";
+        StateHasChanged();
+
+        await Task.Delay(600);
+        CloseRunModal();
+        Nav.NavigateTo($"/runs/{run.Id}");
+    }
+}

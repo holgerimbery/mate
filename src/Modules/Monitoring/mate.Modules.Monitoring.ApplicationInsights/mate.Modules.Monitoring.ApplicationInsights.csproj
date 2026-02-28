@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>mate.Modules.Monitoring.ApplicationInsights</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\mate.Domain\mate.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Core\mate.Core\mate.Core.csproj" />
+    <ProjectReference Include="..\mate.Modules.Monitoring.Generic\mate.Modules.Monitoring.Generic.csproj" />
+  </ItemGroup>
+</Project>

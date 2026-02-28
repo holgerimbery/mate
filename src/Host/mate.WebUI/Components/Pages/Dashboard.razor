@@ -1,0 +1,140 @@
+@page "/dashboard"
+@using mate.Data
+@using mate.Domain.Entities
+@using Microsoft.EntityFrameworkCore
+@inject mateDbContext Db
+
+<PageTitle>Dashboard — @BrandInfo.BrandName</PageTitle>
+
+<div class="mate-header">
+    <h1>Dashboard</h1>
+    <p>AI agent quality testing overview — runs, pass rates, and latency at a glance.</p>
+</div>
+<div class="mate-page">
+
+@if (_loading)
+{
+    <div class="d-flex align-items-center gap-2 py-4"><span class="spinner"></span><span>Loading metrics…</span></div>
+}
+else
+{
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-value">@_totalRuns</div>
+            <div class="kpi-label">Total Runs</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">@(_passRate.ToString("P0"))</div>
+            <div class="kpi-label">Avg Pass Rate</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">@_totalSuites</div>
+            <div class="kpi-label">Test Suites</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">@_totalAgents</div>
+            <div class="kpi-label">Active Agents</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">@($"{_avgLatency:N0} ms")</div>
+            <div class="kpi-label">Avg Latency</div>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <h2 class="section-title">Recent Runs</h2>
+            <div class="filter-row mb-0">
+                <input class="filter-input" placeholder="Suite…" @bind="_filterSuite" @bind:event="oninput" />
+                <input class="filter-input" placeholder="Agent…" @bind="_filterAgent" @bind:event="oninput" />
+                <select class="filter-select" @bind="_filterStatus">
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="running">Running</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Suite</th>
+                    <th>Agent</th>
+                    <th>Status</th>
+                    <th>Pass Rate</th>
+                    <th>Cases</th>
+                    <th>Avg Latency</th>
+                    <th>Started</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var run in FilteredRuns)
+                {
+                    <tr>
+                        <td>@(run.Suite?.Name ?? "—")</td>
+                        <td>@(run.Agent?.Name ?? "—")</td>
+                        <td><span class="badge badge-@run.Status">@run.Status</span></td>
+                        <td>@(run.TotalTestCases > 0 ? $"{(double)run.PassedCount / run.TotalTestCases:P0}" : "—")</td>
+                        <td>@run.PassedCount / @run.TotalTestCases</td>
+                        <td>@($"{run.AverageLatencyMs:N0} ms")</td>
+                        <td>@run.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td><a href="runs/@run.Id" class="btn btn-sm btn-secondary">Detail →</a></td>
+                    </tr>
+                }
+                @if (!FilteredRuns.Any())
+                {
+                    <tr><td colspan="8">
+                        <div class="empty-state py-3">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <h3>No runs yet</h3>
+                            <p>Start a test run from the <a href="/test-suites">Test Suites</a> page.</p>
+                        </div>
+                    </td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+</div>
+
+@code {
+    private bool _loading = true;
+    private int _totalRuns;
+    private double _passRate;
+    private int _totalSuites;
+    private int _totalAgents;
+    private double _avgLatency;
+    private List<Run> _recentRuns = [];
+
+    private string _filterSuite  = string.Empty;
+    private string _filterAgent  = string.Empty;
+    private string _filterStatus = string.Empty;
+
+    private IEnumerable<Run> FilteredRuns => _recentRuns
+        .Where(r =>
+            (string.IsNullOrWhiteSpace(_filterSuite)  || (r.Suite?.Name.Contains(_filterSuite,  StringComparison.OrdinalIgnoreCase) ?? false)) &&
+            (string.IsNullOrWhiteSpace(_filterAgent)  || (r.Agent?.Name.Contains(_filterAgent,  StringComparison.OrdinalIgnoreCase) ?? false)) &&
+            (string.IsNullOrWhiteSpace(_filterStatus) || r.Status == _filterStatus));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _totalRuns   = await Db.Runs.CountAsync();
+        _totalSuites = await Db.TestSuites.CountAsync();
+        _totalAgents = await Db.Agents.CountAsync(a => a.IsActive);
+
+        var completed = await Db.Runs.Where(r => r.Status == "completed").ToListAsync();
+        _passRate   = completed.Count > 0 ? completed.Average(r => r.TotalTestCases > 0 ? (double)r.PassedCount / r.TotalTestCases : 0.0) : 0.0;
+        _avgLatency = completed.Count > 0 ? completed.Average(r => r.AverageLatencyMs) : 0.0;
+
+        _recentRuns = await Db.Runs
+            .Include(r => r.Suite)
+            .Include(r => r.Agent)
+            .OrderByDescending(r => r.StartedAt)
+            .Take(50)
+            .ToListAsync();
+
+        _loading = false;
+    }
+}

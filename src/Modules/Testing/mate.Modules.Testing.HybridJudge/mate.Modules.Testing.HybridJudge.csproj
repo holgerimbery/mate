@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>mate.Modules.Testing.HybridJudge</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\mate.Domain\mate.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Core\mate.Core\mate.Core.csproj" />
+    <ProjectReference Include="..\mate.Modules.Testing.Generic\mate.Modules.Testing.Generic.csproj" />
+    <ProjectReference Include="..\mate.Modules.Testing.ModelAsJudge\mate.Modules.Testing.ModelAsJudge.csproj" />
+    <ProjectReference Include="..\mate.Modules.Testing.RubricsJudge\mate.Modules.Testing.RubricsJudge.csproj" />
+  </ItemGroup>
+</Project>

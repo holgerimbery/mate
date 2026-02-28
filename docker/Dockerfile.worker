@@ -1,0 +1,40 @@
+# mate.Worker Docker image
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+WORKDIR /app
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+COPY ["src/Core/mate.Domain/mate.Domain.csproj",                                                             "src/Core/mate.Domain/"]
+COPY ["src/Core/mate.Data/mate.Data.csproj",                                                                 "src/Core/mate.Data/"]
+COPY ["src/Core/mate.Core/mate.Core.csproj",                                                                 "src/Core/mate.Core/"]
+COPY ["src/Infrastructure/mate.Infrastructure.Local/mate.Infrastructure.Local.csproj",                       "src/Infrastructure/mate.Infrastructure.Local/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.Generic/mate.Modules.AgentConnector.Generic.csproj",         "src/Modules/AgentConnectors/mate.Modules.AgentConnector.Generic/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.CopilotStudio/mate.Modules.AgentConnector.CopilotStudio.csproj", "src/Modules/AgentConnectors/mate.Modules.AgentConnector.CopilotStudio/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.AIFoundry/mate.Modules.AgentConnector.AIFoundry.csproj",     "src/Modules/AgentConnectors/mate.Modules.AgentConnector.AIFoundry/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.Parloa/mate.Modules.AgentConnector.Parloa.csproj",           "src/Modules/AgentConnectors/mate.Modules.AgentConnector.Parloa/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.Generic/mate.Modules.Testing.Generic.csproj",                               "src/Modules/Testing/mate.Modules.Testing.Generic/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.ModelAsJudge/mate.Modules.Testing.ModelAsJudge.csproj",                     "src/Modules/Testing/mate.Modules.Testing.ModelAsJudge/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.RubricsJudge/mate.Modules.Testing.RubricsJudge.csproj",                     "src/Modules/Testing/mate.Modules.Testing.RubricsJudge/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.HybridJudge/mate.Modules.Testing.HybridJudge.csproj",                       "src/Modules/Testing/mate.Modules.Testing.HybridJudge/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.CopilotStudioJudge/mate.Modules.Testing.CopilotStudioJudge.csproj", "src/Modules/Testing/mate.Modules.Testing.CopilotStudioJudge/"]
+COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.Generic/mate.Modules.Monitoring.Generic.csproj",                     "src/Modules/Monitoring/mate.Modules.Monitoring.Generic/"]
+COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.OpenTelemetry/mate.Modules.Monitoring.OpenTelemetry.csproj",         "src/Modules/Monitoring/mate.Modules.Monitoring.OpenTelemetry/"]
+COPY ["src/Host/mate.Worker/mate.Worker.csproj",                                                             "src/Host/mate.Worker/"]
+
+RUN dotnet restore "src/Host/mate.Worker/mate.Worker.csproj"
+
+COPY . .
+
+WORKDIR "/src/src/Host/mate.Worker"
+RUN dotnet build "mate.Worker.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "mate.Worker.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+RUN mkdir -p /app/data/blobs /app/data/backups /app/logs
+
+ENTRYPOINT ["dotnet", "mate.Worker.dll"]

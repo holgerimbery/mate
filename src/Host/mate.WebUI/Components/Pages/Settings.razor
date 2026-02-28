@@ -1,0 +1,699 @@
+@page "/settings"
+@using mate.Data
+@using mate.Domain.Entities
+@using mate.Domain.Contracts.Modules
+@using mate.Domain.Contracts.Monitoring
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Cryptography
+@using AuditLogEntity = mate.Domain.Entities.AuditLog
+@inject mateDbContext Db
+@inject ITenantContext TenantCtx
+@inject mate.Core.mateModuleRegistry Registry
+
+<PageTitle>Settings — @BrandInfo.BrandName</PageTitle>
+
+<div class="mate-header">
+    <h1>Settings</h1>
+</div>
+<div class="mate-page">
+
+<div class="tab-pills mb-4">
+    <button class="tab @(_tab == "modules" ? "active" : "")" @onclick='() => _tab = "modules"'><i class="bi bi-puzzle me-1"></i>Modules</button>
+    <button class="tab @(_tab == "judge" ? "active" : "")" @onclick='() => _tab = "judge"'><i class="bi bi-award me-1"></i>AI Judge</button>
+    <button class="tab @(_tab == "qgen" ? "active" : "")" @onclick='() => _tab = "qgen"'><i class="bi bi-question-circle me-1"></i>Question Generation</button>
+    <button class="tab @(_tab == "apikeys" ? "active" : "")" @onclick='() => _tab = "apikeys"'><i class="bi bi-key me-1"></i>API Keys</button>
+    <button class="tab @(_tab == "auditlog" ? "active" : "")" @onclick='() => _tab = "auditlog"'><i class="bi bi-journal-text me-1"></i>Audit Log</button>
+</div>
+
+@* ── Modules overview ──────────────────────────────────────────────────────── *@
+@if (_tab == "modules")
+{
+    <div class="tab-content">
+        <p class="text-muted mb-4">All module implementations registered at startup. Modules are plug-in libraries loaded via dependency injection and discoverable at runtime.</p>
+
+        <h2 class="section-title">Agent Connector Modules</h2>
+        <div class="row g-3 mb-4">
+            @foreach (var m in _connectorModules)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="section-card h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#0066cc20,#8b5cf620);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                <i class="bi @ConnectorIcon(m.ConnectorType)" style="color:var(--primary);font-size:18px"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:600">@m.DisplayName</div>
+                                <span class="connector-badge">@m.ConnectorType</span>
+                            </div>
+                            <span class="badge badge-pass ms-auto">Active</span>
+                        </div>
+                        @{
+                            var fields = m.GetConfigDefinition().ToList();
+                        }
+                        @if (fields.Any())
+                        {
+                            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">@fields.Count config field@(fields.Count == 1 ? "" : "s")</div>
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var f in fields)
+                                {
+                                    var fieldTitle = f.Description + (f.IsRequired ? " (required)" : string.Empty);
+                                    <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px" title="@fieldTitle">
+                                        @f.Label@(f.IsRequired ? " *" : "")
+                                    </span>
+                                }
+                            </div>
+                        }
+                        <div class="mt-3">
+                            <a href="/wizard" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Create Agent</a>
+                        </div>
+                    </div>
+                </div>
+            }
+            @if (!_connectorModules.Any())
+            {
+                <div class="col-12">
+                    <div class="empty-state"><i class="bi bi-plug"></i><p>No connector modules registered.</p></div>
+                </div>
+            }
+        </div>
+
+        <h2 class="section-title">Judge / Evaluation Modules</h2>
+        <div class="row g-3 mb-4">
+            @foreach (var m in _judgeModules)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="section-card h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#16a34a20,#0066cc20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                <i class="bi bi-award" style="color:var(--success);font-size:18px"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:600">@m.DisplayName</div>
+                                <span class="connector-badge">@m.ProviderType</span>
+                            </div>
+                            <span class="badge badge-pass ms-auto">Active</span>
+                        </div>
+                        @{
+                            var jFields = m.GetJudgeConfigDefinition().ToList();
+                        }
+                        @if (jFields.Any())
+                        {
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var f in jFields)
+                                {
+                                    <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px">@f.Label</span>
+                                }
+                            </div>
+                        }
+                        <div class="mt-3">
+                            <button class="btn btn-secondary btn-sm" @onclick='() => { _tab = "judge"; }'><i class="bi bi-gear me-1"></i>Configure</button>
+                        </div>
+                    </div>
+                </div>
+            }
+            @if (!_judgeModules.Any())
+            {
+                <div class="col-12">
+                    <div class="empty-state"><i class="bi bi-award"></i><p>No judge modules registered.</p></div>
+                </div>
+            }
+        </div>
+
+        <h2 class="section-title">Monitoring Modules</h2>
+        <div class="row g-3">
+            @foreach (var m in _monitoringModules)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="section-card">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#f59e0b20,#0066cc20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                <i class="bi bi-activity" style="color:#f59e0b;font-size:18px"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:600">@m.DisplayName</div>
+                                <span class="connector-badge">@m.ProviderType</span>
+                            </div>
+                            <span class="badge badge-pass ms-auto">Active</span>
+                        </div>
+                    </div>
+                </div>
+            }
+            @if (!_monitoringModules.Any())
+            {
+                <div class="col-12">
+                    <div class="empty-state"><i class="bi bi-activity"></i><p>No monitoring modules registered.</p></div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@* ── AI Judge settings ───────────────────────────────────────────────────── *@
+@if (_tab == "judge")
+{
+    <div class="tab-content">
+        <h2>AI Judge Configurations</h2>
+        <button class="btn btn-primary" @onclick="OpenCreateJudge">+ New Judge Setting</button>
+
+        @if (_judgeSettings.Any())
+        {
+            <table class="data-table" style="margin-top:1rem">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Provider</th>
+                        <th>Model</th>
+                        <th>Pass Threshold</th>
+                        <th>Default</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var js in _judgeSettings)
+                    {
+                        <tr>
+                            <td>@js.Name</td>
+                            <td>@js.ProviderType</td>
+                            <td>@(js.Model ?? "global")</td>
+                            <td>@js.PassThreshold.ToString("P0")</td>
+                            <td>@(js.IsDefault ? "✓" : "")</td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditJudge(js)">Edit</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteJudge(js)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="empty-row">No judge settings configured.</p>
+        }
+    </div>
+}
+
+@* ── Question generation settings ────────────────────────────────────────── *@
+@if (_tab == "qgen")
+{
+    <div class="tab-content">
+        <h2>Question Generation Settings</h2>
+        @if (_qgenSetting is null)
+        {
+            <p>No global question generation settings configured. <button class="btn btn-primary" @onclick="InitQGen">Create</button></p>
+        }
+        else
+        {
+            <div class="form-grid">
+                <label>Endpoint</label>
+                <input class="form-control" @bind="_qgenSetting.Endpoint" placeholder="https://..." />
+
+                <label>API Key Ref (secret store reference name)</label>
+                <input class="form-control" @bind="_qgenSetting.ApiKeyRef" placeholder="OPENAI_API_KEY" />
+
+                <label>Model</label>
+                <input class="form-control" @bind="_qgenSetting.Model" placeholder="gpt-4o-mini" />
+
+                <label>Temperature</label>
+                <input class="form-control" type="number" step="0.05" min="0" max="2" @bind="_qgenSetting.Temperature" />
+
+                <label>Top P</label>
+                <input class="form-control" type="number" step="0.05" min="0" max="1" @bind="_qgenSetting.TopP" />
+
+                <label>Max Output Tokens</label>
+                <input class="form-control" type="number" @bind="_qgenSetting.MaxOutputTokens" />
+
+                <label>System Prompt Override</label>
+                <textarea class="form-control" rows="4" @bind="_qgenSetting.SystemPrompt" placeholder="Leave blank to use built-in default"></textarea>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_qgenSaved))
+            {
+                <div class="alert alert-success" style="margin-top:.5rem">@_qgenSaved</div>
+            }
+            <button class="btn btn-primary" style="margin-top:1rem" @onclick="SaveQGen">Save</button>
+        }
+    </div>
+}
+
+@* ── API Keys ─────────────────────────────────────────────────────────────── *@
+@if (_tab == "apikeys")
+{
+    <div class="tab-content">
+        <h2>API Keys</h2>
+        <p>API keys grant machine-to-machine access. The raw key is shown only once on creation — store it securely.</p>
+        <button class="btn btn-primary" @onclick='() => _showCreateKey = true'>+ Generate Key</button>
+
+        @if (_newRawKey is not null)
+        {
+            <div class="alert alert-success" style="margin-top:.5rem">
+                <strong>New API key (copy now — won't be shown again):</strong><br />
+                <code>@_newRawKey</code>
+                <button class="btn btn-sm btn-secondary" style="margin-left:1rem" @onclick="() => _newRawKey = null">Dismiss</button>
+            </div>
+        }
+
+        <table class="data-table" style="margin-top:1rem">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Prefix</th>
+                    <th>Role</th>
+                    <th>Active</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var key in _apiKeys)
+                {
+                    <tr>
+                        <td>@key.Name</td>
+                        <td><code>@key.Prefix…</code></td>
+                        <td>@key.Role</td>
+                        <td>@(key.IsActive ? "✓" : "✗")</td>
+                        <td>@key.CreatedAt.ToString("yyyy-MM-dd")</td>
+                        <td>@(key.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                        <td>
+                            @if (key.IsActive)
+                            {
+                                <button class="btn btn-sm btn-danger" @onclick="() => RevokeKey(key)">Revoke</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!_apiKeys.Any())
+                {
+                    <tr><td colspan="7" class="empty-row">No API keys. Generate one above.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@* ── Audit Log ────────────────────────────────────────────────────────────── *@
+@if (_tab == "auditlog")
+{
+    <div class="tab-content">
+        <h2>Audit Log</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Action</th>
+                    <th>Entity Type</th>
+                    <th>Entity ID</th>
+                    <th>User</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var log in _auditLogs)
+                {
+                    <tr>
+                        <td>@log.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td>@log.Action</td>
+                        <td>@log.EntityType</td>
+                        <td><small>@log.EntityId?.ToString("D")</small></td>
+                        <td>@log.UserId</td>
+                        <td>@log.Details</td>
+                    </tr>
+                }
+                @if (!_auditLogs.Any())
+                {
+                    <tr><td colspan="6" class="empty-row">No audit records.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@* ── Judge setting form modal ─────────────────────────────────────────────── *@
+@if (_showJudgeForm)
+{
+    <div class="modal-backdrop" @onclick="CloseJudgeForm">
+        <div class="modal-box wide-modal" @onclick:stopPropagation>
+            <h2>@(_editJudge is null ? "New Judge Setting" : "Edit Judge Setting")</h2>
+
+            <div class="form-grid">
+                <label>Name</label>
+                <input class="form-control" @bind="_judgeForm.Name" placeholder="Default Judge" />
+
+                <label>Provider Type</label>
+                <select class="form-control" @bind="_judgeForm.ProviderType">
+                    <option value="ModelAsJudge">ModelAsJudge</option>
+                    <option value="Rubrics">Rubrics</option>
+                    <option value="Hybrid">Hybrid</option>
+                </select>
+
+                <label>Model (leave blank to inherit global)</label>
+                <input class="form-control" @bind="_judgeForm.Model" placeholder="gpt-4o" />
+
+                <label>Endpoint Ref (secret reference name)</label>
+                <input class="form-control" @bind="_judgeForm.EndpointRef" placeholder="AZURE_OAI_ENDPOINT" />
+
+                <label>API Key Ref (secret reference name)</label>
+                <input class="form-control" @bind="_judgeForm.ApiKeyRef" placeholder="AZURE_OAI_KEY" />
+
+                <label>Temperature</label>
+                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.Temperature" />
+
+                <label>Pass Threshold (0–1)</label>
+                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.PassThreshold" />
+
+                <label>Task Success Weight</label>
+                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.TaskSuccessWeight" />
+
+                <label>Intent Match Weight</label>
+                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.IntentMatchWeight" />
+
+                <label>Factuality Weight</label>
+                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.FactualityWeight" />
+
+                <label>Helpfulness Weight</label>
+                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.HelpfulnessWeight" />
+
+                <label>Safety Weight</label>
+                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.SafetyWeight" />
+
+                <label>Use Reference Answer</label>
+                <input type="checkbox" @bind="_judgeForm.UseReferenceAnswer" />
+
+                <label>Is Default</label>
+                <input type="checkbox" @bind="_judgeForm.IsDefault" />
+            </div>
+
+            <label style="margin-top:.5rem">Custom Prompt Template (optional)</label>
+            <textarea class="form-control" rows="5" @bind="_judgeForm.PromptTemplate" placeholder="Leave blank for built-in prompt"></textarea>
+
+            @if (!string.IsNullOrWhiteSpace(_judgeFormError))
+            {
+                <div class="alert alert-error">@_judgeFormError</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveJudge">Save</button>
+                <button class="btn btn-secondary" @onclick="CloseJudgeForm">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Create API key modal ─────────────────────────────────────────────────── *@
+@if (_showCreateKey)
+{
+    <div class="modal-backdrop" @onclick='() => _showCreateKey = false'>
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Generate API Key</h2>
+
+            <label>Name</label>
+            <input class="form-control" @bind="_newKeyName" placeholder="CI pipeline key" />
+
+            <label>Role</label>
+            <select class="form-control" @bind="_newKeyRole">
+                <option value="Viewer">Viewer</option>
+                <option value="Tester">Tester</option>
+                <option value="Admin">Admin</option>
+            </select>
+
+            @if (!string.IsNullOrWhiteSpace(_keyError))
+            {
+                <div class="alert alert-error">@_keyError</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="GenerateKey">Generate</button>
+                <button class="btn btn-secondary" @onclick='() => _showCreateKey = false'>Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Delete judge confirmation ────────────────────────────────────────────── *@
+@if (_deleteJudge is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteJudge = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Delete Judge Setting</h2>
+            <p>Delete <strong>@_deleteJudge.Name</strong>?</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="DeleteJudge">Delete</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteJudge = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+</div>@* end mate-page *@
+
+@code {
+    private string _tab = "modules";
+
+    // Module registry snapshots (loaded once on init)
+    private List<IAgentConnectorModule> _connectorModules = [];
+    private List<ITestingModule> _judgeModules = [];
+    private List<IMonitoringModule> _monitoringModules = [];
+
+    // Judge settings
+    private List<JudgeSetting> _judgeSettings = [];
+    private bool _showJudgeForm;
+    private JudgeSetting? _editJudge;
+    private JudgeSetting? _deleteJudge;
+    private string _judgeFormError = string.Empty;
+    private JudgeFormModel _judgeForm = new();
+
+    // QGen settings
+    private GlobalQuestionGenerationSetting? _qgenSetting;
+    private string _qgenSaved = string.Empty;
+
+    // API keys
+    private List<ApiKey> _apiKeys = [];
+    private bool _showCreateKey;
+    private string _newKeyName = string.Empty;
+    private string _newKeyRole = "Tester";
+    private string? _newRawKey;
+    private string _keyError = string.Empty;
+
+    // Audit log
+    private List<AuditLogEntity> _auditLogs = [];
+
+    private class JudgeFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string ProviderType { get; set; } = "ModelAsJudge";
+        public string? PromptTemplate { get; set; }
+        public string? Model { get; set; }
+        public string? EndpointRef { get; set; }
+        public string? ApiKeyRef { get; set; }
+        public double Temperature { get; set; } = 0.2;
+        public double TopP { get; set; } = 0.9;
+        public int MaxOutputTokens { get; set; } = 800;
+        public double PassThreshold { get; set; } = 0.7;
+        public double TaskSuccessWeight { get; set; } = 0.3;
+        public double IntentMatchWeight { get; set; } = 0.2;
+        public double FactualityWeight { get; set; } = 0.2;
+        public double HelpfulnessWeight { get; set; } = 0.15;
+        public double SafetyWeight { get; set; } = 0.15;
+        public bool UseReferenceAnswer { get; set; }
+        public bool IsDefault { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _connectorModules  = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
+        _judgeModules      = Registry.GetAllTestingModules().Where(m => m.ProviderType != "Generic").ToList();
+        _monitoringModules = Registry.GetAllMonitoring().Where(m => m.ProviderType != "Generic").ToList();
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _judgeSettings = await Db.JudgeSettings.OrderBy(j => j.Name).ToListAsync();
+        _apiKeys = await Db.ApiKeys.OrderByDescending(k => k.CreatedAt).ToListAsync();
+        _auditLogs = await Db.AuditLogs.OrderByDescending(l => l.OccurredAt).Take(200).AsNoTracking().ToListAsync();
+        _qgenSetting = await Db.GlobalQuestionGenerationSettings.FirstOrDefaultAsync();
+    }
+
+    // ── Judge ─────────────────────────────────────────────────────────────────
+
+    private void OpenCreateJudge()
+    {
+        _editJudge = null;
+        _judgeForm = new();
+        _judgeFormError = string.Empty;
+        _showJudgeForm = true;
+    }
+
+    private void OpenEditJudge(JudgeSetting js)
+    {
+        _editJudge = js;
+        _judgeForm = new()
+        {
+            Name = js.Name,
+            ProviderType = js.ProviderType,
+            PromptTemplate = js.PromptTemplate,
+            Model = js.Model,
+            EndpointRef = js.EndpointRef,
+            ApiKeyRef = js.ApiKeyRef,
+            Temperature = js.Temperature,
+            TopP = js.TopP,
+            MaxOutputTokens = js.MaxOutputTokens,
+            PassThreshold = js.PassThreshold,
+            TaskSuccessWeight = js.TaskSuccessWeight,
+            IntentMatchWeight = js.IntentMatchWeight,
+            FactualityWeight = js.FactualityWeight,
+            HelpfulnessWeight = js.HelpfulnessWeight,
+            SafetyWeight = js.SafetyWeight,
+            UseReferenceAnswer = js.UseReferenceAnswer,
+            IsDefault = js.IsDefault
+        };
+        _judgeFormError = string.Empty;
+        _showJudgeForm = true;
+    }
+
+    private async Task SaveJudge()
+    {
+        if (string.IsNullOrWhiteSpace(_judgeForm.Name)) { _judgeFormError = "Name is required."; return; }
+
+        if (_judgeForm.IsDefault)
+        {
+            var others = _judgeSettings.Where(j => j.IsDefault && j.Id != _editJudge?.Id);
+            foreach (var o in others) o.IsDefault = false;
+        }
+
+        if (_editJudge is null)
+        {
+            var js = new JudgeSetting
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantCtx.TenantId,
+                Name = _judgeForm.Name,
+                ProviderType = _judgeForm.ProviderType,
+                PromptTemplate = _judgeForm.PromptTemplate,
+                Model = _judgeForm.Model,
+                EndpointRef = _judgeForm.EndpointRef,
+                ApiKeyRef = _judgeForm.ApiKeyRef,
+                Temperature = _judgeForm.Temperature,
+                TopP = _judgeForm.TopP,
+                MaxOutputTokens = _judgeForm.MaxOutputTokens,
+                PassThreshold = _judgeForm.PassThreshold,
+                TaskSuccessWeight = _judgeForm.TaskSuccessWeight,
+                IntentMatchWeight = _judgeForm.IntentMatchWeight,
+                FactualityWeight = _judgeForm.FactualityWeight,
+                HelpfulnessWeight = _judgeForm.HelpfulnessWeight,
+                SafetyWeight = _judgeForm.SafetyWeight,
+                UseReferenceAnswer = _judgeForm.UseReferenceAnswer,
+                IsDefault = _judgeForm.IsDefault,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            Db.JudgeSettings.Add(js);
+        }
+        else
+        {
+            _editJudge.Name = _judgeForm.Name;
+            _editJudge.ProviderType = _judgeForm.ProviderType;
+            _editJudge.PromptTemplate = _judgeForm.PromptTemplate;
+            _editJudge.Model = _judgeForm.Model;
+            _editJudge.EndpointRef = _judgeForm.EndpointRef;
+            _editJudge.ApiKeyRef = _judgeForm.ApiKeyRef;
+            _editJudge.Temperature = _judgeForm.Temperature;
+            _editJudge.TopP = _judgeForm.TopP;
+            _editJudge.MaxOutputTokens = _judgeForm.MaxOutputTokens;
+            _editJudge.PassThreshold = _judgeForm.PassThreshold;
+            _editJudge.TaskSuccessWeight = _judgeForm.TaskSuccessWeight;
+            _editJudge.IntentMatchWeight = _judgeForm.IntentMatchWeight;
+            _editJudge.FactualityWeight = _judgeForm.FactualityWeight;
+            _editJudge.HelpfulnessWeight = _judgeForm.HelpfulnessWeight;
+            _editJudge.SafetyWeight = _judgeForm.SafetyWeight;
+            _editJudge.UseReferenceAnswer = _judgeForm.UseReferenceAnswer;
+            _editJudge.IsDefault = _judgeForm.IsDefault;
+            _editJudge.UpdatedAt = DateTime.UtcNow;
+        }
+        await Db.SaveChangesAsync();
+        CloseJudgeForm();
+        await LoadAllAsync();
+    }
+
+    private void CloseJudgeForm() => _showJudgeForm = false;
+
+    private void ConfirmDeleteJudge(JudgeSetting js) => _deleteJudge = js;
+
+    private async Task DeleteJudge()
+    {
+        if (_deleteJudge is null) return;
+        Db.JudgeSettings.Remove(_deleteJudge);
+        await Db.SaveChangesAsync();
+        _deleteJudge = null;
+        await LoadAllAsync();
+    }
+
+    // ── QGen ──────────────────────────────────────────────────────────────────
+
+    private async Task InitQGen()
+    {
+        _qgenSetting = new GlobalQuestionGenerationSetting
+        {
+            Id = Guid.NewGuid(),
+            TenantId = TenantCtx.TenantId,
+            UpdatedAt = DateTime.UtcNow
+        };
+        Db.GlobalQuestionGenerationSettings.Add(_qgenSetting);
+        await Db.SaveChangesAsync();
+    }
+
+    private async Task SaveQGen()
+    {
+        if (_qgenSetting is null) return;
+        _qgenSetting.UpdatedAt = DateTime.UtcNow;
+        await Db.SaveChangesAsync();
+        _qgenSaved = "Saved.";
+        StateHasChanged();
+        await Task.Delay(2000);
+        _qgenSaved = string.Empty;
+    }
+
+    // ── API Keys ──────────────────────────────────────────────────────────────
+
+    private async Task GenerateKey()
+    {
+        _keyError = string.Empty;
+        if (string.IsNullOrWhiteSpace(_newKeyName)) { _keyError = "Name is required."; return; }
+        var rawKey = $"mate_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
+        var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
+        var apiKey = new ApiKey
+        {
+            Id = Guid.NewGuid(),
+            TenantId = TenantCtx.TenantId,
+            Name = _newKeyName,
+            Prefix = rawKey[..12],
+            KeyHash = hash,
+            Role = _newKeyRole,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        Db.ApiKeys.Add(apiKey);
+        await Db.SaveChangesAsync();
+        _newRawKey = rawKey;
+        _showCreateKey = false;
+        _newKeyName = string.Empty;
+        await LoadAllAsync();
+    }
+
+    private async Task RevokeKey(ApiKey key)
+    {
+        key.IsActive = false;
+        await Db.SaveChangesAsync();
+    }
+
+    // ── Module helpers ────────────────────────────────────────────────────────
+
+    private static string ConnectorIcon(string connectorType) => connectorType switch
+    {
+        "CopilotStudio" => "bi-microsoft",
+        "AIFoundry"     => "bi-cpu",
+        "Parloa"        => "bi-headset",
+        "Generic"       => "bi-plug",
+        _               => "bi-robot"
+    };
+}

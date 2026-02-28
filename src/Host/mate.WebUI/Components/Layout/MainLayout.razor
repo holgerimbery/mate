@@ -1,0 +1,89 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<!-- Sidebar -->
+<div class="mate-sidebar @(_expanded ? "expanded" : "collapsed")">
+
+    <!-- Toggle -->
+    <div class="sidebar-toggle">
+        <button class="sidebar-toggle-btn" @onclick="ToggleSidebar" title="Toggle menu">
+            <i class="bi @(_expanded ? "bi-chevron-left" : "bi-chevron-right")"></i>
+        </button>
+    </div>
+
+    <!-- Brand -->
+    <div class="sidebar-brand" @onclick='() => Navigation.NavigateTo("/")'>
+        <img src="@BrandInfo.LogoUrl" alt="@BrandInfo.BrandName logo" class="sidebar-brand-logo" />
+        @if (_expanded)
+        {
+            <img src="@BrandInfo.LogoWideUrl" alt="@BrandInfo.BrandName" class="sidebar-brand-logo-wide" />
+        }
+    </div>
+
+    <!-- Primary nav -->
+    <nav class="sidebar-nav">
+        <NavItem Href="/"          Icon="bi-house-door"   Label="Home"        Expanded="_expanded" CurrentPage="_currentPage" PageKey="home" />
+        <NavItem Href="/wizard"    Icon="bi-magic"        Label="Wizard"      Expanded="_expanded" CurrentPage="_currentPage" PageKey="wizard" />
+        <NavItem Href="/test-suites" Icon="bi-list-check" Label="Test Suites" Expanded="_expanded" CurrentPage="_currentPage" PageKey="test-suites" />
+        <NavItem Href="/documents" Icon="bi-file-earmark" Label="Documents"   Expanded="_expanded" CurrentPage="_currentPage" PageKey="documents" />
+        <NavItem Href="/agents"    Icon="bi-robot"        Label="Agents"      Expanded="_expanded" CurrentPage="_currentPage" PageKey="agents" />
+        <NavItem Href="/discover"  Icon="bi-compass"      Label="Discover"    Expanded="_expanded" CurrentPage="_currentPage" PageKey="discover" />
+        <NavItem Href="/dashboard" Icon="bi-graph-up"     Label="Dashboard"   Expanded="_expanded" CurrentPage="_currentPage" PageKey="dashboard" />
+        <NavItem Href="/rubrics"   Icon="bi-award"        Label="Rubrics"     Expanded="_expanded" CurrentPage="_currentPage" PageKey="rubrics" />
+    </nav>
+
+    <!-- Bottom nav (admin) -->
+    <div class="sidebar-bottom">
+        <NavItem Href="/help"      Icon="bi-question-circle" Label="Help"      Expanded="_expanded" CurrentPage="_currentPage" PageKey="help" />
+        <NavItem Href="/audit-log" Icon="bi-journal-check"   Label="Audit Log" Expanded="_expanded" CurrentPage="_currentPage" PageKey="audit-log" />
+        <NavItem Href="/api-keys"  Icon="bi-key"             Label="API Keys"  Expanded="_expanded" CurrentPage="_currentPage" PageKey="api-keys" />
+        <NavItem Href="/settings"  Icon="bi-gear"            Label="Settings"  Expanded="_expanded" CurrentPage="_currentPage" PageKey="settings" />
+    </div>
+</div>
+
+<!-- Main content -->
+<div class="mate-main @(_expanded ? "expanded" : "collapsed")">
+    <div class="mate-page">
+        @Body
+    </div>
+</div>
+
+@code {
+    private bool _expanded = true;
+    private string _currentPage = "home";
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        UpdateCurrentPage(Navigation.Uri);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(() => { UpdateCurrentPage(e.Location); StateHasChanged(); });
+
+    private void UpdateCurrentPage(string uri)
+    {
+        var path = new Uri(uri).AbsolutePath.TrimStart('/').ToLowerInvariant();
+        _currentPage = path switch
+        {
+            "" or "home" => "home",
+            var p when p.StartsWith("wizard") => "wizard",
+            var p when p.StartsWith("test-suite") => "test-suites",
+            var p when p.StartsWith("document") => "documents",
+            var p when p.StartsWith("agent") => "agents",
+            var p when p.StartsWith("discover") => "discover",
+            var p when p.StartsWith("dashboard") => "dashboard",
+            var p when p.StartsWith("rubric") => "rubrics",
+            var p when p.StartsWith("help") => "help",
+            var p when p.StartsWith("audit-log") => "audit-log",
+            var p when p.StartsWith("api-key") => "api-keys",
+            var p when p.StartsWith("setting") => "settings",
+            _ => "home"
+        };
+    }
+
+    private void ToggleSidebar() => _expanded = !_expanded;
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

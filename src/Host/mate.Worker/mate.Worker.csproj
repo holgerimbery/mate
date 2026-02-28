@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>mate.Worker</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\mate.Domain\mate.Domain.csproj" />
+    <ProjectReference Include="..\..\Core\mate.Data\mate.Data.csproj" />
+    <ProjectReference Include="..\..\Core\mate.Core\mate.Core.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\mate.Infrastructure.Local\mate.Infrastructure.Local.csproj" />
+    <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.Generic\mate.Modules.AgentConnector.Generic.csproj" />
+    <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.CopilotStudio\mate.Modules.AgentConnector.CopilotStudio.csproj" />
+    <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.AIFoundry\mate.Modules.AgentConnector.AIFoundry.csproj" />
+    <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.Parloa\mate.Modules.AgentConnector.Parloa.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.Generic\mate.Modules.Testing.Generic.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.ModelAsJudge\mate.Modules.Testing.ModelAsJudge.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.RubricsJudge\mate.Modules.Testing.RubricsJudge.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.HybridJudge\mate.Modules.Testing.HybridJudge.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.CopilotStudioJudge\mate.Modules.Testing.CopilotStudioJudge.csproj" />
+    <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.Generic\mate.Modules.Monitoring.Generic.csproj" />
+    <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.OpenTelemetry\mate.Modules.Monitoring.OpenTelemetry.csproj" />
+  </ItemGroup>
+</Project>

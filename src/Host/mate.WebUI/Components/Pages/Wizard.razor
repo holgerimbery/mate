@@ -1,0 +1,416 @@
+@page "/wizard"
+@using mate.Data
+@using mate.Domain.Entities
+@using mate.Domain.Contracts.Modules
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@inject mateDbContext Db
+@inject mate.Core.mateModuleRegistry Registry
+@inject NavigationManager Navigation
+
+<PageTitle>Setup Wizard — @BrandInfo.BrandName</PageTitle>
+
+<div class="mate-header">
+    <h1>Setup Wizard</h1>
+    <p>Get started quickly — configure your first agent and test suite in a few steps.</p>
+</div>
+<div class="mate-page">
+
+<!-- Step indicator -->
+<div class="wizard-steps mb-4">
+    <div class="wizard-step">
+        <div class="wizard-step-circle @StepClass(1)">@(_step > 1 ? "✓" : "1")</div>
+        @if (_expanded) { <span class="wizard-step-label @(_step == 1 ? "active" : "")">Agent Type</span> }
+    </div>
+    <div class="wizard-connector @(_step > 1 ? "done" : "")"></div>
+    <div class="wizard-step">
+        <div class="wizard-step-circle @StepClass(2)">@(_step > 2 ? "✓" : "2")</div>
+        @if (_expanded) { <span class="wizard-step-label @(_step == 2 ? "active" : "")">Configure</span> }
+    </div>
+    <div class="wizard-connector @(_step > 2 ? "done" : "")"></div>
+    <div class="wizard-step">
+        <div class="wizard-step-circle @StepClass(3)">@(_step > 3 ? "✓" : "3")</div>
+        @if (_expanded) { <span class="wizard-step-label @(_step == 3 ? "active" : "")">Test Connection</span> }
+    </div>
+    <div class="wizard-connector @(_step > 3 ? "done" : "")"></div>
+    <div class="wizard-step">
+        <div class="wizard-step-circle @StepClass(4)">@(_step > 4 ? "✓" : "4")</div>
+        @if (_expanded) { <span class="wizard-step-label @(_step == 4 ? "active" : "")">Test Suite</span> }
+    </div>
+    <div class="wizard-connector @(_step > 4 ? "done" : "")"></div>
+    <div class="wizard-step">
+        <div class="wizard-step-circle @StepClass(5)">5</div>
+        @if (_expanded) { <span class="wizard-step-label @(_step == 5 ? "active" : "")">Done</span> }
+    </div>
+</div>
+
+<div class="section-card">
+
+    <!-- Step 1: Choose agent type -->
+    @if (_step == 1)
+    {
+        <h2 class="section-title mb-4">Step 1 — Select Agent Connector</h2>
+        <p class="text-muted mb-3">Choose the type of AI agent you want to connect to @BrandInfo.BrandName.</p>
+        <div class="row g-3">
+            @foreach (var module in _modules)
+            {
+                var isSelected = _selectedConnectorType == module.ConnectorType;
+                <div class="col-md-6">
+                    <div class="section-card @(isSelected ? "border-primary" : "")"
+                         style="cursor:pointer;transition:all 0.2s;@(isSelected ? "border-color:var(--primary);box-shadow:0 0 0 2px rgba(0,102,204,0.2)" : "")"
+                         @onclick="() => _selectedConnectorType = module.ConnectorType">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#0066cc20,#8b5cf620);display:flex;align-items:center;justify-content:center;">
+                                <i class="bi bi-robot" style="color:var(--primary)"></i>
+                            </div>
+                            <div>
+                                <div class="fw-600">@module.DisplayName</div>
+                                <div style="font-size:11px;color:var(--text-secondary)">@module.ConnectorType</div>
+                            </div>
+                            @if (isSelected)
+                            {
+                                <i class="bi bi-check-circle-fill ms-auto" style="color:var(--primary);font-size:20px"></i>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        @if (!_modules.Any())
+        {
+            <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> No agent connector modules are registered.</div>
+        }
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-primary" @onclick="GoStep2" disabled="@string.IsNullOrEmpty(_selectedConnectorType)">
+                Next <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Step 2: Configure agent -->
+    @if (_step == 2)
+    {
+        <h2 class="section-title mb-4">Step 2 — Configure Agent</h2>
+        <div class="form-group">
+            <label class="form-label">Agent Name *</label>
+            <input class="form-control" @bind="_agentName" placeholder="e.g. My CopilotStudio Bot" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <input class="form-control" @bind="_agentDescription" placeholder="Optional description" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Environment</label>
+            <select class="form-control" @bind="_agentEnv">
+                <option value="development">Development</option>
+                <option value="test">Test</option>
+                <option value="staging">Staging</option>
+                <option value="production">Production</option>
+            </select>
+        </div>
+        @if (_configFields.Any())
+        {
+            <h3 class="mt-4 mb-3" style="font-size:15px">Connector Configuration (@_selectedConnectorType)</h3>
+            @foreach (var field in _configFields)
+            {
+                <div class="form-group">
+                    <label class="form-label">
+                        @field.Label @if (field.IsRequired) { <span style="color:var(--danger)">*</span> }
+                        <span class="field-type-badge ms-1">@field.FieldType</span>
+                    </label>
+                    @if (field.FieldType == "select" && field.SelectOptions != null)
+                    {
+                        <select class="form-control" value="@GetConfigValue(field.Key)"
+                                @onchange="e => SetConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)">
+                            @foreach (var opt in field.SelectOptions) { <option value="@opt">@opt</option> }
+                        </select>
+                    }
+                    else if (field.FieldType is "password" or "secret")
+                    {
+                        <input type="password" class="form-control" value="@GetConfigValue(field.Key)"
+                               @onchange="e => SetConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                               placeholder="@field.Description" />
+                    }
+                    else if (field.FieldType == "boolean")
+                    {
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="field_@field.Key"
+                                   checked="@(GetConfigValue(field.Key) == "true")"
+                                   @onchange="e => SetConfigValue(field.Key, (e.Value?.ToString()?.ToLower()) ?? BoolFalse)" />
+                            <label class="form-check-label" for="field_@field.Key">@field.Description</label>
+                        </div>
+                    }
+                    else
+                    {
+                        <input type="text" class="form-control" value="@GetConfigValue(field.Key)"
+                               @onchange="e => SetConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                               placeholder="@field.Description" />
+                    }
+                </div>
+            }
+        }
+        @if (!string.IsNullOrEmpty(_validationError))
+        {
+            <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_validationError</div>
+        }
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-secondary" @onclick="() => _step = 1"><i class="bi bi-chevron-left"></i> Back</button>
+            <button class="btn btn-primary" @onclick="GoStep3" disabled="@string.IsNullOrWhiteSpace(_agentName)">
+                Next <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Step 3: Test connection -->
+    @if (_step == 3)
+    {
+        <h2 class="section-title mb-4">Step 3 — Test Connection</h2>
+        <p class="text-muted">Saving agent "<strong>@_agentName</strong>" with connector <strong>@_selectedConnectorType</strong>.</p>
+        @if (_testing)
+        {
+            <div class="d-flex align-items-center gap-2"><span class="spinner"></span><span>Testing connection…</span></div>
+        }
+        else if (_testPassed.HasValue)
+        {
+            @if (_testPassed.Value)
+            {
+                <div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> Connection validated successfully.</div>
+            }
+            else
+            {
+                <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> @_testMessage (You can still proceed.)</div>
+            }
+        }
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-secondary" @onclick="() => _step = 2"><i class="bi bi-chevron-left"></i> Back</button>
+            @if (!_testPassed.HasValue)
+            {
+                <button class="btn btn-secondary" @onclick="TestConnection" disabled="@_testing">
+                    <i class="bi bi-wifi"></i> Test Connection
+                </button>
+            }
+            <button class="btn btn-primary" @onclick="GoStep4">
+                @(_testPassed == true ? "Next" : "Skip & Continue") <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Step 4: Create test suite -->
+    @if (_step == 4)
+    {
+        <h2 class="section-title mb-4">Step 4 — Create Test Suite <small class="text-muted ms-2" style="font-size:13px">(optional)</small></h2>
+        <div class="form-group">
+            <label class="form-label">Test Suite Name</label>
+            <input class="form-control" @bind="_suiteName" placeholder="Leave blank to skip" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <input class="form-control" @bind="_suiteDescription" placeholder="Optional" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Pass Threshold</label>
+            <input type="number" class="form-control" @bind="_passThreshold" min="0" max="1" step="0.05" style="width:120px" />
+            <small class="text-muted">Score 0-1 required to pass (e.g. 0.7 = 70%)</small>
+        </div>
+        <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-secondary" @onclick="() => _step = 3"><i class="bi bi-chevron-left"></i> Back</button>
+            <button class="btn btn-primary" @onclick="FinishWizard">
+                <i class="bi bi-check-lg"></i> Finish
+            </button>
+        </div>
+    }
+
+    <!-- Step 5: Done -->
+    @if (_step == 5)
+    {
+        <div class="text-center py-4">
+            <div style="font-size:64px;color:var(--success)" class="mb-3"><i class="bi bi-check-circle-fill"></i></div>
+            <h2 class="mb-2">All done!</h2>
+            <p class="text-muted mb-4">Agent "@_agentName" has been created.@(!string.IsNullOrWhiteSpace(_suiteName) ? $" Test suite \"{_suiteName}\" is ready." : "")</p>
+            <div class="d-flex gap-3 justify-content-center">
+                <a href="/agents" class="btn btn-secondary"><i class="bi bi-robot"></i> View Agents</a>
+                @if (!string.IsNullOrWhiteSpace(_suiteName))
+                {
+                    <a href="/test-suites" class="btn btn-primary"><i class="bi bi-list-check"></i> View Test Suites</a>
+                }
+                <a href="/dashboard" class="btn btn-secondary"><i class="bi bi-graph-up"></i> Dashboard</a>
+            </div>
+        </div>
+    }
+
+</div>
+</div>
+
+@code {
+    private int _step = 1;
+    private bool _expanded = true;  // wizard always shows labels
+
+    private List<IAgentConnectorModule> _modules = [];
+    private string _selectedConnectorType = string.Empty;
+    private Dictionary<string, string> _configValues = new();
+    private List<ConfigFieldDefinition> _configFields = [];
+
+    private string _agentName = string.Empty;
+    private string _agentDescription = string.Empty;
+    private string _agentEnv = "development";
+
+    private string _suiteName = string.Empty;
+    private string _suiteDescription = string.Empty;
+    private double _passThreshold = 0.7;
+
+    private const string BoolFalse = "false";
+
+    private bool _testing;
+    private bool? _testPassed;
+    private string _testMessage = string.Empty;
+    private string _validationError = string.Empty;
+
+    private Guid _createdAgentId;
+
+    protected override void OnInitialized()
+    {
+        _modules = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
+    }
+
+    private string StepClass(int step) =>
+        _step > step ? "done" : _step == step ? "active" : "pending";
+
+    private string GetConfigValue(string key) =>
+        _configValues.TryGetValue(key, out var v) ? v : string.Empty;
+
+    private void SetConfigValue(string key, string value) =>
+        _configValues[key] = value;
+
+    private void GoStep2()
+    {
+        var module = _modules.FirstOrDefault(m => m.ConnectorType == _selectedConnectorType);
+        if (module is null) return;
+        _configFields = module.GetConfigDefinition().ToList();
+        _step = 2;
+    }
+
+    private void GoStep3()
+    {
+        if (string.IsNullOrWhiteSpace(_agentName)) return;
+        var module = _modules.FirstOrDefault(m => m.ConnectorType == _selectedConnectorType);
+        if (module is not null)
+        {
+            var configJson = JsonSerializer.Serialize(_configValues);
+            var result = module.ValidateConfig(configJson);
+            if (!result.IsValid)
+            {
+                _validationError = string.Join(", ", result.Errors);
+                return;
+            }
+        }
+        _validationError = string.Empty;
+        _step = 3;
+    }
+
+    private async Task TestConnection()
+    {
+        _testing = true;
+        _testPassed = null;
+        _testMessage = string.Empty;
+        StateHasChanged();
+        try
+        {
+            await SaveAgent();
+            var module = _modules.FirstOrDefault(m => m.ConnectorType == _selectedConnectorType);
+            if (module is not null)
+            {
+                var connConfig = new AgentConnectionConfig
+                {
+                    ConnectorType = _selectedConnectorType,
+                    ConfigJson = JsonSerializer.Serialize(_configValues)
+                };
+                var connector = module.CreateConnector(connConfig);
+                var session = await connector.StartConversationAsync(connConfig, CancellationToken.None);
+                _testPassed = session is not null;
+                if (!_testPassed.Value)
+                    _testMessage = "Connection returned no session.";
+            }
+            else
+            {
+                _testPassed = false;
+                _testMessage = "Module not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _testPassed = false;
+            _testMessage = ex.Message;
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+
+    private async Task GoStep4()
+    {
+        if (_createdAgentId == Guid.Empty)
+            await SaveAgent();
+        _step = 4;
+    }
+
+    private async Task SaveAgent()
+    {
+        if (_createdAgentId != Guid.Empty) return;
+        var agent = new Agent
+        {
+            Id = Guid.NewGuid(),
+            TenantId = Guid.Empty,
+            Name = _agentName,
+            Description = _agentDescription,
+            Environment = _agentEnv,
+            Tags = Array.Empty<string>(),
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        agent.ConnectorConfigs.Add(new AgentConnectorConfig
+        {
+            Id = Guid.NewGuid(),
+            AgentId = agent.Id,
+            TenantId = agent.TenantId,
+            ConnectorType = _selectedConnectorType,
+            ConfigJson = JsonSerializer.Serialize(_configValues),
+            IsActive = true
+        });
+        Db.Agents.Add(agent);
+        await Db.SaveChangesAsync();
+        _createdAgentId = agent.Id;
+    }
+
+    private async Task FinishWizard()
+    {
+        if (_createdAgentId == Guid.Empty)
+            await SaveAgent();
+
+        if (!string.IsNullOrWhiteSpace(_suiteName))
+        {
+            var suiteId = Guid.NewGuid();
+            var suite = new TestSuite
+            {
+                Id = suiteId,
+                TenantId = Guid.Empty,
+                Name = _suiteName,
+                Description = _suiteDescription,
+                PassThreshold = _passThreshold,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            Db.TestSuites.Add(suite);
+            // Link agent to suite via TestSuiteAgent join entity
+            Db.TestSuiteAgents.Add(new TestSuiteAgent
+            {
+                TestSuiteId = suiteId,
+                AgentId = _createdAgentId,
+                TenantId = Guid.Empty
+            });
+            await Db.SaveChangesAsync();
+        }
+        _step = 5;
+    }
+}

@@ -1,0 +1,158 @@
+@page "/documents"
+@using mate.Core.DocumentProcessing
+@using mate.Data
+@using mate.Domain.Entities
+@using Microsoft.EntityFrameworkCore
+@inject mateDbContext Db
+@inject DocumentIngestor Ingestor
+@inject ITenantContext TenantCtx
+
+<PageTitle>Documents — @BrandInfo.BrandName</PageTitle>
+
+<h1>Documents</h1>
+
+<div class="upload-section">
+    <h2>Upload Document</h2>
+    <p>Supported formats: <strong>PDF</strong>, <strong>DOCX</strong>. Files are chunked and used for AI-powered test question generation.</p>
+
+    <InputFile OnChange="HandleFileSelected" accept=".pdf,.docx" />
+
+    @if (_uploading)
+    {
+        <p><em>Uploading and processing…</em></p>
+    }
+    @if (!string.IsNullOrWhiteSpace(_uploadError))
+    {
+        <div class="alert alert-error">@_uploadError</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_uploadSuccess))
+    {
+        <div class="alert alert-success">@_uploadSuccess</div>
+    }
+</div>
+
+<h2>Uploaded Documents</h2>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>File Name</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Pages</th>
+                <th>Chunks</th>
+                <th>Uploaded</th>
+                <th>By</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var doc in _documents)
+            {
+                <tr>
+                    <td>@doc.FileName</td>
+                    <td>@doc.ContentType</td>
+                    <td>@FormatSize(doc.FileSizeBytes)</td>
+                    <td>@doc.PageCount</td>
+                    <td>@doc.ChunkCount</td>
+                    <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@doc.UploadedBy</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
+                    </td>
+                </tr>
+            }
+            @if (!_documents.Any())
+            {
+                <tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (_deleteDoc is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteDoc = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Delete Document</h2>
+            <p>Delete <strong>@_deleteDoc.FileName</strong>? This will also remove all associated chunks.</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="DeleteDocument">Delete</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteDoc = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _uploading;
+    private List<Document> _documents = [];
+    private Document? _deleteDoc;
+    private string _uploadError = string.Empty;
+    private string _uploadSuccess = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _documents = await Db.Documents
+            .OrderByDescending(d => d.UploadedAt)
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _uploadError = string.Empty;
+        _uploadSuccess = string.Empty;
+        var file = e.File;
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (ext is not ".pdf" and not ".docx")
+        {
+            _uploadError = "Only .pdf and .docx files are supported.";
+            return;
+        }
+        _uploading = true;
+        StateHasChanged();
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024); // 50 MB
+            var doc = await Ingestor.IngestAsync(file.Name, stream, TenantCtx.TenantId);
+            _uploadSuccess = $"'{doc.FileName}' uploaded successfully — {doc.ChunkCount} chunks created.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private void ConfirmDelete(Document doc) => _deleteDoc = doc;
+
+    private async Task DeleteDocument()
+    {
+        if (_deleteDoc is null) return;
+        Db.Documents.Remove(_deleteDoc);
+        await Db.SaveChangesAsync();
+        _deleteDoc = null;
+        await LoadAsync();
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024L) return $"{bytes} B";
+        if (bytes < 1024L * 1024L) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+}

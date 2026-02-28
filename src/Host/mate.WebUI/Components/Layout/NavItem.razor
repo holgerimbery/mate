@@ -1,0 +1,20 @@
+@inject NavigationManager Navigation
+
+<a class="nav-item @(CurrentPage == PageKey ? "active" : "")"
+   href="@Href"
+   title="@Label">
+    <i class="bi @Icon"></i>
+    @if (Expanded)
+    {
+        <span>@Label</span>
+    }
+</a>
+
+@code {
+    [Parameter] public string Href        { get; set; } = "/";
+    [Parameter] public string Icon        { get; set; } = "bi-circle";
+    [Parameter] public string Label       { get; set; } = "";
+    [Parameter] public bool   Expanded    { get; set; } = true;
+    [Parameter] public string CurrentPage { get; set; } = "";
+    [Parameter] public string PageKey     { get; set; } = "";
+}

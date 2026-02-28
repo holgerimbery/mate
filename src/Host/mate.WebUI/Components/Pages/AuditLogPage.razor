@@ -1,0 +1,199 @@
+@page "/audit-log"
+@using Microsoft.EntityFrameworkCore
+@inject mate.Data.mateDbContext Db
+
+<PageTitle>Audit Log — @BrandInfo.BrandName</PageTitle>
+
+<div class="mate-header">
+    <h1>Audit Log</h1>
+    <p>Immutable record of all mutating operations across the platform.</p>
+</div>
+<div class="mate-page">
+
+<div class="section-card mb-3">
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+        <div class="form-group mb-0">
+            <label class="form-label">Entity Type</label>
+            <select class="form-control" @bind="_filterEntityType" @bind:after="ApplyFilter">
+                <option value="">All</option>
+                <option value="Agent">Agent</option>
+                <option value="TestSuite">TestSuite</option>
+                <option value="TestCase">TestCase</option>
+                <option value="Run">Run</option>
+                <option value="Document">Document</option>
+                <option value="ApiKey">ApiKey</option>
+                <option value="Tenant">Tenant</option>
+                <option value="JudgeSetting">JudgeSetting</option>
+                <option value="RubricSet">RubricSet</option>
+            </select>
+        </div>
+        <div class="form-group mb-0">
+            <label class="form-label">Action</label>
+            <select class="form-control" @bind="_filterAction" @bind:after="ApplyFilter">
+                <option value="">All</option>
+                <option value="Created">Created</option>
+                <option value="Updated">Updated</option>
+                <option value="Deleted">Deleted</option>
+                <option value="RunStarted">RunStarted</option>
+                <option value="RunCompleted">RunCompleted</option>
+                <option value="Login">Login</option>
+                <option value="KeyRevoked">KeyRevoked</option>
+            </select>
+        </div>
+        <div class="form-group mb-0">
+            <label class="form-label">From</label>
+            <input type="date" class="form-control" @bind="_filterFrom" @bind:after="ApplyFilter" />
+        </div>
+        <div class="form-group mb-0">
+            <label class="form-label">To</label>
+            <input type="date" class="form-control" @bind="_filterTo" @bind:after="ApplyFilter" />
+        </div>
+        <div class="form-group mb-0 flex-grow-1">
+            <label class="form-label">Search</label>
+            <input class="form-control" @bind="_filterSearch" @bind:event="oninput" @bind:after="ApplyFilter" placeholder="Search entity ID, user, details…" />
+        </div>
+        <button class="btn btn-secondary" @onclick="ClearFilters">
+            <i class="bi bi-x-circle"></i> Clear
+        </button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex align-items-center gap-2 mb-3"><span class="spinner"></span><span>Loading audit entries…</span></div>
+}
+else if (!_filtered.Any())
+{
+    <div class="empty-state">
+        <i class="bi bi-journal-text"></i>
+        <h3>No audit entries</h3>
+        <p>Audit events will appear here as you interact with the platform.</p>
+    </div>
+}
+else
+{
+    <div class="section-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span style="font-size:13px;color:var(--text-secondary)">
+                Showing @_filtered.Count of @_allLogs.Count entries (last 500)
+            </span>
+            <div class="d-flex gap-2 align-items-center">
+                <label style="font-size:12px;color:var(--text-secondary)" class="me-1">Page</label>
+                <button class="btn btn-secondary btn-sm" @onclick="PrevPage" disabled="@(_page == 1)"><i class="bi bi-chevron-left"></i></button>
+                <span style="font-size:12px">@_page / @TotalPages</span>
+                <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)"><i class="bi bi-chevron-right"></i></button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:160px">Time</th>
+                        <th style="width:120px">Action</th>
+                        <th style="width:130px">Entity Type</th>
+                        <th>Entity ID</th>
+                        <th>User</th>
+                        <th>Details</th>
+                        <th style="width:80px">IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in PagedLogs)
+                    {
+                        <tr>
+                            <td style="font-size:12px;color:var(--text-secondary)">@log.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>
+                                <span class="badge @ActionBadge(log.Action)">@log.Action</span>
+                            </td>
+                            <td style="font-size:12px">@log.EntityType</td>
+                            <td style="font-size:11px"><code>@(log.EntityId?.ToString("D").Substring(0, 8) + "…" ?? "—")</code></td>
+                            <td style="font-size:12px">@(log.UserId ?? "—")</td>
+                            <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="@log.Details">
+                                @(log.Details ?? "—")
+                            </td>
+                            <td style="font-size:11px">@(log.IpAddress ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<mate.Domain.Entities.AuditLog> _allLogs = [];
+    private List<mate.Domain.Entities.AuditLog> _filtered = [];
+
+    private string _filterEntityType = string.Empty;
+    private string _filterAction = string.Empty;
+    private string _filterSearch = string.Empty;
+    private DateTime? _filterFrom;
+    private DateTime? _filterTo;
+
+    private int _page = 1;
+    private const int PageSize = 50;
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)PageSize));
+    private IEnumerable<mate.Domain.Entities.AuditLog> PagedLogs =>
+        _filtered.Skip((_page - 1) * PageSize).Take(PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        _allLogs = await Db.AuditLogs
+            .OrderByDescending(l => l.OccurredAt)
+            .Take(500)
+            .AsNoTracking()
+            .ToListAsync();
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = _allLogs;
+        if (!string.IsNullOrEmpty(_filterEntityType))
+            _filtered = _filtered.Where(l => l.EntityType == _filterEntityType).ToList();
+        if (!string.IsNullOrEmpty(_filterAction))
+            _filtered = _filtered.Where(l => l.Action == _filterAction).ToList();
+        if (_filterFrom.HasValue)
+            _filtered = _filtered.Where(l => l.OccurredAt >= _filterFrom.Value).ToList();
+        if (_filterTo.HasValue)
+            _filtered = _filtered.Where(l => l.OccurredAt < _filterTo.Value.AddDays(1)).ToList();
+        if (!string.IsNullOrWhiteSpace(_filterSearch))
+        {
+            var q = _filterSearch.Trim().ToLower();
+            _filtered = _filtered.Where(l =>
+                (l.EntityId?.ToString().Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (l.UserId?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (l.Details?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (l.IpAddress?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+        _page = 1;
+    }
+
+    private void ClearFilters()
+    {
+        _filterEntityType = string.Empty;
+        _filterAction = string.Empty;
+        _filterSearch = string.Empty;
+        _filterFrom = null;
+        _filterTo = null;
+        ApplyFilter();
+    }
+
+    private void PrevPage() { if (_page > 1) _page--; }
+    private void NextPage() { if (_page < TotalPages) _page++; }
+
+    private static string ActionBadge(string action) => action switch
+    {
+        "Created" => "badge-pass",
+        "Updated" => "badge-pending",
+        "Deleted" or "KeyRevoked" => "badge-fail",
+        "RunStarted" or "RunCompleted" => "badge-running",
+        _ => "badge-pending"
+    };
+}

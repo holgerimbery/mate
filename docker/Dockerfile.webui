@@ -1,0 +1,50 @@
+# mate.WebUI Docker image
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+WORKDIR /app
+EXPOSE 8080
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Restore only (better layer caching)
+COPY ["src/Core/mate.Domain/mate.Domain.csproj",                                                             "src/Core/mate.Domain/"]
+COPY ["src/Core/mate.Data/mate.Data.csproj",                                                                 "src/Core/mate.Data/"]
+COPY ["src/Core/mate.Core/mate.Core.csproj",                                                                 "src/Core/mate.Core/"]
+COPY ["src/Infrastructure/mate.Infrastructure.Local/mate.Infrastructure.Local.csproj",                       "src/Infrastructure/mate.Infrastructure.Local/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.Generic/mate.Modules.AgentConnector.Generic.csproj",         "src/Modules/AgentConnectors/mate.Modules.AgentConnector.Generic/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.CopilotStudio/mate.Modules.AgentConnector.CopilotStudio.csproj", "src/Modules/AgentConnectors/mate.Modules.AgentConnector.CopilotStudio/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.AIFoundry/mate.Modules.AgentConnector.AIFoundry.csproj",     "src/Modules/AgentConnectors/mate.Modules.AgentConnector.AIFoundry/"]
+COPY ["src/Modules/AgentConnectors/mate.Modules.AgentConnector.Parloa/mate.Modules.AgentConnector.Parloa.csproj",           "src/Modules/AgentConnectors/mate.Modules.AgentConnector.Parloa/"]
+COPY ["src/Modules/Authentication/mate.Modules.Auth.Generic/mate.Modules.Auth.Generic.csproj",           "src/Modules/Authentication/mate.Modules.Auth.Generic/"]
+COPY ["src/Modules/Authentication/mate.Modules.Auth.EntraId/mate.Modules.Auth.EntraId.csproj",           "src/Modules/Authentication/mate.Modules.Auth.EntraId/"]
+COPY ["src/Modules/Authentication/mate.Modules.Auth.OAuth/mate.Modules.Auth.OAuth.csproj",               "src/Modules/Authentication/mate.Modules.Auth.OAuth/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.Generic/mate.Modules.Testing.Generic.csproj",                               "src/Modules/Testing/mate.Modules.Testing.Generic/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.ModelAsJudge/mate.Modules.Testing.ModelAsJudge.csproj",                     "src/Modules/Testing/mate.Modules.Testing.ModelAsJudge/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.RubricsJudge/mate.Modules.Testing.RubricsJudge.csproj",                     "src/Modules/Testing/mate.Modules.Testing.RubricsJudge/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.HybridJudge/mate.Modules.Testing.HybridJudge.csproj",                       "src/Modules/Testing/mate.Modules.Testing.HybridJudge/"]
+COPY ["src/Modules/Testing/mate.Modules.Testing.CopilotStudioJudge/mate.Modules.Testing.CopilotStudioJudge.csproj", "src/Modules/Testing/mate.Modules.Testing.CopilotStudioJudge/"]
+COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.Generic/mate.Modules.Monitoring.Generic.csproj",                     "src/Modules/Monitoring/mate.Modules.Monitoring.Generic/"]
+COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.OpenTelemetry/mate.Modules.Monitoring.OpenTelemetry.csproj",         "src/Modules/Monitoring/mate.Modules.Monitoring.OpenTelemetry/"]
+COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.ApplicationInsights/mate.Modules.Monitoring.ApplicationInsights.csproj", "src/Modules/Monitoring/mate.Modules.Monitoring.ApplicationInsights/"]
+COPY ["src/Host/mate.WebUI/mate.WebUI.csproj",                                                               "src/Host/mate.WebUI/"]
+
+RUN dotnet restore "src/Host/mate.WebUI/mate.WebUI.csproj"
+
+COPY . .
+
+WORKDIR "/src/src/Host/mate.WebUI"
+RUN dotnet build "mate.WebUI.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "mate.WebUI.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+# Install curl for the health check and create data directories
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/data/blobs /app/data/backups /app/logs
+
+ENTRYPOINT ["dotnet", "mate.WebUI.dll"]

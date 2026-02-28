@@ -1,0 +1,284 @@
+@page "/agents"
+@using mate.Data
+@using mate.Domain.Entities
+@using mate.Domain.Contracts.Modules
+@using Microsoft.EntityFrameworkCore
+@inject mateDbContext Db
+@inject mate.Core.mateModuleRegistry Registry
+
+<PageTitle>Agents — @BrandInfo.BrandName</PageTitle>
+
+<h1>Agents</h1>
+
+<button class="btn btn-primary" @onclick="OpenCreate">+ New Agent</button>
+
+@if (_loading)
+{
+    <p><em>Loading…</em></p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Environment</th>
+                <th>Connectors</th>
+                <th>Active</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var agent in _agents)
+            {
+                <tr>
+                    <td><strong>@agent.Name</strong><br /><small>@agent.Description</small></td>
+                    <td><span class="badge badge-@agent.Environment">@agent.Environment</span></td>
+                    <td>@string.Join(", ", agent.ConnectorConfigs.Select(c => c.ConnectorType))</td>
+                    <td>@(agent.IsActive ? "✓" : "✗")</td>
+                    <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
+                    </td>
+                </tr>
+            }
+            @if (!_agents.Any())
+            {
+                <tr><td colspan="6" class="empty-row">No agents configured yet.</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (_showForm)
+{
+    <div class="modal-backdrop" @onclick="CloseForm">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>@(_editAgent is null ? "New Agent" : "Edit Agent")</h2>
+
+            <label>Name</label>
+            <input class="form-control" @bind="_form.Name" placeholder="My Bot" />
+
+            <label>Description</label>
+            <input class="form-control" @bind="_form.Description" placeholder="Short description" />
+
+            <label>Environment</label>
+            <select class="form-control" @bind="_form.Environment">
+                <option value="dev">dev</option>
+                <option value="test">test</option>
+                <option value="staging">staging</option>
+                <option value="production">production</option>
+            </select>
+
+            <label>Tags (comma-separated)</label>
+            <input class="form-control" @bind="_form.TagsRaw" placeholder="tag1, tag2" />
+
+            @if (_editAgent is null)
+            {
+                <h3 style="margin-top:1rem">Connector</h3>
+
+                <label>Connector Type</label>
+                <select class="form-control" @bind="_form.ConnectorType">
+                    @foreach (var m in _connectorModules)
+                    {
+                        <option value="@m.ConnectorType">@m.DisplayName</option>
+                    }
+                </select>
+
+                <label>Config JSON (use secret-ref names, not raw secrets)</label>
+                <textarea class="form-control" rows="5" @bind="_form.ConfigJson" placeholder='{"BotId":"...", "DirectLineSecretRef":"MY_SECRET_REF"}'></textarea>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_formError))
+            {
+                <div class="alert alert-error">@_formError</div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveAgent">Save</button>
+                <button class="btn btn-secondary" @onclick="CloseForm">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_editConnectors is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _editConnectors = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Connectors for @_editConnectors.Name</h2>
+            @foreach (var cfg in _editConnectors.ConnectorConfigs)
+            {
+                <div class="connector-row">
+                    <strong>@cfg.ConnectorType</strong>
+                    <span class="badge @(cfg.IsActive ? "badge-completed" : "badge-failed")">@(cfg.IsActive ? "Active" : "Inactive")</span>
+                    <button class="btn btn-sm btn-secondary" @onclick="() => ToggleConnector(cfg)">
+                        @(cfg.IsActive ? "Disable" : "Enable")
+                    </button>
+                </div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @onclick="() => _editConnectors = null">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteAgent is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteAgent = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Delete Agent</h2>
+            <p>Are you sure you want to delete <strong>@_deleteAgent.Name</strong>?</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="DeleteAgent">Delete</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteAgent = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private List<Agent> _agents = [];
+    private List<IAgentConnectorModule> _connectorModules = [];
+    private bool _showForm;
+    private Agent? _editAgent;
+    private Agent? _deleteAgent;
+    private Agent? _editConnectors;
+    private string _formError = string.Empty;
+
+    private AgentFormModel _form = new();
+
+    private class AgentFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Environment { get; set; } = "production";
+        public string TagsRaw { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
+        public string ConnectorType { get; set; } = "CopilotStudio";
+        public string ConfigJson { get; set; } = "{}";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _connectorModules = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
+        if (_connectorModules.Any())
+            _form.ConnectorType = _connectorModules[0].ConnectorType;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _agents = await Db.Agents
+            .Include(a => a.ConnectorConfigs)
+            .OrderBy(a => a.Name)
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        _editAgent = null;
+        _form = new();
+        _formError = string.Empty;
+        _showForm = true;
+    }
+
+    private void OpenEdit(Agent a)
+    {
+        _editAgent = a;
+        _form = new()
+        {
+            Name = a.Name,
+            Description = a.Description,
+            Environment = a.Environment,
+            TagsRaw = string.Join(", ", a.Tags),
+            IsActive = a.IsActive
+        };
+        _formError = string.Empty;
+        _showForm = true;
+    }
+
+    private async Task SaveAgent()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _formError = "Name is required.";
+            return;
+        }
+        var tags = _form.TagsRaw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (_editAgent is null)
+        {
+            // Create
+            var agent = new Agent
+            {
+                Id = Guid.NewGuid(),
+                TenantId = Guid.Empty, // resolved by tenant middleware in production
+                Name = _form.Name,
+                Description = _form.Description,
+                Environment = _form.Environment,
+                Tags = tags,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            if (!string.IsNullOrWhiteSpace(_form.ConnectorType))
+            {
+                agent.ConnectorConfigs.Add(new AgentConnectorConfig
+                {
+                    Id = Guid.NewGuid(),
+                    AgentId = agent.Id,
+                    TenantId = agent.TenantId,
+                    ConnectorType = _form.ConnectorType,
+                    ConfigJson = _form.ConfigJson,
+                    IsActive = true
+                });
+            }
+            Db.Agents.Add(agent);
+        }
+        else
+        {
+            // Update
+            _editAgent.Name = _form.Name;
+            _editAgent.Description = _form.Description;
+            _editAgent.Environment = _form.Environment;
+            _editAgent.Tags = tags;
+            _editAgent.IsActive = _form.IsActive;
+            _editAgent.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await Db.SaveChangesAsync();
+        CloseForm();
+        await LoadAsync();
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editAgent = null;
+        _formError = string.Empty;
+    }
+
+    private void ConfirmDelete(Agent a) => _deleteAgent = a;
+
+    private async Task DeleteAgent()
+    {
+        if (_deleteAgent is null) return;
+        Db.Agents.Remove(_deleteAgent);
+        await Db.SaveChangesAsync();
+        _deleteAgent = null;
+        await LoadAsync();
+    }
+
+    private async Task ToggleConnector(AgentConnectorConfig cfg)
+    {
+        cfg.IsActive = !cfg.IsActive;
+        await Db.SaveChangesAsync();
+    }
+}

@@ -1,0 +1,42 @@
+# .NET build outputs
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+
+# Publish output
+publish/
+out/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+
+# Local data / secrets
+data/
+logs/
+*.db
+*.db-shm
+*.db-wal
+
+# Docker local overrides
+infra/local/.env
+
+# Environment / secrets
+*.env
+.env.*
+appsettings.*.json
+!appsettings.Development.json
+!appsettings.template.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp

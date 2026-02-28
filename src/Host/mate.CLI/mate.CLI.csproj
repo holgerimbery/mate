@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>mate.CLI</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\mate.Domain\mate.Domain.csproj" />
+    <ProjectReference Include="..\..\Core\mate.Data\mate.Data.csproj" />
+    <ProjectReference Include="..\..\Core\mate.Core\mate.Core.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\mate.Infrastructure.Local\mate.Infrastructure.Local.csproj" />
+    <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.Generic\mate.Modules.AgentConnector.Generic.csproj" />
+    <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.CopilotStudio\mate.Modules.AgentConnector.CopilotStudio.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.Generic\mate.Modules.Testing.Generic.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.ModelAsJudge\mate.Modules.Testing.ModelAsJudge.csproj" />
+  </ItemGroup>
+</Project>

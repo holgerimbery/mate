@@ -1,0 +1,61 @@
+version: "3.9"
+
+# mate — local development stack
+# Usage: docker compose up -d
+# The WebUI will be available at http://localhost:5000
+# Worker and CLI are optional — omit them if running directly via `dotnet run`
+
+services:
+  # ── WebUI ──────────────────────────────────────────────────────────────────
+  webui:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.webui
+    container_name: mate-webui
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - Authentication__Scheme=Generic
+      - Monitoring__Provider=Generic
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/mate-local.db
+      - LocalInfrastructure__BlobStoragePath=/app/data/blobs
+      - LocalInfrastructure__SqliteDatabasePath=/app/data/mate-local.db
+      - LocalInfrastructure__BackupPath=/app/data/backups
+    volumes:
+      - mate-data:/app/data
+      - mate-logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Worker ─────────────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.worker
+    container_name: mate-worker
+    environment:
+      - DOTNET_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/mate-local.db
+      - LocalInfrastructure__BlobStoragePath=/app/data/blobs
+      - LocalInfrastructure__SqliteDatabasePath=/app/data/mate-local.db
+      - LocalInfrastructure__BackupPath=/app/data/backups
+    volumes:
+      - mate-data:/app/data
+      - mate-logs:/app/logs
+    depends_on:
+      webui:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mate-data:
+    name: mate-data
+  mate-logs:
+    name: mate-logs
