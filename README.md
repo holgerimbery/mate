@@ -1,8 +1,8 @@
 # **mate** — a multi-agent test environment for AI agents.
 
-mate connects to multiple AI agents, runs automated evaluation suites against them, and tracks quality over time. It supports Microsoft Copilot Studio, Azure AI Foundry, generic HTTP agents, and Parloa out of the box — and is extensible with custom connector and judge modules.
+mate connects to multiple AI agents, runs automated evaluation suites against them, tracks quality over time, and red-teams them for adversarial vulnerabilities. It supports Microsoft Copilot Studio, Azure AI Foundry, generic HTTP agents, and Parloa out of the box — and is extensible with custom connector, judge, and red-team modules.
 
-Current version: **v0.2.1**  
+Current version: **v0.3.0**  
 
 ---
 
@@ -10,6 +10,7 @@ Current version: **v0.2.1**
 
 - **Multi-agent** — connect and evaluate any number of AI agents in a single test suite
 - **Pluggable judge modules** — ModelAsJudge (LLM scoring), RubricsJudge (deterministic), HybridJudge, CopilotStudioJudge, or write your own
+- **Red teaming** — adversarial probe generation and vulnerability assessment across 8 attack categories (prompt injection, jailbreak, system-prompt leak, data exfiltration, hallucination induction, toxic content, privacy leak, role confusion); pluggable `IRedTeamModule` / `IAttackProvider` architecture
 - **Blazor Server UI** — full-featured web interface for managing agents, test suites, documents, rubrics, and results
 - **REST API** — full Minimal API with OpenAPI spec, Scalar explorer, and API key authentication
 - **Multi-tenant** — EF Core global query filters isolate all data per tenant
@@ -57,7 +58,7 @@ mate.sln
 │   ├── Core/               — module registry, execution engine, domain entities
 │   ├── Host/               — WebUI (Blazor + API), Worker, CLI
 │   ├── Infrastructure/     — SQLite/Azure storage implementations
-│   └── Modules/            — agent connectors, judge modules, auth, monitoring
+│   └── Modules/            — agent connectors, judge modules, auth, monitoring, red teaming
 ├── tests/                  — Unit, Integration, EndToEnd
 ├── infra/local/            — docker-compose.yml, Dockerfiles, .env.template
 └── docs/
@@ -85,7 +86,11 @@ mate.sln
 | `mate.Modules.Testing.HybridJudge` | Rubrics gate + LLM blend |
 | `mate.Modules.Testing.CopilotStudioJudge` | Citation-aware LLM, Copilot Studio defaults |
 | `mate.Modules.Testing.Generic` | Keyword/regex, zero cost |
+## Red Teaming Modules
 
+| Module | Approach |
+|--------|----------|
+| `mate.Modules.RedTeaming.Generic` | Built-in static probe library (10 probes, 8 attack categories), heuristic response evaluation, works offline |
 ---
 
 ## Documentation

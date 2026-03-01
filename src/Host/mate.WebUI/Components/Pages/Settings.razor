@@ -4,6 +4,7 @@
 @using mate.Domain.Entities
 @using mate.Domain.Contracts.Modules
 @using mate.Domain.Contracts.Monitoring
+@using mate.Domain.Contracts.RedTeaming
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Cryptography
 @using System.Net.Http
@@ -160,7 +161,7 @@
         </div>
 
         <h2 class="section-title">Question Generation Modules</h2>
-        <div class="row g-3">
+        <div class="row g-3 mb-4">
             @foreach (var m in _qgenModules)
             {
                 <div class="col-md-6 col-lg-4">
@@ -185,6 +186,50 @@
             {
                 <div class="col-12">
                     <div class="empty-state"><i class="bi bi-stars"></i><p>No question generation modules registered.</p></div>
+                </div>
+            }
+        </div>
+
+        <h2 class="section-title">Red Teaming Modules</h2>
+        <div class="row g-3">
+            @foreach (var m in _redTeamModules)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="section-card h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#dc262620,#7c3aed20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                <i class="bi bi-shield-exclamation" style="color:#dc2626;font-size:18px"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:600">@m.DisplayName</div>
+                                <span class="connector-badge">@m.ProviderType</span>
+                            </div>
+                            <span class="badge badge-pass ms-auto">Active</span>
+                        </div>
+                        @{
+                            var caps = m.GetCapabilities();
+                        }
+                        @if (caps.Any())
+                        {
+                            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">Attack categories</div>
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var cap in caps)
+                                {
+                                    <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px">@cap.Replace('_', ' ')</span>
+                                }
+                            </div>
+                        }
+                        @if (m.ConfigSchema.Any())
+                        {
+                            <div style="font-size:12px;color:var(--text-secondary);margin-top:8px">@m.ConfigSchema.Count config field@(m.ConfigSchema.Count == 1 ? "" : "s")</div>
+                        }
+                    </div>
+                </div>
+            }
+            @if (!_redTeamModules.Any())
+            {
+                <div class="col-12">
+                    <div class="empty-state"><i class="bi bi-shield-exclamation"></i><p>No red-teaming modules registered.</p></div>
                 </div>
             }
         </div>
@@ -1005,6 +1050,7 @@ OAuth__Audience=your-api-audience</pre>
     private List<ITestingModule>                 _judgeModules      = [];
     private List<IMonitoringModule>              _monitoringModules = [];
     private List<IQuestionGenerationProvider>   _qgenModules       = [];
+    private List<IRedTeamModule>                 _redTeamModules    = [];
 
     // Judge settings
     private List<JudgeSetting> _judgeSettings = [];
@@ -1086,6 +1132,7 @@ OAuth__Audience=your-api-audience</pre>
         _judgeModules      = Registry.GetAllTestingModules().Where(m => m.ProviderType != "Generic" && m.ProviderType != "ModelQGen").ToList();
         _monitoringModules = Registry.GetAllMonitoring().Where(m => m.ProviderType != "Generic").ToList();
         _qgenModules       = Registry.GetAllQuestionProviders().Where(m => m.ProviderType != "Generic").ToList();
+        _redTeamModules    = Registry.GetAllRedTeamModules().ToList();
         _authScheme        = Config["Authentication:Scheme"] ?? "None";
         await LoadAllAsync();
     }

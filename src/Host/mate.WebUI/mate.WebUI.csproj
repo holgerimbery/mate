@@ -38,5 +38,6 @@
     <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.Generic\mate.Modules.Monitoring.Generic.csproj" />
     <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.OpenTelemetry\mate.Modules.Monitoring.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.ApplicationInsights\mate.Modules.Monitoring.ApplicationInsights.csproj" />
+    <ProjectReference Include="..\..\Modules\RedTeaming\mate.Modules.RedTeaming.Generic\mate.Modules.RedTeaming.Generic.csproj" />
   </ItemGroup>
 </Project>

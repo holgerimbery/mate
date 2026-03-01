@@ -28,6 +28,8 @@
 | E16 | Notifications & Scheduled Runs | Medium |
 | E17 | Extended Document Sources | Medium |
 | E18 | Dynamic Binary Module System (Plugins) | High |
+| E19 | Red Teaming Module Category | High |
+| E19 | Red Teaming Module Category | High |
 
 ---
 
@@ -506,6 +508,78 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 | TD-02 | No `.env.template` file documenting required environment variables | Medium |
 | TD-03 | `dotnet user-secrets` not initialized for local dev | Low |
 | TD-04 | Missing `Class1.cs` stub files should be replaced with real implementations | Low |
+
+---
+
+## E19 — Red Teaming Module Category
+
+> **Goal:** give operators a structured way to probe an AI agent for adversarial vulnerabilities (prompt injection, jailbreaks, data exfiltration, etc.) and receive actionable, risk-rated findings — separate from functional quality testing in E6/E8.
+>
+> **Regulatory context:** supports EU AI Act Art. 9 risk-management obligations and NIST AI RMF GOVERN/MAP/MEASURE cycles.
+
+### v0.3.0 — Contracts & Generic Module ✅ Done
+
+- [x] **E19-01** New domain contract file `src/Core/mate.Domain/Contracts/RedTeaming/IRedTeamModule.cs`:
+  - `AttackCategory` enum (8 values: PromptInjection, Jailbreak, SystemPromptLeak, DataExfiltration, HallucinationInduction, ToxicContent, PrivacyLeak, RoleConfusion)
+  - `RiskLevel` enum (None / Low / Medium / High / Critical)
+  - `AttackRequest`, `AttackProbe`, `RedTeamFinding`, `RedTeamReport` DTOs
+  - `IAttackProvider` interface — `GenerateProbesAsync` + `EvaluateResponseAsync`
+  - `IRedTeamModule` interface — module descriptor
+- [x] **E19-02** `mate.Modules.RedTeaming.Generic` — `GenericAttackProvider` with 10 built-in probes, heuristic refusal detection, severity-mapped findings; zero external dependencies
+- [x] **E19-03** `mateModuleRegistry` extended: `RegisterRedTeamModule`, `GetRedTeamModule`, `GetAllRedTeamModules`
+- [x] **E19-04** WebUI wiring: `AddmateGenericRedTeaming()` in `Program.cs`; registry population loop
+- [x] **E19-05** Settings UI: Red Teaming Modules section in the Modules tab (card per module, capability chips, `bi-shield-exclamation` icon)
+- [x] **E19-06** `mate.WebUI.csproj` and `mate.sln` updated with new project references and configuration entries
+
+### v0.3.0 — Red Team Run Execution
+
+- [ ] **E19-07** `RedTeamRun` entity — `Id`, `TenantId`, `AgentId`, `ModuleId`, `Status`, `StartedAt`, `CompletedAt`, `TotalProbes`, `FindingCount`, `HighestRisk`; EF migration
+- [ ] **E19-08** `RedTeamFindingRecord` entity — persisted finding: `Id`, `RunId`, `TenantId`, `ProbeMessage`, `AgentResponse`, `Category`, `Risk`, `Rationale`, navigation to run; EF migration
+- [ ] **E19-09** `RedTeamExecutionCoordinator` in `mate.Core` — selects probe provider, calls `GenerateProbesAsync`, sends each probe to the agent via `IAgentConnector`, calls `EvaluateResponseAsync`, persists findings; honours `CancellationToken`
+- [ ] **E19-10** `IMessageQueue` message type `StartRedTeamRunMessage` — `RunId`, `AgentId`, `ModuleId`, `Categories[]`, `NumberOfProbes`
+- [ ] **E19-11** `TestRunWorker` extended (or separate `RedTeamWorker`) to consume `StartRedTeamRunMessage` and call `RedTeamExecutionCoordinator`
+- [ ] **E19-12** `POST /api/redteam/runs` API endpoint — start a red-team run; body: `agentId`, `providerType`, `categories[]`, `numberOfProbes`; returns `{ runId }`
+- [ ] **E19-13** `GET /api/redteam/runs/{id}` — run status + summary
+- [ ] **E19-14** `GET /api/redteam/runs/{id}/findings` — paginated list of findings for a run
+
+### v0.3.0 — Red Team UI
+
+- [ ] **E19-15** Red Team page (`/redteam`) — list past red-team runs per agent with highest risk badge, finding count, date; "Start New Run" button opening a config panel
+- [ ] **E19-16** New Run panel — select agent, select provider module, choose attack categories (multi-select chips), set probe count; submit triggers `POST /api/redteam/runs`
+- [ ] **E19-17** Red Team Run Report page (`/redteam/{runId}`) — findings table with risk badge, category, probe message, agent response preview, rationale, reproduction steps, mitigations; expandable row for full detail
+- [ ] **E19-18** Risk summary bar — Critical / High / Medium / Low / None count tiles at top of report
+- [ ] **E19-19** Export findings as CSV / JSON from the run report page
+- [ ] **E19-20** Red Team run history accessible from the Agent detail card (link from Agents page)
+- [ ] **E19-21** Navigation sidebar entry — "Red Team" link (below Testing section, `bi-shield-exclamation` icon)
+
+### v0.3.0 — Audit Logging
+
+- [ ] **E19-22** `AuditHelper.Log` calls for `RedTeamRunStarted` and `RedTeamRunCompleted` entity type actions
+- [ ] **E19-23** Audit Log page shows red-team events alongside test-run events
+
+### v0.3.0 — CLI Integration
+
+- [ ] **E19-24** `mate redteam run <agentId> [--categories <list>] [--probes <n>]` — start a run, stream finding summary to console
+- [ ] **E19-25** `mate redteam report <runId> [--format json|csv]` — export findings
+
+### v0.3.0 — Health & Monitoring
+
+- [ ] **E19-26** `/health/modules` extended — includes `IRedTeamModule.IsHealthy()` per registered provider
+- [ ] **E19-27** Settings Modules tab: red-team modules show their health status inline (same pattern as connectors)
+
+### v0.4.0 — AI-Powered Red Team Modules
+
+- [ ] **E19-28** `mate.Modules.RedTeaming.ModelAsAttacker` — uses an LLM (Azure OpenAI / AI Foundry) to generate context-aware, domain-specific adversarial probes; config fields: Endpoint, ApiKey, Model, Temperature; implements `IAttackProvider`
+- [ ] **E19-29** `mate.Modules.RedTeaming.ModelAsEvaluator` — uses an LLM to evaluate whether an agent response constitutes a vulnerability (replaces heuristic refusal detection); combine with any `IAttackProvider`
+- [ ] **E19-30** Multi-turn attack chains — `AttackProbe` extended with `FollowUpMessages[]`; `RedTeamExecutionCoordinator` sends a multi-turn conversation; captures full transcript in `RedTeamFindingRecord`
+- [ ] **E19-31** Jailbreak catalogue — curated, versioned YAML library of known jailbreak patterns (`docs/redteaming/jailbreaks.yml`); `GenericAttackProvider` loads from catalogue at startup; community-updatable
+
+### v0.4.0 — Reporting & Compliance
+
+- [ ] **E19-32** CVSS-style risk score per finding — exploitability + impact sub-scores composited into `RiskScore` (0.0–10.0); shown on report
+- [ ] **E19-33** Trend analysis — compare finding counts and highest risk across multiple red-team runs for the same agent; trend chart on Red Team page
+- [ ] **E19-34** PDF report export — formatted red-team report with executive summary, finding table, and remediation guidance; suitable for compliance reviews
+- [ ] **E19-35** EU AI Act Art. 9 compliance annotation — tag findings with relevant AI Act obligation; PDF report section maps findings to Art. 9 sub-requirements
 | TD-05 | `AddMicrosoftIdentityWebApp(AuthenticationBuilder)` overload does not set DefaultScheme/DefaultChallengeScheme — must be set explicitly before calling it | Note |
 | TD-06 | Azure AD `response_mode=form_post` requires `SameSite=Unspecified` on OIDC correlation and nonce cookies | Note |
 | TD-07 | ~~ASP.NET Core Data Protection keys must be persisted to a volume in Docker~~ — **RESOLVED**: in-memory keys are correct; persisted keys caused decrypt failures when container restarts with new keys | Resolved |

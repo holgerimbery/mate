@@ -13,6 +13,7 @@ using mate.Data;
 using mate.Domain.Contracts.Infrastructure;
 using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
+using mate.Domain.Contracts.RedTeaming;
 using mate.Domain.Entities;
 using mate.Infrastructure.Local;
 using mate.Modules.AgentConnector.CopilotStudio;
@@ -28,6 +29,7 @@ using mate.Modules.Testing.HybridJudge;
 using mate.Modules.Testing.ModelAsJudge;
 using mate.Modules.Testing.ModelQGen;
 using mate.Modules.Testing.RubricsJudge;
+using mate.Modules.RedTeaming.Generic;
 using mate.WebUI.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -154,6 +156,9 @@ try
     // ── Question generation modules ──────────────────────────────────────────
     builder.Services.AddmateModelQGenModule(config);
 
+    // ── Red-teaming modules ──────────────────────────────────────────────────
+    builder.Services.AddmateGenericRedTeaming();
+
     // ── Authentication ───────────────────────────────────────────────────────
     var authScheme = config["Authentication:Scheme"] ?? "EntraId";
 
@@ -266,6 +271,8 @@ try
             registry.RegisterQuestionProvider(m);
         foreach (var m in scope.ServiceProvider.GetServices<IMonitoringModule>())
             registry.RegisterMonitoring(m);
+        foreach (var m in scope.ServiceProvider.GetServices<IRedTeamModule>())
+            registry.RegisterRedTeamModule(m);
     }
 
     if (!app.Environment.IsDevelopment())

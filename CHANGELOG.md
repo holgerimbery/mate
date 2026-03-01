@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.0] — 2026-03-01
+
+### Added
+- **Red Teaming module category** — new first-class module type (`IRedTeamModule` / `IAttackProvider`) for adversarial security testing of AI agents, fully separate from the existing `ITestingModule` / `IJudgeProvider` stack.
+- **Domain contracts** (`src/Core/mate.Domain/Contracts/RedTeaming/IRedTeamModule.cs`):
+  - `AttackCategory` enum — 8 attack types: `PromptInjection`, `Jailbreak`, `SystemPromptLeak`, `DataExfiltration`, `HallucinationInduction`, `ToxicContent`, `PrivacyLeak`, `RoleConfusion`.
+  - `RiskLevel` enum — `None`, `Low`, `Medium`, `High`, `Critical`.
+  - `AttackRequest` — input to probe generators (agent description, categories filter, probe count, domain hint, resolved credentials).
+  - `AttackProbe` — a single adversarial prompt with category, failure signature, and rationale.
+  - `RedTeamFinding` — confirmed vulnerability: probe, agent response, risk level, rationale, reproduction steps, mitigations.
+  - `RedTeamReport` — aggregated findings for one red-team run.
+  - `IAttackProvider` — generates probes + evaluates agent responses; returns `null` when the agent handled the probe safely.
+  - `IRedTeamModule` — module descriptor with `ModuleId`, `DisplayName`, `ProviderType`, `ConfigSchema`, `IsHealthy()`, `ValidateConfig()`, `GetCapabilities()`, `RegisterServices()`.
+- **`mate.Modules.RedTeaming.Generic`** (`src/Modules/RedTeaming/mate.Modules.RedTeaming.Generic/`):
+  - `GenericAttackProvider` — 10 built-in adversarial probes covering all 8 attack categories; heuristic refusal-keyword detection to flag compliant (vulnerable) responses; severity-mapped `RedTeamFinding` output; no external LLM required — suitable for local dev and CI.
+  - `GenericRedTeamModule` — zero-config descriptor; `GetCapabilities()` returns all 7 attack-category strings.
+  - `AddmateGenericRedTeaming()` DI extension.
+- **`mateModuleRegistry`** (`src/Core/mate.Core/mateModuleRegistry.cs`) — new `_redTeamModules` dictionary, `RegisterRedTeamModule()`, `GetRedTeamModule()`, `GetAllRedTeamModules()`.
+- **WebUI registration** (`Program.cs`) — `AddmateGenericRedTeaming()` call; `foreach (var m in GetServices<IRedTeamModule>()) registry.RegisterRedTeamModule(m)` population loop at startup.
+- **Settings UI — Red Teaming Modules section** (`Settings.razor`) — new card section in the Modules tab after Question Generation: shows `DisplayName`, `ProviderType` badge, Active status, and all attack-category capability chips; red/purple gradient icon (`bi-shield-exclamation`).
+- **Project wiring** — `mate.WebUI.csproj` project reference; `mate.sln` project entry and all 6 build configuration entries.
+
 ## [v0.2.1] — 2026-03-01
 
 ### Added

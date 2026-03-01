@@ -1,5 +1,6 @@
 using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
+using mate.Domain.Contracts.RedTeaming;
 using Microsoft.Extensions.Logging;
 
 namespace mate.Core;
@@ -16,7 +17,8 @@ public sealed class mateModuleRegistry
     private readonly Dictionary<string, IJudgeProvider> _judgeProviders = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IQuestionGenerationProvider> _questionProviders = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IMonitoringModule> _monitoringModules = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, ITestingModule> _testingModules = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ITestingModule>   _testingModules   = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IRedTeamModule>    _redTeamModules   = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<mateModuleRegistry> _logger;
 
     public mateModuleRegistry(ILogger<mateModuleRegistry> logger)
@@ -59,6 +61,13 @@ public sealed class mateModuleRegistry
             module.ProviderType, module.DisplayName);
     }
 
+    public void RegisterRedTeamModule(IRedTeamModule module)
+    {
+        _redTeamModules[module.ProviderType] = module;
+        _logger.LogInformation("Registered red-team module: {ProviderType} ({DisplayName})",
+            module.ProviderType, module.DisplayName);
+    }
+
     // ── Resolution ────────────────────────────────────────────────────────────
 
     /// <summary>Returns the connector module for the given type, or throws <see cref="ModuleNotFoundException"/>.</summary>
@@ -85,11 +94,20 @@ public sealed class mateModuleRegistry
         return provider;
     }
 
-    public IReadOnlyList<IAgentConnectorModule>          GetAllConnectors()       => [.. _connectorModules.Values];
-    public IReadOnlyList<IJudgeProvider>                  GetAllJudgeProviders()   => [.. _judgeProviders.Values];
-    public IReadOnlyList<IMonitoringModule>               GetAllMonitoring()       => [.. _monitoringModules.Values];
-    public IReadOnlyList<ITestingModule>                  GetAllTestingModules()   => [.. _testingModules.Values];
+    public IReadOnlyList<IAgentConnectorModule>          GetAllConnectors()        => [.. _connectorModules.Values];
+    public IReadOnlyList<IJudgeProvider>                  GetAllJudgeProviders()    => [.. _judgeProviders.Values];
+    public IReadOnlyList<IMonitoringModule>               GetAllMonitoring()        => [.. _monitoringModules.Values];
+    public IReadOnlyList<ITestingModule>                  GetAllTestingModules()    => [.. _testingModules.Values];
     public IReadOnlyList<IQuestionGenerationProvider>     GetAllQuestionProviders() => [.. _questionProviders.Values];
+    public IReadOnlyList<IRedTeamModule>                  GetAllRedTeamModules()    => [.. _redTeamModules.Values];
+
+    /// <summary>Returns the red-team module for the given provider type, or throws <see cref="ModuleNotFoundException"/>.</summary>
+    public IRedTeamModule GetRedTeamModule(string providerType)
+    {
+        if (!_redTeamModules.TryGetValue(providerType, out var module))
+            throw new ModuleNotFoundException("RedTeamModule", providerType, _redTeamModules.Keys);
+        return module;
+    }
 }
 
 /// <summary>
