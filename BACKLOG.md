@@ -1,4 +1,4 @@
-# mate — Product Backlog
+﻿# mate — Product Backlog
 
 > Version discipline: Items are tagged with the target version milestone. We start at **v0.1.0** and advance only on explicit instruction.
 >
@@ -22,6 +22,8 @@
 | E10 | Self-Check & App Health Mechanisms | Medium |
 | E11 | Logging System | Medium |
 | E12 | Versioning, CHANGELOG, BACKLOG | Done |
+| E13 | Authentication — EntraId full flow | Blocked |
+| E14 | HTTPS on localhost — dev cert for Docker | High |
 
 ---
 
@@ -63,6 +65,8 @@ GetCapabilities() : List<string>             — declares what the module can do
 - [x] **E1-07** Verify `mate.sln` includes ALL projects (check for missing module projects)
 - [x] **E1-08** Restructure `infra/local/` — Dockerfiles moved from `docker/` root into `infra/local/`; `docker-compose.yml` references updated; `docker/` folder removed
 - [x] **E1-09** Git repository initialised; `.gitignore` added; pushed to `https://github.com/holgerimbery/mate` (private)
+- [x] **E1-10** Data Protection keys persisted: `docker-compose.yml` mounts `mate-dataprotection` volume to `/root/.aspnet/DataProtection-Keys` — prevents correlation cookie failures on container restart
+- [x] **E1-11** `Authentication__Scheme` in `.env` reset to `None` — app runs without auth for local development
 
 ### v0.2.0
 
@@ -121,7 +125,7 @@ GetCapabilities() : List<string>             — declares what the module can do
 Implement the same collapsible icon sidebar as MaaJforMCS:
 
 - [x] **E4-01** **MainLayout** — collapsible left sidebar with logo, Bootstrap Icons, branding from `BrandInfo`
-- [ ] **E4-02** **Home / Welcome page** — quick-start cards, links to wizard, recent activity feed
+- [x] **E4-02** **Home / Welcome page** — action card grid, KPI stats, Quick Run modal, Recent Runs feed, Module Status panel, Getting Started steps
 - [ ] **E4-03** **Setup Wizard** — combined tenant + agent onboarding wizard (E2-06 + E3-01 merged)
 - [ ] **E4-04** **Test Suites page** — CRUD, test case management, run execution button
 - [ ] **E4-05** **Documents page** — upload, list, delete; displays chunk count per document
@@ -130,7 +134,7 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 - [ ] **E4-08** **Dashboard page** — KPI cards, pass rate trend chart, recent runs table, per-module breakdown
 - [x] **E4-09** **Judge Rubrics page** — RubricSet CRUD, criteria editor, assign to test suite
 - [ ] **E4-10** **Run Report page** — results table, transcript modal, human verdict override
-- [x] **E4-11** **Help page** — documentation links, keyboard shortcuts, FAQ
+- [x] **E4-11** **Help page** — documentation links, REST API reference table, OpenAPI download, Interactive API Explorer link
 - [x] **E4-12** **Audit Log page** (admin) — paginated event log with filters
 - [ ] **E4-13** **API Keys page** (admin) — generate, list, revoke keys; show scopes
 - [x] **E4-14** **Settings page** (admin) — tabs: AI Judge config, Question Generation, Modules, Tenant
@@ -315,6 +319,39 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 ---
 
+## E13 — Authentication — EntraId full flow ✅ Complete
+
+- [x] **E13-01** `EntraIdAuthModule` — `AddMicrosoftIdentityWebApp` (OIDC + session cookie) + `AddMicrosoftIdentityWebApi` (JWT Bearer `EntraId` scheme)
+- [x] **E13-02** `AddMicrosoftIdentityUI` — MVC controllers for `/MicrosoftIdentity/Account/*` redirect endpoints
+- [x] **E13-03** `IClaimsTransformation` on `EntraIdAuthModule` — injects `mate:externalTenantId` (`tid`), `mate:userId` (`oid`), `mate:role` (`roles`) claims
+- [x] **E13-04** `Program.cs` explicit auth defaults: `DefaultScheme=Cookies`, `DefaultChallengeScheme=OpenIdConnect`, `DefaultSignInScheme=Cookies`
+- [x] **E13-05** OIDC correlation cookie `SameSite=Unspecified` — fixes `Correlation failed` on Azure AD `form_post` cross-site callback
+- [x] **E13-06** Tenant mapping seeder: `SeedEntraIdTenantMappingAsync` maps dev tenant `ExternalTenantId` → Azure AD `tid` GUID (idempotent)
+- [x] **E13-07** `ITenantContext` factory Blazor Server fallback via `AuthenticationStateProvider` (fixes null `HttpContext` in SignalR circuits)
+- [x] **E13-08** `Agents.razor`, `TestSuites.razor`, `Wizard.razor` updated to use `@inject ITenantContext TenantCtx`
+- [ ] **E13-09** `infra/local/.env.template` — document `Authentication__Scheme`, `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`
+- [ ] **E13-10** README section: "Switching to EntraId authentication" setup guide
+- [x] **E13-11** ~~BLOCKED~~ **RESOLVED** — EntraId login on HTTP localhost works via nginx reverse proxy at `https://maaj.imbery.de`; full OIDC flow confirmed working in production.
+- [x] **E13-12** Fixed circular DI infinite loop: `TenantLookupService` now constructs `mateDbContext` directly with `null` tenant context — no DI involvement, loop impossible.
+- [x] **E13-13** Fixed Blazor sync-context deadlock: `Task.Run()` in `ITenantContext` factory escapes `RendererSynchronizationContext`.
+- [x] **E13-14** Fixed user name display: `ClaimsIdentity` constructed with `nameType:"name"` in `EntraIdAuthModule` — maps Entra `name` claim to `Identity.Name`.
+- [x] **E13-15** Removed `DataProtection` key persistence — in-memory keys prevent cookie decrypt failures on container restart.
+
+---
+
+## E14 — HTTPS on localhost (dev cert for Docker)
+
+### v0.1.0
+
+- [ ] **E14-01** Generate ASP.NET Core dev certificate on host: `dotnet dev-certs https --export-path ./infra/local/certs/aspnetapp.pfx --password <pwd>`
+- [ ] **E14-02** Mount cert into `mate-webui` container; set `ASPNETCORE_Kestrel__Certificates__Default__Path` + `__Password` env vars
+- [ ] **E14-03** Expose port 5001 (HTTPS) in `docker-compose.yml` alongside 5000
+- [ ] **E14-04** Update Azure AD app registration redirect URI to `https://localhost:5001/signin-oidc`
+- [ ] **E14-05** Update `.env` `Authentication__Scheme` back to `EntraId` and test full login flow
+- [ ] **E14-06** Add README section: "Running with HTTPS locally"
+
+---
+
 ## Discovered Issues / Tech Debt
 
 | ID | Issue | Severity |
@@ -323,7 +360,12 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 | TD-02 | No `.env.template` file documenting required environment variables | Medium |
 | TD-03 | `dotnet user-secrets` not initialized for local dev | Low |
 | TD-04 | Missing `Class1.cs` stub files should be replaced with real implementations | Low |
+| TD-05 | `AddMicrosoftIdentityWebApp(AuthenticationBuilder)` overload does not set DefaultScheme/DefaultChallengeScheme — must be set explicitly before calling it | Note |
+| TD-06 | Azure AD `response_mode=form_post` requires `SameSite=Unspecified` on OIDC correlation and nonce cookies | Note |
+| TD-07 | ~~ASP.NET Core Data Protection keys must be persisted to a volume in Docker~~ — **RESOLVED**: in-memory keys are correct; persisted keys caused decrypt failures when container restarts with new keys | Resolved |
+| TD-08 | `IHttpContextAccessor.HttpContext` is null in Blazor Server SignalR circuits — always use `AuthenticationStateProvider` fallback for tenant/user resolution | Note |
+| TD-09 | ~~EntraId login requires HTTPS on localhost~~ — **RESOLVED**: production deployment at `https://maaj.imbery.de` via nginx fully resolves the Mixed Content issue; localhost HTTP remains unsupported | Resolved |
 
 ---
 
-*Last updated: 2026-02-28*
+*Last updated: 2026-03-01, Session 14 — v0.2.0 released*

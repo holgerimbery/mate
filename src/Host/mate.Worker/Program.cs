@@ -2,6 +2,7 @@ using mate.Core;
 using mate.Core.Tenancy;
 using mate.Data;
 using mate.Domain.Contracts.Infrastructure;
+using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
 using mate.Infrastructure.Local;
 using mate.Modules.AgentConnector.CopilotStudio;
@@ -9,6 +10,7 @@ using mate.Modules.AgentConnector.Generic;
 using mate.Modules.Monitoring.Generic;
 using mate.Modules.Testing.Generic;
 using mate.Modules.Testing.ModelAsJudge;
+using mate.Modules.Testing.ModelQGen;
 using mate.Modules.Testing.RubricsJudge;
 using mate.Modules.Testing.CopilotStudioJudge;
 using mate.Modules.Testing.HybridJudge;
@@ -62,7 +64,8 @@ try
             services.AddmateRubricsJudgeModule();
             services.AddmateHybridJudgeModule(config);
             services.AddmateCopilotStudioJudgeModule(config);
-
+            // ── Question generation modules ─────────────────────────────────────────
+            services.AddmateModelQGenModule(config);
             // ── Monitoring ────────────────────────────────────────────────────
             services.AddmateGenericMonitoring();
 
@@ -73,6 +76,22 @@ try
 
     // Apply EF migrations + seed default data on startup
     await host.Services.ApplyMigrationsAsync(seed: true);
+
+    // ── Populate module registry from DI ──────────────────────────────────────────
+    {
+        using var scope = host.Services.CreateScope();
+        var registry = scope.ServiceProvider.GetRequiredService<mateModuleRegistry>();
+        foreach (var m in scope.ServiceProvider.GetServices<IAgentConnectorModule>())
+            registry.RegisterConnector(m);
+        foreach (var m in scope.ServiceProvider.GetServices<ITestingModule>())
+            registry.RegisterTestingModule(m);
+        foreach (var m in scope.ServiceProvider.GetServices<IJudgeProvider>())
+            registry.RegisterJudgeProvider(m);
+        foreach (var m in scope.ServiceProvider.GetServices<IQuestionGenerationProvider>())
+            registry.RegisterQuestionProvider(m);
+        foreach (var m in scope.ServiceProvider.GetServices<IMonitoringModule>())
+            registry.RegisterMonitoring(m);
+    }
 
     await host.RunAsync();
     return 0;

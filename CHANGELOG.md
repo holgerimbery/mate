@@ -1,12 +1,76 @@
-# mate — Changelog
+﻿# mate — Changelog
 
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.0] — 2026-03-01
+
+### Added
+- **Tenant ID resolution across auth schemes**: `TenantLookupService` maps the Entra ID `tid` claim (external tenant GUID) to the internal `Tenant.Id` via database lookup, with 5-minute `IMemoryCache` caching. Enables seamless switching between `Generic` and `EntraId` auth without data loss.
+
+### Fixed
+- **Circular DI infinite loop** (`TenantLookupService` / `mateDbContext`): `TenantLookupService` previously injected `mateDbContext` via DI, whose `AddDbContext` factory called `sp.GetService<ITenantContext>()`, triggering the `ITenantContext` factory again — hundreds of recursive calls per request, app never responded. Fixed by injecting `DbContextOptions<mateDbContext>` and constructing `new mateDbContext(options, tenantContext: null)` directly, bypassing DI entirely. The `null` tenant context correctly disables the global query filter for tenant lookup.
+- **Blazor `RendererSynchronizationContext` deadlock** (`Program.cs`): the `ITenantContext` scoped factory used `.GetAwaiter().GetResult()` on the Blazor render thread; the EF Core async continuation tried to resume on that same blocked thread. Fixed by wrapping the call in `Task.Run(() => lookup.LookupByExternalIdAsync(...))` to offload to the thread pool with no captured sync context.
+- **Removed `DataProtection` key persistence**: `PersistKeysToFileSystem` + `SetApplicationName` were removed from `Program.cs`. Persisted keys on the Docker volume caused cookie decryption failures when the container restarted and generated new in-memory keys that couldn't decrypt the old cookies. In-memory keys (ASP.NET Core default) are correct for this deployment — matching MaaJforMCS.
+- **User display name shows "U User"** (`EntraIdAuthModule`): `ClaimsIdentity` was constructed without `nameType`, defaulting to the `ClaimTypes.Name` long URI; Entra sends the display name under the short key `"name"`. Fixed by passing `nameType: "name", roleType: ClaimTypes.Role` to the `ClaimsIdentity` constructor in `TransformClaimsAsync`.
+- **Auth log noise reduced**: `appsettings.json` Serilog override levels for `Microsoft.AspNetCore.Authentication`, `Microsoft.AspNetCore.Authentication.Cookies`, `Microsoft.AspNetCore.Authentication.OpenIdConnect`, `Microsoft.Identity.Web`, and `Microsoft.IdentityModel` restored to `Warning` (were set to `Debug` during debugging session).
+
+### Changed
+- **`DataServiceExtensions.AddmateSqlite`**: removed `sp.GetService<ITenantContext>()` call from the `AddDbContext` options factory — it was a no-op that triggered the circular DI chain.
+- **`infra/local/.env`**: `Authentication__Scheme` set to `EntraId` — production deployment at `https://maaj.imbery.de` is now the default.
+
 ---
 
-## [Unreleased]
+## [Unreleased] — Session 13
+
+### Changed
+- **`.env` `Authentication__Scheme`**: switched back to `None` — unauthenticated mode for local development; EntraId flow blocked by browser Mixed Content policy (HTTPS Azure AD → HTTP localhost form POST)
+
+### Fixed
+- **`EntraIdAuthModule.cs`**: removed duplicate `AddMicrosoftIdentityUI` static method and leftover `RegisterEntraIdAuth` static method introduced during session 12 experiments — restored `ConfigureAuthentication` to pre-session state (`AddMicrosoftIdentityWebApp` + `AddMicrosoftIdentityWebApi` + `IClaimsTransformation`)
+- **`Program.cs` auth section**: restored `AuthenticationBuilder` ternary pattern with explicit `DefaultScheme/DefaultChallengeScheme/DefaultSignInScheme` + `authModule.ConfigureAuthentication(authBuilder, config)` + `AddMicrosoftIdentityUI` call — removed `RegisterEntraIdAuth` branch introduced during session 12
+
+### Known Issue
+- **EntraId login on HTTP localhost is blocked by browser**: Azure AD's KMSI page at `https://login.microsoftonline.com/kmsi` performs a `form_post` back to `http://localhost:5000/signin-oidc`. Modern browsers (Edge, Chrome) silently block HTTPS→HTTP cross-origin form submissions as Mixed Content — even with Automatic HTTPS disabled. The container receives no callback. Resolution requires HTTPS on localhost (ASP.NET Core dev cert in Docker)
+
+---
+
+## [Unreleased] — Session 12
+
+### Added
+- **Microsoft Entra ID (Azure AD) authentication**: full OIDC browser sign-in flow via `Microsoft.Identity.Web 3.4.0`. `EntraIdAuthModule` registers `AddMicrosoftIdentityWebApp` (OIDC + session cookie) and `AddMicrosoftIdentityWebApi` (JWT Bearer `EntraId` scheme). `AddMicrosoftIdentityUI` registers `/MicrosoftIdentity/Account/*` MVC controllers for redirect handling.
+- **`IClaimsTransformation` on `EntraIdAuthModule`**: injects `mate:externalTenantId` (from `tid`), `mate:userId` (from `oid`), and `mate:role` (from `roles`) claims — available in both HTTP pipeline and Blazor Server SignalR circuits.
+- **Tenant mapping seeder**: `mateDbSeeder.SeedEntraIdTenantMappingAsync` idempotently updates the dev tenant row's `ExternalTenantId` to the configured Azure AD tenant GUID — resolves the tenant lookup when `tid` claim is present.
+- **Data Protection key persistence**: `docker-compose.yml` mounts named volume `mate-dataprotection` to `/root/.aspnet/DataProtection-Keys` in the `webui` container — keys survive container restarts and session/correlation cookies remain valid.
+
+### Changed
+- **`EntraIdAuthModule.ConfigureAuthentication`**: uses `configureMicrosoftIdentityOptions` callback overload; sets `CorrelationCookie.SameSite = Unspecified` and `NonceCookie.SameSite = Unspecified` to fix OIDC callback failure caused by Azure AD's cross-site `form_post` response mode dropping `SameSite=Lax` cookies.
+- **`Program.cs` auth scheme setup**: `DefaultScheme = "Cookies"`, `DefaultChallengeScheme = "OpenIdConnect"`, `DefaultSignInScheme = "Cookies"` are now set explicitly before `AddMicrosoftIdentityWebApp` — required because the `AuthenticationBuilder` overload of MIWA does not set these defaults.
+- **`ITenantContext` factory in `Program.cs`**: added `AuthenticationStateProvider` fallback so tenant is resolved correctly in Blazor Server SignalR circuits where `IHttpContextAccessor.HttpContext` is null.
+- **`Agents.razor`, `TestSuites.razor`, `Wizard.razor`**: replaced local `_tenantId` field with `@inject ITenantContext TenantCtx` + `TenantCtx.TenantId` — tenant is now always read from the live context, not a stale field.
+- **`mateDbSeeder.SeedDevTenantAsync`**: tenant existence check changed from `ExternalTenantId == "...0099"` to `Id == DevTenantId` — avoids false negatives after `ExternalTenantId` is updated by the EntraId mapping seeder.
+- **`Settings.razor` judge modules filter**: excludes `ProviderType == "ModelQGen"` from the Judge/Evaluation modules list — `ModelQGen` now only appears in the Question Generation section.
+
+### Fixed
+- **`AuthenticationFailureException: Correlation failed`**: root cause was `SameSite=Lax` on correlation cookie dropped by browser on Azure AD's cross-site `form_post` POST — fixed by setting `SameSite=Unspecified`.
+- **`UNIQUE constraint failed: Tenants.Id`** on startup: seeder changed to UPDATE existing row instead of INSERT when dev tenant already exists.
+- **Agents not visible after EntraId login**: Blazor Server `IHttpContextAccessor.HttpContext` is null in SignalR circuits — fixed via `AuthenticationStateProvider` fallback + `IClaimsTransformation` claim injection + per-page `ITenantContext` injection.
+- **`No DefaultChallengeScheme found`**: fixed by explicitly calling `AddAuthentication(options => ...)` with scheme defaults before `AddMicrosoftIdentityWebApp`.
+
+## [Unreleased] — Session 11
+
+### Added
+- **Dark Mode**: Full dark theme via `[data-theme="dark"]` CSS variables in `app.css`; JS helpers (`mateInitDarkMode`, `mateSetDarkMode`, `mateGetDarkMode`) in `app.js` with localStorage persistence; sidebar toggle button in `MainLayout.razor`
+- **Settings — Appearance tab**: New tab in Settings to toggle dark mode with a switch control
+- **API Key Authentication**: `ApiKeyAuthHandler` — proper ASP.NET Core `IAuthenticationHandler`; registered as "ApiKey" auth scheme alongside primary; `FallbackPolicy` extended to accept both — fixes API key requests being rejected
+- **Help — OpenAPI download**: "Interactive API Explorer" (→/scalar/v1) and "Download OpenAPI spec" (→/openapi/v1.json) buttons added to REST API Reference section
+- **Home page rewrite**: Action card grid (Wizard, Test Suites, Documents, Agents, Dashboard, Quick Run); KPI stats row; Quick Run modal; Getting Started steps; Recent Runs feed; Module Status panel using `mateModuleRegistry`; version + changelog entry in header
+
+### Changed
+- **Auth default**: `appsettings.json` `Authentication:Scheme` changed from `EntraId` to `None` — app starts without auth for first-time setup
+- **`Program.cs` auth**: Added `None` case to auth scheme switch (maps to `GenericAuthModule`); removed old post-authorization API key middleware
+- **Help page**: Removed Keyboard Shortcuts and FAQ sections
 
 ### Added
 - **`mate.Modules.Testing.CopilotStudioJudge`** — new testing module combining deterministic rubrics with a citation-aware LLM judge tuned for Microsoft Copilot Studio agents. Features: three built-in default rubrics (NonEmpty mandatory gate, no rejection phrase, no error surfacing), citation block awareness (`[1]: cite:...` = positive grounding indicator), semantic equivalence evaluation, CopilotStudio-specific scoring weights (TaskSuccess 0.35, IntentMatch 0.25, Factuality 0.25, Helpfulness 0.10, Safety 0.05), 0.3×rubrics + 0.7×LLM blend, rubrics-only mode when LLM not configured, graceful fallback on LLM failure. Ported from MaaJforMCS `AzureAIFoundryJudgeService`.

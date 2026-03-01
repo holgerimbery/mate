@@ -16,6 +16,8 @@ public class TestSuite
     /// <summary>Per-suite judge override. Null = use agent or global JudgeSetting.</summary>
     public Guid? JudgeSettingId { get; set; }
 
+    public string[] Tags { get; set; } = [];
+
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

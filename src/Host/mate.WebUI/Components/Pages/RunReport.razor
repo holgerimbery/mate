@@ -1,3 +1,4 @@
+@attribute [Authorize]
 @page "/runs/{RunId:guid}"
 @using mate.Data
 @using mate.Domain.Entities
@@ -9,126 +10,194 @@
 
 <PageTitle>Run Report — @BrandInfo.BrandName</PageTitle>
 
-@if (_run is null && !_loading)
+@if (_loading)
 {
-    <p>Run not found. <a href="/">← Back to Dashboard</a></p>
+    <div class="mate-page"><div class="d-flex align-items-center gap-2 py-4"><span class="spinner"></span><span>Loading report…</span></div></div>
 }
-else if (_loading)
+else if (_run is null)
 {
-    <p><em>Loading…</em></p>
+    <div class="mate-page"><div class="alert alert-warning">Run not found. <a href="/dashboard">← Back to Dashboard</a></div></div>
 }
 else
 {
-    <div class="page-header">
-        <a href="/" class="back-link">← Dashboard</a>
-        <h1>Run Report</h1>
-    </div>
-
-    <div class="run-header">
-        <div class="run-meta">
-            <span><strong>Suite:</strong> @_run!.Suite?.Name</span>
-            <span><strong>Agent:</strong> @_run.Agent?.Name</span>
-            <span><strong>Status:</strong> <span class="badge badge-@_run.Status">@_run.Status</span></span>
-            <span><strong>Started:</strong> @_run.StartedAt.ToString("yyyy-MM-dd HH:mm:ss")</span>
-            @if (_run.CompletedAt.HasValue)
-            {
-                <span><strong>Completed:</strong> @_run.CompletedAt.Value.ToString("yyyy-MM-dd HH:mm:ss")</span>
-            }
-            <span><strong>Requested by:</strong> @_run.RequestedBy</span>
+    <!-- Page header with breadcrumb -->
+    <div class="mate-header">
+        <div>
+            <nav style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">
+                <a href="/dashboard" style="color:var(--primary);text-decoration:none;font-weight:500">Dashboard</a>
+                <span style="margin:0 6px;color:var(--text-tertiary)">/</span>
+                <span>Run Report</span>
+            </nav>
+            <h1>@(_run.Suite?.Name ?? "Test Suite") — Run Report</h1>
+            <p>Executed @_run.StartedAt.ToString("MMMM dd, yyyy \\a\\t HH:mm:ss")</p>
         </div>
-
-        <div class="kpi-grid compact">
-            <div class="kpi-card">
-                <div class="kpi-value">@_run.TotalTestCases</div>
-                <div class="kpi-label">Total</div>
-            </div>
-            <div class="kpi-card kpi-pass">
-                <div class="kpi-value">@_run.PassedCount</div>
-                <div class="kpi-label">Passed</div>
-            </div>
-            <div class="kpi-card kpi-fail">
-                <div class="kpi-value">@_run.FailedCount</div>
-                <div class="kpi-label">Failed</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-value">@_run.SkippedCount</div>
-                <div class="kpi-label">Skipped</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-value">@(_run.TotalTestCases > 0 ? $"{(double)_run.PassedCount / _run.TotalTestCases:P0}" : "—")</div>
-                <div class="kpi-label">Pass Rate</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-value">@($"{_run.AverageLatencyMs:N0} ms")</div>
-                <div class="kpi-label">Avg Latency</div>
-            </div>
+        <div class="d-flex gap-2 align-items-center" style="flex-shrink:0">
+            <button class="btn btn-secondary" @onclick="ExportCsv">
+                <i class="bi bi-download me-1"></i>Export CSV
+            </button>
+            <a href="/dashboard" class="btn btn-secondary">
+                <i class="bi bi-chevron-left me-1"></i>Dashboard
+            </a>
         </div>
     </div>
+    <div class="mate-page">
 
     @if (_run.Status == "running")
     {
-        <div class="alert alert-info">
-            This run is currently in progress. Refresh the page for updated results.
+        <div class="alert alert-info mb-3"><i class="bi bi-hourglass-split me-1"></i>This run is currently in progress. Refresh for updated results.</div>
+    }
+
+    <!-- Summary KPI cards -->
+    <div class="kpi-grid" style="margin-bottom:24px">
+        <div class="kpi-card">
+            <div class="kpi-value">@(_results.Any() ? (_results.Average(r => r.OverallScore) * 100).ToString("F1") + "%" : "—")</div>
+            <div class="kpi-label">Overall Score</div>
+        </div>
+        <div class="kpi-card kpi-pass">
+            <div class="kpi-value">@(_run.TotalTestCases > 0 ? $"{(double)_run.PassedCount / _run.TotalTestCases:P0}" : "—")</div>
+            <div class="kpi-label">Pass Rate</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value"><span style="color:var(--success)">@_run.PassedCount</span> / <span style="color:var(--danger)">@_run.FailedCount</span></div>
+            <div class="kpi-label">Pass / Fail</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">@($"{_run.AverageLatencyMs:N0} ms")</div>
+            <div class="kpi-label">Avg Latency</div>
+        </div>
+    </div>
+
+    <!-- Run details -->
+    <div class="section-card" style="margin-bottom:20px">
+        <h2 class="section-title mb-3"><i class="bi bi-info-circle me-2"></i>Run Details</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px;font-size:14px">
+            <div>
+                <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Suite</div>
+                <div style="font-weight:600">@(_run.Suite?.Name ?? "—")</div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Agent</div>
+                <div style="font-weight:600">@(_run.Agent?.Name ?? "—")</div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Started</div>
+                <div style="font-weight:600">@_run.StartedAt.ToString("MMM dd, HH:mm:ss")</div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Duration</div>
+                <div style="font-weight:600">
+                    @if (_run.CompletedAt.HasValue)
+                    {
+                        <span>@((_run.CompletedAt.Value - _run.StartedAt).TotalSeconds.ToString("F1"))s</span>
+                    }
+                    else
+                    {
+                        <span style="color:var(--warning)">In Progress</span>
+                    }
+                </div>
+            </div>
+            <div>
+                <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Status</div>
+                <div><span class="badge badge-@_run.Status">@_run.Status</span></div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_run.RequestedBy))
+            {
+                <div>
+                    <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Requested by</div>
+                    <div style="font-weight:600">@_run.RequestedBy</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Score breakdown -->
+    @if (_results.Any())
+    {
+        var avgTask       = _results.Average(r => r.TaskSuccessScore);
+        var avgIntent     = _results.Average(r => r.IntentMatchScore);
+        var avgFactuality = _results.Average(r => r.FactualityScore);
+        var avgHelpful    = _results.Average(r => r.HelpfulnessScore);
+        var avgSafety     = _results.Average(r => r.SafetyScore);
+
+        <div class="section-card" style="margin-bottom:20px">
+            <h2 class="section-title mb-3"><i class="bi bi-graph-up me-2"></i>Score Breakdown</h2>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+                @foreach (var (label, val) in new[]{("Task Success", avgTask),("Intent Match", avgIntent),("Factuality", avgFactuality),("Helpfulness", avgHelpful),("Safety", avgSafety)})
+                {
+                    <div>
+                        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+                            <span style="color:var(--text-secondary)">@label</span>
+                            <strong style="color:var(--primary)">@val.ToString("P0")</strong>
+                        </div>
+                        <div style="background:var(--light-bg);border-radius:4px;height:8px;overflow:hidden">
+                            <div style="height:100%;border-radius:4px;background:var(--primary);width:@((val*100).ToString("F1"))%"></div>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
     }
 
-    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
-        <button class="btn btn-primary" @onclick="ExportCsv">⬇ Export CSV</button>
+    <!-- Results table -->
+    <div class="section-card">
+        <div class="section-header">
+            <h2 class="section-title">Results (@_results.Count)</h2>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Test Case</th>
+                    <th style="text-align:center">Verdict</th>
+                    <th style="text-align:center">Overall</th>
+                    <th style="text-align:center">Task</th>
+                    <th style="text-align:center">Intent</th>
+                    <th style="text-align:center">Factual</th>
+                    <th style="text-align:center">Helpful</th>
+                    <th style="text-align:center">Safety</th>
+                    <th style="text-align:center">Latency</th>
+                    <th style="text-align:center">Human</th>
+                    <th style="text-align:center"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _results)
+                {
+                    <tr>
+                        <td>@r.TestCase?.Name</td>
+                        <td style="text-align:center"><span class="badge badge-@r.Verdict">@r.Verdict</span></td>
+                        <td style="text-align:center;font-weight:600">@r.OverallScore.ToString("F2")</td>
+                        <td style="text-align:center">@r.TaskSuccessScore.ToString("F2")</td>
+                        <td style="text-align:center">@r.IntentMatchScore.ToString("F2")</td>
+                        <td style="text-align:center">@r.FactualityScore.ToString("F2")</td>
+                        <td style="text-align:center">@r.HelpfulnessScore.ToString("F2")</td>
+                        <td style="text-align:center">@r.SafetyScore.ToString("F2")</td>
+                        <td style="text-align:center;color:var(--text-secondary)">@r.LatencyMs ms</td>
+                        <td style="text-align:center">
+                            @if (r.HumanVerdict is not null)
+                            {
+                                <span class="badge badge-@r.HumanVerdict">@r.HumanVerdict</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td style="text-align:center">
+                            <button class="btn btn-sm btn-secondary" @onclick="() => ShowTranscript(r)">Transcript</button>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenVerdict(r)">Review</button>
+                        </td>
+                    </tr>
+                }
+                @if (!_results.Any())
+                {
+                    <tr><td colspan="11" class="empty-row">No results yet.</td></tr>
+                }
+            </tbody>
+        </table>
     </div>
 
-    <h2>Results</h2>
-
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Test Case</th>
-                <th>Verdict</th>
-                <th>Overall</th>
-                <th>Task</th>
-                <th>Intent</th>
-                <th>Factual</th>
-                <th>Helpful</th>
-                <th>Safety</th>
-                <th>Latency</th>
-                <th>Human Verdict</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var r in _results)
-            {
-                <tr>
-                    <td>@r.TestCase?.Name</td>
-                    <td><span class="badge badge-@r.Verdict">@r.Verdict</span></td>
-                    <td>@r.OverallScore.ToString("F2")</td>
-                    <td>@r.TaskSuccessScore.ToString("F2")</td>
-                    <td>@r.IntentMatchScore.ToString("F2")</td>
-                    <td>@r.FactualityScore.ToString("F2")</td>
-                    <td>@r.HelpfulnessScore.ToString("F2")</td>
-                    <td>@r.SafetyScore.ToString("F2")</td>
-                    <td>@r.LatencyMs ms</td>
-                    <td>
-                        @if (r.HumanVerdict is not null)
-                        {
-                            <span class="badge badge-@r.HumanVerdict">@r.HumanVerdict</span>
-                        }
-                        else
-                        {
-                            <span class="text-muted">—</span>
-                        }
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-secondary" @onclick="() => ShowTranscript(r)">Transcript</button>
-                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenVerdict(r)">Review</button>
-                    </td>
-                </tr>
-            }
-            @if (!_results.Any())
-            {
-                <tr><td colspan="11" class="empty-row">No results yet.</td></tr>
-            }
-        </tbody>
-    </table>
+    </div>
 }
 
 @* ── Transcript modal ─────────────────────────────────────────────────────── *@
@@ -157,6 +226,18 @@ else
                     <strong>AI Rationale:</strong> @_transcriptResult.Rationale
                 </div>
             }
+            @if (_transcriptResult.Citations is { Length: > 0 })
+            {
+                <div class="rationale-box" style="margin-top:8px">
+                    <strong>Citations:</strong>
+                    <ul style="margin:6px 0 0;padding-left:20px;font-size:13px;line-height:1.6">
+                        @foreach (var c in _transcriptResult.Citations)
+                        {
+                            <li>@c</li>
+                        }
+                    </ul>
+                </div>
+            }
             <div class="modal-actions">
                 <button class="btn btn-secondary" @onclick="() => _transcriptResult = null">Close</button>
             </div>
@@ -171,22 +252,22 @@ else
         <div class="modal-box" @onclick:stopPropagation>
             <h2>Human Review — @_verdictResult.TestCase?.Name</h2>
 
-            <label>Verdict</label>
+            <label class="form-label mt-3">Verdict</label>
             <select class="form-control" @bind="_verdictValue">
                 <option value="">— select —</option>
                 <option value="pass">Pass</option>
                 <option value="fail">Fail</option>
             </select>
 
-            <label>Note</label>
+            <label class="form-label mt-3">Note</label>
             <textarea class="form-control" rows="3" @bind="_verdictNote" placeholder="Optional reviewer note"></textarea>
 
-            <label>Reviewer Name</label>
+            <label class="form-label mt-3">Reviewer Name</label>
             <input class="form-control" @bind="_verdictBy" placeholder="Your name" />
 
             @if (!string.IsNullOrWhiteSpace(_verdictError))
             {
-                <div class="alert alert-error">@_verdictError</div>
+                <div class="alert alert-danger mt-2">@_verdictError</div>
             }
 
             <div class="modal-actions">
@@ -269,7 +350,6 @@ else
         result.HumanVerdictAt = DateTime.UtcNow;
         result.HumanVerdictBy = string.IsNullOrWhiteSpace(_verdictBy) ? "reviewer" : _verdictBy;
         await Db.SaveChangesAsync();
-        // Update in-memory copy
         var idx = _results.FindIndex(r => r.Id == result.Id);
         if (idx >= 0) _results[idx] = result;
         CloseVerdict();
@@ -282,7 +362,6 @@ else
         foreach (var r in _results)
         {
             var name = r.TestCase?.Name?.Replace(",", ";") ?? "";
-            var rationale = r.Rationale?.Replace(",", ";")?.Replace("\n", " ") ?? "";
             sb.AppendLine($"{name},{r.Verdict},{r.OverallScore:F4},{r.TaskSuccessScore:F4},{r.IntentMatchScore:F4},{r.FactualityScore:F4},{r.HelpfulnessScore:F4},{r.SafetyScore:F4},{r.LatencyMs},{r.HumanVerdict ?? ""},{r.HumanVerdictNote?.Replace(",", ";") ?? ""}");
         }
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());

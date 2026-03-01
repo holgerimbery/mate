@@ -8,20 +8,23 @@ namespace mate.Core.Tenancy;
 
 /// <summary>
 /// Looks up the internal TenantId from the external identity-provider tenant identifier.
+/// Constructs mateDbContext directly with null ITenantContext to bypass the circular DI chain:
+/// ITenantContext factory → TenantLookupService → mateDbContext → ITenantContext (loop).
+/// A null ITenantContext disables the global query filter, which is correct for tenant resolution.
 /// Results are cached for 5 minutes to avoid per-request database calls.
 /// </summary>
 public sealed class TenantLookupService
 {
-    private readonly mateDbContext _db;
+    private readonly DbContextOptions<mateDbContext> _dbOptions;
     private readonly IMemoryCache _cache;
     private readonly ILogger<TenantLookupService> _logger;
 
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private const string CacheKeyPrefix = "tenant:ext:";
 
-    public TenantLookupService(mateDbContext db, IMemoryCache cache, ILogger<TenantLookupService> logger)
+    public TenantLookupService(DbContextOptions<mateDbContext> dbOptions, IMemoryCache cache, ILogger<TenantLookupService> logger)
     {
-        _db = db;
+        _dbOptions = dbOptions;
         _cache = cache;
         _logger = logger;
     }
@@ -37,7 +40,9 @@ public sealed class TenantLookupService
         if (_cache.TryGetValue(cacheKey, out Guid cached))
             return cached;
 
-        var tenant = await _db.Tenants
+        // Construct directly with null tenant context — no DI, no circular reference.
+        using var db = new mateDbContext(_dbOptions, tenantContext: null);
+        var tenant = await db.Tenants
             .IgnoreQueryFilters()
             .Where(t => t.ExternalTenantId == externalTenantId && t.IsActive)
             .Select(t => new { t.Id })
@@ -56,7 +61,8 @@ public sealed class TenantLookupService
     /// <summary>Loads the full tenant record. Bypasses the query filter (used for admin operations).</summary>
     public async Task<Tenant?> GetTenantAsync(Guid tenantId, CancellationToken ct = default)
     {
-        return await _db.Tenants
+        using var db = new mateDbContext(_dbOptions, tenantContext: null);
+        return await db.Tenants
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(t => t.Id == tenantId, ct);
     }

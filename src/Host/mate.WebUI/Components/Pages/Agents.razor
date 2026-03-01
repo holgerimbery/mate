@@ -1,105 +1,322 @@
+@attribute [Authorize]
 @page "/agents"
 @using mate.Data
 @using mate.Domain.Entities
 @using mate.Domain.Contracts.Modules
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Text.Json
 @inject mateDbContext Db
 @inject mate.Core.mateModuleRegistry Registry
+@inject AuthenticationStateProvider AuthStateProvider
+@inject mate.Domain.Contracts.Infrastructure.ISecretService SecretSvc
+@inject ITenantContext TenantCtx
 
 <PageTitle>Agents — @BrandInfo.BrandName</PageTitle>
 
-<h1>Agents</h1>
-
-<button class="btn btn-primary" @onclick="OpenCreate">+ New Agent</button>
-
-@if (_loading)
+@if (!_showForm)
 {
-    <p><em>Loading…</em></p>
+    <div class="mate-header">
+        <h1>Agents</h1>
+        <p>Manage AI agent connections and configurations.</p>
+    </div>
+    <div class="mate-page">
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-title">All Agents</span>
+                <button class="btn btn-primary btn-sm" @onclick="OpenCreate">
+                    <i class="bi bi-plus-lg"></i> New Agent
+                </button>
+            </div>
+            @if (_loading)
+            {
+                <p><em>Loading…</em></p>
+            }
+            else
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Environment</th>
+                            <th>Connectors</th>
+                            <th>Active</th>
+                            <th>Created</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var agent in _agents)
+                        {
+                            <tr>
+                                <td><strong>@agent.Name</strong><br /><small>@agent.Description</small></td>
+                                <td><span class="badge badge-@agent.Environment">@agent.Environment</span></td>
+                                <td>@string.Join(", ", agent.ConnectorConfigs.Select(c => c.ConnectorType))</td>
+                                <td>@(agent.IsActive ? "✓" : "✗")</td>
+                                <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                        @if (!_agents.Any())
+                        {
+                            <tr><td colspan="6" class="empty-row">No agents configured yet.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
 }
 else
 {
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Environment</th>
-                <th>Connectors</th>
-                <th>Active</th>
-                <th>Created</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var agent in _agents)
-            {
-                <tr>
-                    <td><strong>@agent.Name</strong><br /><small>@agent.Description</small></td>
-                    <td><span class="badge badge-@agent.Environment">@agent.Environment</span></td>
-                    <td>@string.Join(", ", agent.ConnectorConfigs.Select(c => c.ConnectorType))</td>
-                    <td>@(agent.IsActive ? "✓" : "✗")</td>
-                    <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
-                    <td>
-                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
-                    </td>
-                </tr>
-            }
-            @if (!_agents.Any())
-            {
-                <tr><td colspan="6" class="empty-row">No agents configured yet.</td></tr>
-            }
-        </tbody>
-    </table>
-}
+    <div class="mate-header">
+        <h1>@(_editAgent is null ? "New Agent" : "Edit Agent — " + _editAgent.Name)</h1>
+        <p>@(_editAgent is null ? "Configure a new agent connection." : "Update agent details and connector configuration.")</p>
+    </div>
+    <div class="mate-page">
 
-@if (_showForm)
-{
-    <div class="modal-backdrop" @onclick="CloseForm">
-        <div class="modal-box" @onclick:stopPropagation>
-            <h2>@(_editAgent is null ? "New Agent" : "Edit Agent")</h2>
-
-            <label>Name</label>
-            <input class="form-control" @bind="_form.Name" placeholder="My Bot" />
-
-            <label>Description</label>
-            <input class="form-control" @bind="_form.Description" placeholder="Short description" />
-
-            <label>Environment</label>
-            <select class="form-control" @bind="_form.Environment">
-                <option value="dev">dev</option>
-                <option value="test">test</option>
-                <option value="staging">staging</option>
-                <option value="production">production</option>
-            </select>
-
-            <label>Tags (comma-separated)</label>
-            <input class="form-control" @bind="_form.TagsRaw" placeholder="tag1, tag2" />
-
-            @if (_editAgent is null)
-            {
-                <h3 style="margin-top:1rem">Connector</h3>
-
-                <label>Connector Type</label>
-                <select class="form-control" @bind="_form.ConnectorType">
-                    @foreach (var m in _connectorModules)
-                    {
-                        <option value="@m.ConnectorType">@m.DisplayName</option>
-                    }
-                </select>
-
-                <label>Config JSON (use secret-ref names, not raw secrets)</label>
-                <textarea class="form-control" rows="5" @bind="_form.ConfigJson" placeholder='{"BotId":"...", "DirectLineSecretRef":"MY_SECRET_REF"}'></textarea>
-            }
-
-            @if (!string.IsNullOrWhiteSpace(_formError))
-            {
-                <div class="alert alert-error">@_formError</div>
-            }
-
-            <div class="modal-actions">
-                <button class="btn btn-primary" @onclick="SaveAgent">Save</button>
-                <button class="btn btn-secondary" @onclick="CloseForm">Cancel</button>
+        <!-- Basic Information -->
+        <div class="section-card">
+            <h2 class="section-title mb-4">Basic Information</h2>
+            <div class="form-group">
+                <label class="form-label">Agent Name *</label>
+                <input class="form-control" @bind="_form.Name" placeholder="e.g. My CopilotStudio Bot" />
             </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <input class="form-control" @bind="_form.Description" placeholder="Optional description" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Environment</label>
+                <select class="form-control" @bind="_form.Environment">
+                    <option value="development">Development</option>
+                    <option value="test">Test</option>
+                    <option value="staging">Staging</option>
+                    <option value="production">Production</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tags (comma-separated)</label>
+                <input class="form-control" @bind="_form.TagsRaw" placeholder="tag1, tag2" />
+            </div>
+            @if (_editAgent is not null)
+            {
+                <div class="form-group">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="agentIsActive"
+                               checked="@_form.IsActive"
+                               @onchange="e => _form.IsActive = (bool)(e.Value ?? true)" />
+                        <label class="form-check-label" for="agentIsActive">Agent is active</label>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (_editAgent is null)
+        {
+            <!-- Connector type selection — visual cards like the wizard -->
+            <div class="section-card">
+                <h2 class="section-title mb-3">Agent Connector</h2>
+                <p class="text-muted mb-3">Choose the type of AI agent you want to connect to @BrandInfo.BrandName.</p>
+                @if (_connectorModules.Any())
+                {
+                    <div class="row g-3">
+                        @foreach (var module in _connectorModules)
+                        {
+                            var isSelected = _form.ConnectorType == module.ConnectorType;
+                            <div class="col-md-6">
+                                <div class="section-card @(isSelected ? "border-primary" : "")"
+                                     style="cursor:pointer;transition:all 0.2s;@(isSelected ? "border-color:var(--primary);box-shadow:0 0 0 2px rgba(0,102,204,0.2)" : "")"
+                                     @onclick="() => SelectConnectorType(module.ConnectorType)">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#0066cc20,#8b5cf620);display:flex;align-items:center;justify-content:center;">
+                                            <i class="bi bi-robot" style="color:var(--primary)"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-600">@module.DisplayName</div>
+                                            <div style="font-size:11px;color:var(--text-secondary)">@module.ConnectorType</div>
+                                        </div>
+                                        @if (isSelected)
+                                        {
+                                            <i class="bi bi-check-circle-fill ms-auto" style="color:var(--primary);font-size:20px"></i>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> No agent connector modules are registered.</div>
+                }
+            </div>
+
+            <!-- Connector configuration fields -->
+            @if (_configFields.Any())
+            {
+                <div class="section-card">
+                    <h2 class="section-title mb-4">
+                        Connector Configuration
+                        <small class="text-muted ms-2" style="font-size:13px">(@_form.ConnectorType)</small>
+                    </h2>
+                    <p class="text-muted mb-3" style="font-size:13px">Configure the connection details, then test before saving.</p>
+                    @foreach (var field in _configFields)
+                    {
+                        <div class="form-group">
+                            <label class="form-label">
+                                @field.Label @if (field.IsRequired) { <span style="color:var(--danger)">*</span> }
+                                <span class="field-type-badge ms-1">@field.FieldType</span>
+                            </label>
+                            @if (field.FieldType == "select" && field.SelectOptions != null)
+                            {
+                                <select class="form-control" value="@GetFormConfigValue(field.Key)"
+                                        @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)">
+                                    @foreach (var opt in field.SelectOptions) { <option value="@opt">@opt</option> }
+                                </select>
+                            }
+                            else if (field.FieldType is "password" or "secret")
+                            {
+                                <input type="password" class="form-control" value="@GetFormConfigValue(field.Key)"
+                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       placeholder="@field.Description" />
+                            }
+                            else if (field.FieldType == "boolean")
+                            {
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="afield_@field.Key"
+                                           checked="@(GetFormConfigValue(field.Key) == "true")"
+                                           @onchange="e => SetFormConfigValue(field.Key, ((bool)(e.Value ?? false)).ToString().ToLower())" />
+                                    <label class="form-check-label" for="afield_@field.Key">@field.Description</label>
+                                </div>
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control" value="@GetFormConfigValue(field.Key)"
+                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       placeholder="@field.Description" />
+                            }
+                            @if (!string.IsNullOrWhiteSpace(field.Description) && field.FieldType is not "boolean")
+                            {
+                                <small class="text-muted">@field.Description</small>
+                            }
+                        </div>
+                    }
+                    <!-- Test connection (create mode) -->
+                    <div class="mt-3">
+                        @if (_testing)
+                        {
+                            <div class="d-flex align-items-center gap-2"><span class="spinner"></span><span>Testing connection…</span></div>
+                        }
+                        else if (_testPassed.HasValue)
+                        {
+                            @if (_testPassed.Value)
+                            {
+                                <div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> Connection validated successfully.</div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> @_testMessage</div>
+                            }
+                        }
+                        <button class="btn btn-secondary" @onclick="TestConnectionAsync" disabled="@_testing">
+                            <i class="bi bi-wifi"></i> Test Connection
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <!-- Edit: connector configuration -->
+            @if (_editConnectorFields.Any())
+            {
+                <div class="section-card">
+                    <h2 class="section-title mb-4">
+                        Connector Configuration
+                        <small class="text-muted ms-2" style="font-size:13px">(@_editConnectorType)</small>
+                    </h2>
+                    @foreach (var field in _editConnectorFields)
+                    {
+                        <div class="form-group">
+                            <label class="form-label">
+                                @field.Label @if (field.IsRequired) { <span style="color:var(--danger)">*</span> }
+                                <span class="field-type-badge ms-1">@field.FieldType</span>
+                            </label>
+                            @if (field.FieldType == "select" && field.SelectOptions != null)
+                            {
+                                <select class="form-control" value="@GetFormConfigValue(field.Key)"
+                                        @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)">
+                                    @foreach (var opt in field.SelectOptions) { <option value="@opt">@opt</option> }
+                                </select>
+                            }
+                            else if (field.FieldType is "password" or "secret")
+                            {
+                                <input type="password" class="form-control" value="@GetFormConfigValue(field.Key)"
+                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       placeholder="@field.Description" />
+                            }
+                            else if (field.FieldType == "boolean")
+                            {
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="efield_@field.Key"
+                                           checked="@(GetFormConfigValue(field.Key) == "true")"
+                                           @onchange="e => SetFormConfigValue(field.Key, ((bool)(e.Value ?? false)).ToString().ToLower())" />
+                                    <label class="form-check-label" for="efield_@field.Key">@field.Description</label>
+                                </div>
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control" value="@GetFormConfigValue(field.Key)"
+                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       placeholder="@field.Description" />
+                            }
+                            @if (!string.IsNullOrWhiteSpace(field.Description) && field.FieldType is not "boolean")
+                            {
+                                <small class="text-muted">@field.Description</small>
+                            }
+                        </div>
+                    }
+                    <!-- Test connection (edit mode) -->
+                    <div class="mt-3">
+                        @if (_testing)
+                        {
+                            <div class="d-flex align-items-center gap-2"><span class="spinner"></span><span>Testing connection…</span></div>
+                        }
+                        else if (_testPassed.HasValue)
+                        {
+                            @if (_testPassed.Value)
+                            {
+                                <div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> Connection validated successfully.</div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> @_testMessage</div>
+                            }
+                        }
+                        <button class="btn btn-secondary" @onclick="TestConnectionAsync" disabled="@_testing">
+                            <i class="bi bi-wifi"></i> Test Connection
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_formError))
+        {
+            <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_formError</div>
+        }
+
+        <div class="d-flex gap-2 mb-4">
+            <button class="btn btn-primary" @onclick="SaveAgent">
+                <i class="bi bi-check-lg"></i> @(_editAgent is null ? "Create Agent" : "Save Changes")
+            </button>
+            <button class="btn btn-secondary" @onclick="CloseForm">
+                <i class="bi bi-x-lg"></i> Cancel
+            </button>
         </div>
     </div>
 }
@@ -149,6 +366,18 @@ else
     private Agent? _deleteAgent;
     private Agent? _editConnectors;
     private string _formError = string.Empty;
+    // Connector config fields for the form (dynamic, driven by module GetConfigDefinition)
+    private List<ConfigFieldDefinition> _configFields = [];
+    private Dictionary<string, string> _configValues = new();
+
+    // For edit mode — the connector fields of the first existing connector config
+    private List<ConfigFieldDefinition> _editConnectorFields = [];
+    private string _editConnectorType = string.Empty;
+
+    // Test connection state
+    private bool _testing;
+    private bool? _testPassed;
+    private string _testMessage = string.Empty;
 
     private AgentFormModel _form = new();
 
@@ -159,15 +388,75 @@ else
         public string Environment { get; set; } = "production";
         public string TagsRaw { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
-        public string ConnectorType { get; set; } = "CopilotStudio";
-        public string ConfigJson { get; set; } = "{}";
+        public string ConnectorType { get; set; } = string.Empty;
+    }
+
+    private string GetFormConfigValue(string key) =>
+        _configValues.TryGetValue(key, out var v) ? v : string.Empty;
+
+    private void SetFormConfigValue(string key, string value) =>
+        _configValues[key] = value;
+
+    private void SelectConnectorType(string connectorType)
+    {
+        _form.ConnectorType = connectorType;
+        LoadConnectorFields(connectorType);
+    }
+
+    private void LoadConnectorFields(string connectorType, string? existingConfigJson = null)
+    {
+        var module = _connectorModules.FirstOrDefault(m => m.ConnectorType == connectorType);
+        _configFields = module?.GetConfigDefinition().ToList() ?? [];
+        _configValues = new();
+        if (existingConfigJson != null)
+        {
+            try
+            {
+                var node = System.Text.Json.JsonSerializer
+                    .Deserialize<System.Text.Json.Nodes.JsonObject>(existingConfigJson);
+                foreach (var field in _configFields)
+                {
+                    if (node != null && node.TryGetPropertyValue(field.Key, out var val) && val != null)
+                        _configValues[field.Key] = val.ToString();
+                    else if (field.DefaultValue != null)
+                        _configValues[field.Key] = field.DefaultValue;
+                }
+            }
+            catch { }
+        }
+        else
+        {
+            foreach (var f in _configFields.Where(f => f.DefaultValue != null))
+                _configValues[f.Key] = f.DefaultValue!;
+        }
+    }
+
+    private string BuildFormConfigJson()
+    {
+        var node = new System.Text.Json.Nodes.JsonObject();
+        foreach (var kv in _configValues)
+        {
+            var fieldDef = _configFields.Concat(_editConnectorFields).FirstOrDefault(f => f.Key == kv.Key);
+            if (fieldDef?.FieldType == "boolean")
+                node[kv.Key] = bool.TryParse(kv.Value, out var b) ? b : false;
+            else if (fieldDef?.FieldType == "number")
+                node[kv.Key] = double.TryParse(kv.Value,
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+            else
+                node[kv.Key] = kv.Value;
+        }
+        return node.ToJsonString();
     }
 
     protected override async Task OnInitializedAsync()
     {
         _connectorModules = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
         if (_connectorModules.Any())
+        {
             _form.ConnectorType = _connectorModules[0].ConnectorType;
+            LoadConnectorFields(_form.ConnectorType);
+        }
         await LoadAsync();
     }
 
@@ -184,7 +473,15 @@ else
     {
         _editAgent = null;
         _form = new();
+        if (_connectorModules.Any())
+        {
+            _form.ConnectorType = _connectorModules[0].ConnectorType;
+            LoadConnectorFields(_form.ConnectorType);
+        }
         _formError = string.Empty;
+        _testing = false;
+        _testPassed = null;
+        _testMessage = string.Empty;
         _showForm = true;
     }
 
@@ -199,7 +496,39 @@ else
             TagsRaw = string.Join(", ", a.Tags),
             IsActive = a.IsActive
         };
+        // Load connector fields for the first connector config so they can be edited
+        var firstConn = a.ConnectorConfigs.FirstOrDefault();
+        if (firstConn != null)
+        {
+            _editConnectorType = firstConn.ConnectorType;
+            var module = _connectorModules.FirstOrDefault(m => m.ConnectorType == firstConn.ConnectorType);
+            _editConnectorFields = module?.GetConfigDefinition().ToList() ?? [];
+            // Pre-populate values from stored ConfigJson
+            _configValues = new();
+            try
+            {
+                var node = System.Text.Json.JsonSerializer
+                    .Deserialize<System.Text.Json.Nodes.JsonObject>(firstConn.ConfigJson);
+                foreach (var field in _editConnectorFields)
+                {
+                    if (node != null && node.TryGetPropertyValue(field.Key, out var val) && val != null)
+                        _configValues[field.Key] = val.ToString();
+                    else if (field.DefaultValue != null)
+                        _configValues[field.Key] = field.DefaultValue;
+                }
+            }
+            catch { }
+        }
+        else
+        {
+            _editConnectorFields = [];
+            _editConnectorType = string.Empty;
+            _configValues = new();
+        }
         _formError = string.Empty;
+        _testing = false;
+        _testPassed = null;
+        _testMessage = string.Empty;
         _showForm = true;
     }
 
@@ -215,11 +544,26 @@ else
 
         if (_editAgent is null)
         {
+            // Validate connector config
+            if (!string.IsNullOrWhiteSpace(_form.ConnectorType))
+            {
+                var module = _connectorModules.FirstOrDefault(m => m.ConnectorType == _form.ConnectorType);
+                if (module != null)
+                {
+                    var validation = module.ValidateConfig(BuildFormConfigJson());
+                    if (!validation.IsValid)
+                    {
+                        _formError = string.Join(", ", validation.Errors);
+                        return;
+                    }
+                }
+            }
+
             // Create
             var agent = new Agent
             {
                 Id = Guid.NewGuid(),
-                TenantId = Guid.Empty, // resolved by tenant middleware in production
+                TenantId = TenantCtx.TenantId,
                 Name = _form.Name,
                 Description = _form.Description,
                 Environment = _form.Environment,
@@ -234,9 +578,9 @@ else
                 {
                     Id = Guid.NewGuid(),
                     AgentId = agent.Id,
-                    TenantId = agent.TenantId,
+                    TenantId = TenantCtx.TenantId,
                     ConnectorType = _form.ConnectorType,
-                    ConfigJson = _form.ConfigJson,
+                    ConfigJson = BuildFormConfigJson(),
                     IsActive = true
                 });
             }
@@ -244,13 +588,20 @@ else
         }
         else
         {
-            // Update
+            // Update agent fields
             _editAgent.Name = _form.Name;
             _editAgent.Description = _form.Description;
             _editAgent.Environment = _form.Environment;
             _editAgent.Tags = tags;
             _editAgent.IsActive = _form.IsActive;
             _editAgent.UpdatedAt = DateTime.UtcNow;
+
+            // Update first connector config if it exists
+            var firstConn = _editAgent.ConnectorConfigs.FirstOrDefault();
+            if (firstConn != null && _editConnectorFields.Any())
+            {
+                firstConn.ConfigJson = BuildFormConfigJson();
+            }
         }
 
         await Db.SaveChangesAsync();
@@ -258,11 +609,65 @@ else
         await LoadAsync();
     }
 
+    private async Task TestConnectionAsync()
+    {
+        _testing = true;
+        _testPassed = null;
+        _testMessage = string.Empty;
+        StateHasChanged();
+        try
+        {
+            var connectorType = _editAgent is null ? _form.ConnectorType : _editConnectorType;
+            var fields = _editAgent is null ? _configFields : _editConnectorFields;
+            var module = _connectorModules.FirstOrDefault(m => m.ConnectorType == connectorType);
+            if (module is null)
+            {
+                _testPassed = false;
+                _testMessage = "Connector module not found.";
+                return;
+            }
+            var resolvedSecrets = new Dictionary<string, string>();
+            foreach (var field in fields.Where(f => f.FieldType is "secret" or "password"))
+            {
+                var refName = GetFormConfigValue(field.Key);
+                if (string.IsNullOrWhiteSpace(refName)) continue;
+                try { resolvedSecrets[refName] = await SecretSvc.GetSecretAsync(refName); }
+                catch { resolvedSecrets[refName] = refName; }
+            }
+            var connConfig = new mate.Domain.Contracts.Modules.AgentConnectionConfig
+            {
+                ConnectorType = connectorType,
+                ConfigJson = BuildFormConfigJson(),
+                ResolvedSecrets = resolvedSecrets
+            };
+            var connector = module.CreateConnector(connConfig);
+            var session = await connector.StartConversationAsync(connConfig, CancellationToken.None);
+            _testPassed = session is not null;
+            if (!_testPassed.Value)
+                _testMessage = "Connection returned no session.";
+        }
+        catch (Exception ex)
+        {
+            _testPassed = false;
+            _testMessage = ex.InnerException?.Message ?? ex.Message;
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+
     private void CloseForm()
     {
         _showForm = false;
         _editAgent = null;
         _formError = string.Empty;
+        _configValues = new();
+        _editConnectorFields = [];
+        _editConnectorType = string.Empty;
+        _testing = false;
+        _testPassed = null;
+        _testMessage = string.Empty;
     }
 
     private void ConfirmDelete(Agent a) => _deleteAgent = a;

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using mate.Data;
 
@@ -10,9 +11,11 @@ using mate.Data;
 namespace mate.Data.Migrations
 {
     [DbContext(typeof(mateDbContext))]
-    partial class mateDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260228160446_AddTestSuiteTags")]
+    partial class AddTestSuiteTags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.2");
@@ -314,16 +317,10 @@ namespace mate.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Endpoint")
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("INTEGER");
 
                     b.Property<int>("MaxOutputTokens")
                         .HasColumnType("INTEGER");
@@ -331,10 +328,6 @@ namespace mate.Data.Migrations
                     b.Property<string>("Model")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SystemPrompt")

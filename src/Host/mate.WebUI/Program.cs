@@ -1,5 +1,10 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Options;
 using mate.Core;
 using mate.Core.DocumentProcessing;
 using mate.Core.Execution;
@@ -20,6 +25,7 @@ using mate.Modules.Testing.Generic;
 using mate.Modules.Testing.CopilotStudioJudge;
 using mate.Modules.Testing.HybridJudge;
 using mate.Modules.Testing.ModelAsJudge;
+using mate.Modules.Testing.ModelQGen;
 using mate.Modules.Testing.RubricsJudge;
 using mate.WebUI.Api;
 using Microsoft.AspNetCore.Builder;
@@ -55,24 +61,73 @@ try
 
     var config = builder.Configuration;
 
+    // ── Forwarded Headers (nginx / reverse proxy) ────────────────────────────
+    // ASPNETCORE_FORWARDEDHEADERS_ENABLED=true in the container environment
+    // activates the built-in ForwardedHeaders middleware automatically (same
+    // approach as MaaJforMCS). No manual Configure<ForwardedHeadersOptions>
+    // needed — the built-in handler clears KnownNetworks/KnownProxies so it
+    // trusts X-Forwarded-Proto from any upstream, which is correct inside Docker
+    // where the proxy IP varies. The explicit custom config below is kept only
+    // as a fallback for environments that do NOT set the env var.
+
+    // NOTE: No custom DataProtection config — matching MaaJforMCS which uses
+    // the default in-memory keys. PersistKeysToFileSystem + SetApplicationName
+    // were removed because stale keys in the volume caused cookie decrypt failures.
+
     // ── Data (EF Core + migrations) ──────────────────────────────────────────
     builder.Services.AddmateSqlite(config);
     builder.Services.AddMemoryCache();
 
     // ── Tenant resolution ───────────────────────────────────────────────────
     builder.Services.AddHttpContextAccessor();
-    // HttpTenantContext requires a resolved Guid — use a factory so DI can construct it.
-    // The factory reads the 'mate:externalTenantId' claim (Generic/dev auth) or 'tid' (Entra ID).
-    // Falls back to StaticTenantContext(Guid.Empty) when no HTTP context is present (seeder, startup).
+    // TenantLookupService maps ExternalTenantId (from auth claim) → internal Tenant.Id (from DB).
+    // This ensures continuity when switching auth schemes (Generic ↔ EntraId):
+    // as long as the Tenants table has a row with the correct ExternalTenantId, data is accessible.
     builder.Services.AddScoped<ITenantContext>(sp =>
     {
+        // Primary: HttpContext (works for REST API requests and SSR pre-render)
         var user = sp.GetService<IHttpContextAccessor>()?.HttpContext?.User;
+
+        // Fallback: AuthenticationStateProvider (required for Blazor Server interactive circuits
+        // where IHttpContextAccessor.HttpContext is null per ASP.NET Core Blazor docs).
+        // ServerAuthenticationStateProvider returns a pre-completed Task backed by the user
+        // captured during the initial HTTP connection, so GetAwaiter().GetResult() is safe.
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            var asp = sp.GetService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
+            if (asp is not null)
+            {
+                try
+                {
+                    var authState = asp.GetAuthenticationStateAsync().GetAwaiter().GetResult();
+                    user = authState.User;
+                }
+                catch { /* not in a Blazor context — ignore */ }
+            }
+        }
+
         if (user?.Identity?.IsAuthenticated == true)
         {
             var externalId = user.FindFirstValue("mate:externalTenantId")
                           ?? user.FindFirstValue("tid");
-            if (Guid.TryParse(externalId, out var tenantId))
-                return new HttpTenantContext(tenantId);
+            if (!string.IsNullOrEmpty(externalId))
+            {
+                var lookup = sp.GetService<TenantLookupService>();
+                if (lookup is not null)
+                {
+                    // Task.Run(): no captured SynchronizationContext → avoids deadlock
+                    // when called under Blazor's RendererSynchronizationContext.
+                    // TenantLookupService constructs mateDbContext directly with null
+                    // ITenantContext, breaking the circular DI chain entirely.
+                    var resolved = Task.Run(() => lookup.LookupByExternalIdAsync(externalId))
+                        .GetAwaiter().GetResult();
+                    if (resolved.HasValue)
+                        return new HttpTenantContext(resolved.Value);
+                }
+                // Fallback: try to use claim directly as GUID (Generic auth dev flow)
+                if (Guid.TryParse(externalId, out var tenantId))
+                    return new HttpTenantContext(tenantId);
+            }
         }
         return new StaticTenantContext(Guid.Empty);
     });
@@ -94,22 +149,47 @@ try
     builder.Services.AddmateHybridJudgeModule(config);
     builder.Services.AddmateCopilotStudioJudgeModule(config);
 
+    // ── Question generation modules ──────────────────────────────────────────
+    builder.Services.AddmateModelQGenModule(config);
+
     // ── Authentication ───────────────────────────────────────────────────────
     var authScheme = config["Authentication:Scheme"] ?? "EntraId";
-    var authBuilder = builder.Services.AddAuthentication(authScheme);
 
     IAuthModule authModule = authScheme switch
     {
-        "Generic" => new mate.Modules.Auth.Generic.GenericAuthModule(),
+        "None" or "Generic" => new mate.Modules.Auth.Generic.GenericAuthModule(),
         "EntraId" or _ => new mate.Modules.Auth.EntraId.EntraIdAuthModule(),
     };
 
+    // For EntraId: use OpenIdConnectDefaults.AuthenticationScheme as the outer
+    // scheme name — exactly as MaaJforMCS does. AddMicrosoftIdentityWebApp then
+    // internally wires DefaultScheme=Cookies, DefaultChallengeScheme=OpenIdConnect.
+    // Overriding those options explicitly (as we did before) can conflict with
+    // what the library configures in its own IConfigureOptions pass.
+    AuthenticationBuilder authBuilder = authScheme is "EntraId"
+        ? builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+        : builder.Services.AddAuthentication(authScheme);
+
     authModule.ConfigureAuthentication(authBuilder, config);
 
+    // EntraId browser sign-in: register /MicrosoftIdentity/Account/* controller routes
+    if (authScheme is "EntraId")
+        mate.Modules.Auth.EntraId.EntraIdAuthModule.AddMicrosoftIdentityUI(builder.Services);
+
+    // No extra AddScheme — matches MaaJforMCS. API key is handled by inline middleware only.
+
     builder.Services.AddAuthorization(options =>
-        authModule.ConfigureAuthorization(options, config));
+    {
+        authModule.ConfigureAuthorization(options, config);
+    });
 
     builder.Services.AddSingleton<IAuthModule>(authModule);
+
+    // Register ClaimsTransformation using the SAME instance registered as IAuthModule
+    // so that IClaimsTransformation and IAuthModule are the same object (no duplicate
+    // claim sets, no second construction with different lifetime).
+    if (authModule is IClaimsTransformation ct)
+        builder.Services.AddSingleton<IClaimsTransformation>(_ => ct);
 
     // ── Monitoring ───────────────────────────────────────────────────────────
     var monitoringProvider = config["Monitoring:Provider"] ?? "Generic";
@@ -153,6 +233,8 @@ try
             registry.RegisterTestingModule(m);
         foreach (var m in scope.ServiceProvider.GetServices<IJudgeProvider>())
             registry.RegisterJudgeProvider(m);
+        foreach (var m in scope.ServiceProvider.GetServices<IQuestionGenerationProvider>())
+            registry.RegisterQuestionProvider(m);
         foreach (var m in scope.ServiceProvider.GetServices<IMonitoringModule>())
             registry.RegisterMonitoring(m);
     }
@@ -163,44 +245,89 @@ try
         app.UseHsts();
     }
 
-    app.UseHttpsRedirection();
-    app.UseStaticFiles();
-    app.UseRouting();
-    app.UseAuthentication();
-    app.UseAuthorization();
+    // ── Forwarded Headers ────────────────────────────────────────────────────
+    // ASPNETCORE_FORWARDEDHEADERS_ENABLED=true already activates the built-in
+    // ForwardedHeaders middleware automatically before any other middleware runs.
+    // The explicit call below is kept as a no-op safety net for environments
+    // that run without the env var (e.g. plain dotnet run without Docker).
+    app.UseForwardedHeaders();
 
-    // ── API key authentication middleware ────────────────────────────────────
-    // Runs after standard auth so bearer/cookie sessions continue to work unchanged.
+    // ── Diagnostic: log request host/scheme after ForwardedHeaders processing ──
+    // Helps debug proxy/redirect_uri mismatches. Remove once auth is stable.
     app.Use(async (ctx, next) =>
     {
-        if (!(ctx.User.Identity?.IsAuthenticated ?? false))
-        {
-            if (ctx.Request.Headers.TryGetValue("X-Api-Key", out var rawKey))
-            {
-                var hash = Convert.ToHexString(
-                    SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey.ToString())))
-                    .ToLowerInvariant();
-                using var scope = ctx.RequestServices.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<mateDbContext>();
-                var apiKey = await db.ApiKeys.FirstOrDefaultAsync(k => k.KeyHash == hash && k.IsActive);
-                if (apiKey is not null)
-                {
-                    apiKey.LastUsedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync();
-                    var claims = new[]
-                    {
-                        new Claim(ClaimTypes.Name, apiKey.Name),
-                        new Claim(ClaimTypes.Role, apiKey.Role),
-                        new Claim("api_key_id", apiKey.Id.ToString())
-                    };
-                    ctx.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "ApiKey"));
-                }
-            }
-        }
+        Log.Information("DIAG REQ {Method} {Scheme}://{Host}{Path} (IsHttps={IsHttps})",
+            ctx.Request.Method, ctx.Request.Scheme, ctx.Request.Host, ctx.Request.Path, ctx.Request.IsHttps);
         await next();
+        // Log where /signin-oidc redirects the browser after sign-in
+        if (ctx.Request.Path.StartsWithSegments("/signin-oidc") && ctx.Response.StatusCode is 302 or 301)
+            Log.Information("DIAG POST-SIGNIN redirect → {Location}", ctx.Response.Headers.Location.ToString());
     });
 
+    // Only redirect to HTTPS when NOT using Entra ID.
+    // With EntraId, Azure AD uses response_mode=form_post — it POSTs to /signin-oidc
+    // with state+code in the form body. UseHttpsRedirection converts that POST to a
+    // GET (HTTP 301), stripping the body → state is null → "message.State is null or empty".
+    // For EntraId: nginx terminates TLS (prod) or the container runs plain HTTP (dev/Docker);
+    // in both cases no HTTPS redirect is needed or safe.
+    if (authScheme is not "EntraId")
+    {
+        app.UseHttpsRedirection();
+    }
+
+    app.UseStaticFiles();
+    // NOTE: No explicit app.UseRouting() here — matches MaaJforMCS exactly.
+    // In .NET 9, when UseRouting() is called explicitly BEFORE UseAuthentication(),
+    // the endpoint is matched before auth runs. The cookie handler then sees the
+    // pre-matched /_blazor SignalR endpoint context and issues a raw 401 redirect
+    // instead of the normal cookie challenge for WebSocket upgrade requests.
+    // Without explicit UseRouting(), ASP.NET Core inserts it automatically at the
+    // right place (after endpoint middleware runs auth/authz), so all requests pass
+    // through UseAuthentication() before any endpoint-specific behaviour fires.
+    app.UseAuthentication();
+
+    // API key authentication middleware — mirrors MaaJforMCS inline approach.
+    if (authScheme is not "Generic" and not "None")
+    {
+        app.Use(async (ctx, next) =>
+        {
+            if (!(ctx.User.Identity?.IsAuthenticated ?? false))
+            {
+                if (ctx.Request.Headers.TryGetValue("X-Api-Key", out var rawKey))
+                {
+                    var hash = Convert.ToHexString(
+                        SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey.ToString())))
+                        .ToLowerInvariant();
+                    using var scope = ctx.RequestServices.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<mateDbContext>();
+                    var apiKey = await db.ApiKeys.FirstOrDefaultAsync(k => k.KeyHash == hash && k.IsActive);
+                    if (apiKey is not null)
+                    {
+                        apiKey.LastUsedAt = DateTime.UtcNow;
+                        await db.SaveChangesAsync();
+                        var claims = new[]
+                        {
+                            new Claim(ClaimTypes.Name, apiKey.Name),
+                            new Claim(ClaimTypes.Role, apiKey.Role),
+                            new Claim("api_key_id", apiKey.Id.ToString()),
+                            new Claim("mate:externalTenantId", apiKey.TenantId.ToString()),
+                        };
+                        ctx.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "ApiKey"));
+                    }
+                }
+            }
+            await next();
+        });
+    }
+
+    app.UseAuthorization();
+
     app.UseAntiforgery();
+
+    // EntraId: map /MicrosoftIdentity/Account/{SignIn,SignOut,AccessDenied} controller routes
+    // Registered AFTER UseAntiforgery — matches MaaJforMCS pipeline order.
+    if (authScheme is "EntraId")
+        app.MapControllers();
 
     // ── Platform endpoints ───────────────────────────────────────────────────
     app.MapHealthChecks("/health").AllowAnonymous();
@@ -212,7 +339,11 @@ try
     }).AllowAnonymous();
 
     // ── REST API ─────────────────────────────────────────────────────────────
-    var api = app.MapGroup("/api");
+    // When a real auth scheme is active, require authentication on all /api endpoints.
+    // Generic/None (dev) allows unauthenticated access so local dev works without a token.
+    var api = authScheme is not "Generic" and not "None"
+        ? app.MapGroup("/api").RequireAuthorization("AnyAuthenticated")
+        : app.MapGroup("/api");
 
     // Agents
     api.MapGet("/agents", async (mateDbContext db) =>
@@ -749,6 +880,31 @@ try
         return Results.Ok(new { total, page, pageSize, logs });
     }).WithName("GetAuditLog").WithTags("Admin");
 
+    // Admin: Backup
+    api.MapGet("/admin/backup", async (mate.Domain.Contracts.Infrastructure.IBackupService backup, CancellationToken ct) =>
+    {
+        var stream = await backup.CreateBackupStreamAsync(ct);
+        var stamp  = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        return Results.Stream(stream, "application/octet-stream", $"mate-backup-{stamp}.db");
+    }).WithName("DownloadBackup").WithTags("Admin").AllowAnonymous();
+
+    // Admin: Restore
+    api.MapPost("/admin/restore", async (
+        HttpContext ctx,
+        mate.Domain.Contracts.Infrastructure.IBackupService backup,
+        CancellationToken ct) =>
+    {
+        if (!ctx.Request.HasFormContentType)
+            return Results.BadRequest("Expected multipart/form-data with a 'file' field.");
+        var form = await ctx.Request.ReadFormAsync(ct);
+        var file = form.Files["file"];
+        if (file is null || file.Length == 0)
+            return Results.BadRequest("No file provided.");
+        await using var stream = file.OpenReadStream();
+        await backup.RestoreAsync(stream, ct);
+        return Results.Ok(new { Message = "Restore successful. Please reload the application." });
+    }).WithName("RestoreBackup").WithTags("Admin").AllowAnonymous();
+
     app.MapRazorComponents<mate.WebUI.Components.App>()
        .AddInteractiveServerRenderMode();
 
@@ -763,4 +919,46 @@ catch (Exception ex) when (ex is not OperationCanceledException)
 finally
 {
     await Log.CloseAndFlushAsync();
+}
+
+// ── API Key Authentication Handler ────────────────────────────────────────────
+internal sealed class ApiKeyAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+{
+    public ApiKeyAuthHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        UrlEncoder encoder)
+        : base(options, logger, encoder) { }
+
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        if (!Request.Headers.TryGetValue("X-Api-Key", out var rawKey))
+            return AuthenticateResult.NoResult();
+
+        var hash = Convert.ToHexString(
+            SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey.ToString())))
+            .ToLowerInvariant();
+
+        using var scope = Context.RequestServices.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<mateDbContext>();
+        var apiKey = await db.ApiKeys
+            .FirstOrDefaultAsync(k => k.KeyHash == hash && k.IsActive);
+
+        if (apiKey is null)
+            return AuthenticateResult.Fail("Invalid or inactive API key.");
+
+        apiKey.LastUsedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.Name, apiKey.Name),
+            new Claim(ClaimTypes.Role, apiKey.Role),
+            new Claim("api_key_id", apiKey.Id.ToString()),
+            new Claim("mate:externalTenantId", apiKey.TenantId.ToString()),
+        };
+        var identity = new ClaimsIdentity(claims, Scheme.Name);
+        return AuthenticateResult.Success(
+            new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));
+    }
 }

@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.RubricsJudge\mate.Modules.Testing.RubricsJudge.csproj" />
     <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.HybridJudge\mate.Modules.Testing.HybridJudge.csproj" />
     <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.CopilotStudioJudge\mate.Modules.Testing.CopilotStudioJudge.csproj" />
+    <ProjectReference Include="..\..\Modules\Testing\mate.Modules.Testing.ModelQGen\mate.Modules.Testing.ModelQGen.csproj" />
     <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.Generic\mate.Modules.Monitoring.Generic.csproj" />
     <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.OpenTelemetry\mate.Modules.Monitoring.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.ApplicationInsights\mate.Modules.Monitoring.ApplicationInsights.csproj" />

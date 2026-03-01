@@ -15,11 +15,25 @@ services:
     ports:
       - "5000:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Production
+      # Trust X-Forwarded-Proto / X-Forwarded-For from the upstream proxy (matches MaaJforMCS)
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
       - ASPNETCORE_URLS=http://+:8080
-      - Authentication__Scheme=Generic
+      - Authentication__Scheme=${Authentication__Scheme:-Generic}
+      - AzureAd__Instance=${AzureAd__Instance:-https://login.microsoftonline.com/}
+      - AzureAd__TenantId=${AzureAd__TenantId:-}
+      - AzureAd__ClientId=${AzureAd__ClientId:-}
+      - AzureAd__ClientSecret=${AzureAd__ClientSecret:-}
+      - AzureAd__CallbackPath=${AzureAd__CallbackPath:-/signin-oidc}
+      - AzureAd__SignedOutCallbackPath=${AzureAd__SignedOutCallbackPath:-/signout-callback-oidc}
+      - AzureAd__ResponseType=code
+      # Public URL that nginx exposes – used by OIDC to build the correct redirect_uri.
+      # Example: https://mate.example.com
+      - AzureAd__RedirectUri=${AzureAd__RedirectUri:-}
+      # IP address of the nginx proxy (or leave empty to trust the Docker bridge 172.16/12)
+      - ReverseProxy__TrustedProxyAddress=${ReverseProxy__TrustedProxyAddress:-}
       - Monitoring__Provider=Generic
-      - ConnectionStrings__DefaultConnection=Data Source=/app/data/mate-local.db
+      - ConnectionStrings__Default=Data Source=/app/data/mate-local.db
       - LocalInfrastructure__BlobStoragePath=/app/data/blobs
       - LocalInfrastructure__SqliteDatabasePath=/app/data/mate-local.db
       - LocalInfrastructure__BackupPath=/app/data/backups
@@ -42,7 +56,7 @@ services:
     container_name: mate-worker
     environment:
       - DOTNET_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Data Source=/app/data/mate-local.db
+      - ConnectionStrings__Default=Data Source=/app/data/mate-local.db
       - LocalInfrastructure__BlobStoragePath=/app/data/blobs
       - LocalInfrastructure__SqliteDatabasePath=/app/data/mate-local.db
       - LocalInfrastructure__BackupPath=/app/data/backups

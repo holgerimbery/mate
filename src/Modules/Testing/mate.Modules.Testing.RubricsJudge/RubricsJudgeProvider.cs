@@ -174,7 +174,7 @@ public static class RubricsJudgeModuleExtensions
     public static IServiceCollection AddmateRubricsJudgeModule(this IServiceCollection services)
     {
         services.AddSingleton<RubricsJudgeProvider>();
-        services.AddSingleton<RubricsJudgeModule>();
+        services.AddSingleton<ITestingModule, RubricsJudgeModule>();
         return services;
     }
 }

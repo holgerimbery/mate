@@ -1,5 +1,6 @@
 using mate.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace mate.Data;
@@ -12,11 +13,13 @@ public sealed class mateDbSeeder
 {
     private readonly mateDbContext _db;
     private readonly ILogger<mateDbSeeder> _logger;
+    private readonly IConfiguration _config;
 
-    public mateDbSeeder(mateDbContext db, ILogger<mateDbSeeder> logger)
+    public mateDbSeeder(mateDbContext db, ILogger<mateDbSeeder> logger, IConfiguration config)
     {
         _db = db;
         _logger = logger;
+        _config = config;
     }
 
     // Fixed platform tenant — must be non-zero so EF Core's ValueGeneratedOnAdd sentinel
@@ -32,6 +35,7 @@ public sealed class mateDbSeeder
         _logger.LogInformation("Starting database seed...");
         await SeedPlatformTenantAsync(ct);
         await SeedDevTenantAsync(ct);
+        await SeedEntraIdTenantMappingAsync(ct);
         await SeedDefaultJudgeSettingAsync(ct);
         _logger.LogInformation("Database seed completed.");
     }
@@ -69,7 +73,7 @@ public sealed class mateDbSeeder
     {
         var exists = await _db.Tenants
             .IgnoreQueryFilters()
-            .AnyAsync(t => t.ExternalTenantId == DevTenantId.ToString(), ct);
+            .AnyAsync(t => t.Id == DevTenantId, ct);
 
         if (exists) return;
 
@@ -87,23 +91,75 @@ public sealed class mateDbSeeder
     }
 
     /// <summary>
+    /// If Authentication:Scheme is EntraId, ensures the Azure AD tenant ID
+    /// maps to the internal dev tenant so data created under Generic auth remains visible.
+    /// This is idempotent: re-running it when the mapping already exists is a no-op.
+    /// </summary>
+    private async Task SeedEntraIdTenantMappingAsync(CancellationToken ct)
+    {
+        var azureTenantId = _config["AzureAd:TenantId"];
+
+        if (string.IsNullOrWhiteSpace(azureTenantId) || azureTenantId == "common" || azureTenantId.StartsWith("__"))
+            return; // not configured or placeholder
+
+        // If the dev tenant row already has the Azure AD external ID → nothing to do.
+        // If it exists with a different ExternalTenantId → UPDATE it so TenantLookupService
+        // can resolve EntraId's 'tid' claim ("b9b61d9b-...") to DevTenantId.
+        // Generic auth still works: the GUID-direct fallback in Program.cs resolves
+        // "00000000-0000-0000-0000-000000000099" directly to the same internal Tenant.Id.
+        var devTenant = await _db.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == DevTenantId, ct);
+
+        if (devTenant is not null)
+        {
+            if (devTenant.ExternalTenantId == azureTenantId) return; // already mapped
+            devTenant.ExternalTenantId = azureTenantId;
+            await _db.SaveChangesAsync(ct);
+            _logger.LogInformation("Updated dev tenant ExternalTenantId → '{AzureTenantId}'.", azureTenantId);
+            return;
+        }
+
+        // Dev tenant row doesn't exist yet — insert it with Azure AD tenant ID directly
+        var alreadyMapped = await _db.Tenants
+            .IgnoreQueryFilters()
+            .AnyAsync(t => t.ExternalTenantId == azureTenantId, ct);
+
+        if (alreadyMapped) return;
+
+        // Map the Azure AD tenant ID to the dev tenant so all existing data is accessible
+        _db.Tenants.Add(new Tenant
+        {
+            Id               = DevTenantId,
+            ExternalTenantId = azureTenantId,
+            DisplayName      = "Entra ID Tenant (local dev)",
+            Plan             = "enterprise",
+            IsActive         = true,
+            CreatedAt        = DateTime.UtcNow,
+        });
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Mapped EntraId tenant '{AzureTenantId}' → dev tenant.", azureTenantId);
+    }
+
+    /// <summary>
     /// Ensures there is a platform-level "Default ModelAsJudge" judge setting
     /// that tenant-created suites/agents can reference by convention (TenantId = Guid.Empty).
     /// </summary>
     private async Task SeedDefaultJudgeSettingAsync(CancellationToken ct)
     {
         const string defaultName = "Default ModelAsJudge";
+        var seedId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
         var exists = await _db.JudgeSettings
             .IgnoreQueryFilters()
-            .AnyAsync(j => j.Name == defaultName && j.TenantId == PlatformTenantId, ct);
+            .AnyAsync(j => j.Id == seedId, ct);
 
         if (exists)
             return;
 
         _db.JudgeSettings.Add(new JudgeSetting
         {
-            Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            Id = seedId,
             TenantId = PlatformTenantId, // Platform-level — accessible by all tenants
             Name = defaultName,
             ProviderType = "ModelAsJudge",

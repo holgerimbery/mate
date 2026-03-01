@@ -1,5 +1,8 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@using System.Security.Claims
 @implements IDisposable
 
 <!-- Sidebar -->
@@ -17,50 +20,171 @@
         <img src="@BrandInfo.LogoUrl" alt="@BrandInfo.BrandName logo" class="sidebar-brand-logo" />
         @if (_expanded)
         {
-            <img src="@BrandInfo.LogoWideUrl" alt="@BrandInfo.BrandName" class="sidebar-brand-logo-wide" />
+            <span class="sidebar-brand-text">@BrandInfo.BrandName</span>
         }
     </div>
 
     <!-- Primary nav -->
     <nav class="sidebar-nav">
-        <NavItem Href="/"          Icon="bi-house-door"   Label="Home"        Expanded="_expanded" CurrentPage="_currentPage" PageKey="home" />
-        <NavItem Href="/wizard"    Icon="bi-magic"        Label="Wizard"      Expanded="_expanded" CurrentPage="_currentPage" PageKey="wizard" />
-        <NavItem Href="/test-suites" Icon="bi-list-check" Label="Test Suites" Expanded="_expanded" CurrentPage="_currentPage" PageKey="test-suites" />
-        <NavItem Href="/documents" Icon="bi-file-earmark" Label="Documents"   Expanded="_expanded" CurrentPage="_currentPage" PageKey="documents" />
-        <NavItem Href="/agents"    Icon="bi-robot"        Label="Agents"      Expanded="_expanded" CurrentPage="_currentPage" PageKey="agents" />
-        <NavItem Href="/discover"  Icon="bi-compass"      Label="Discover"    Expanded="_expanded" CurrentPage="_currentPage" PageKey="discover" />
-        <NavItem Href="/dashboard" Icon="bi-graph-up"     Label="Dashboard"   Expanded="_expanded" CurrentPage="_currentPage" PageKey="dashboard" />
-        <NavItem Href="/rubrics"   Icon="bi-award"        Label="Rubrics"     Expanded="_expanded" CurrentPage="_currentPage" PageKey="rubrics" />
+        <NavItem Href="/"            Icon="bi-house-door"        Label="Home"        Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="home" />
+        <NavItem Href="/wizard"      Icon="bi-magic"             Label="Wizard"      Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="wizard" />
+        <NavItem Href="/test-suites" Icon="bi-list-check"        Label="Test Suites" Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="test-suites" />
+        <NavItem Href="/documents"   Icon="bi-file-earmark-text" Label="Documents"   Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="documents" />
+        <NavItem Href="/agents"      Icon="bi-robot"             Label="Agents"      Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="agents" />
+        <NavItem Href="/dashboard"   Icon="bi-graph-up"          Label="Dashboard"   Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="dashboard" />
+        <NavItem Href="/rubrics"     Icon="bi-award"             Label="Rubrics"     Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="rubrics" />
     </nav>
 
     <!-- Bottom nav (admin) -->
     <div class="sidebar-bottom">
-        <NavItem Href="/help"      Icon="bi-question-circle" Label="Help"      Expanded="_expanded" CurrentPage="_currentPage" PageKey="help" />
-        <NavItem Href="/audit-log" Icon="bi-journal-check"   Label="Audit Log" Expanded="_expanded" CurrentPage="_currentPage" PageKey="audit-log" />
-        <NavItem Href="/api-keys"  Icon="bi-key"             Label="API Keys"  Expanded="_expanded" CurrentPage="_currentPage" PageKey="api-keys" />
-        <NavItem Href="/settings"  Icon="bi-gear"            Label="Settings"  Expanded="_expanded" CurrentPage="_currentPage" PageKey="settings" />
+        <NavItem Href="/help"      Icon="bi-question-circle" Label="Help"      Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="help" />
+        <NavItem Href="/audit-log" Icon="bi-journal-check"   Label="Audit Log" Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="audit-log" />
+        <NavItem Href="/api-keys"  Icon="bi-key"             Label="API Keys"  Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="api-keys" />
+        <NavItem Href="/settings"  Icon="bi-gear"            Label="Settings"  Expanded="@_expanded" CurrentPage="@_currentPage" PageKey="settings" />
+
+        <!-- Dark mode toggle -->
+        <button class="sidebar-darkmode-btn" @onclick="ToggleDarkMode" title="Toggle dark mode">
+            <i class="bi @(_darkMode ? "bi-sun" : "bi-moon-stars")"></i>
+            @if (_expanded) { <span>@(_darkMode ? "Light mode" : "Dark mode")</span> }
+        </button>
     </div>
 </div>
 
 <!-- Main content -->
 <div class="mate-main @(_expanded ? "expanded" : "collapsed")">
+
+    <!-- Top bar -->
+    <div class="mate-topbar">
+        <div class="mate-topbar-user">
+            <AuthorizeView>
+                <Authorized Context="authCtx">
+                    <button class="topbar-user-btn" @onclick="ToggleUserPopup"
+                            title="@(authCtx.User.Identity?.Name ?? "User")">
+                        <span class="topbar-user-name d-none d-md-inline">@(authCtx.User.Identity?.Name ?? "User")</span>
+                        <div class="user-avatar @(IsDevScheme() ? "user-avatar-dev" : "")">
+                            @GetInitials(authCtx.User.Identity?.Name ?? "User")
+                        </div>
+                    </button>
+                    @if (_userPopupOpen)
+                    {
+                        <div class="user-popup user-popup-top">
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="user-avatar user-avatar-lg @(IsDevScheme() ? "user-avatar-dev" : "")">
+                                    @GetInitials(authCtx.User.Identity?.Name ?? "User")
+                                </div>
+                                <div style="overflow:hidden;min-width:0">
+                                    <p class="user-popup-name">@(authCtx.User.Identity?.Name ?? "User")</p>
+                                    @{ var email = authCtx.User.FindFirst(ClaimTypes.Email)?.Value; }
+                                    @if (!string.IsNullOrEmpty(email)) { <p class="user-popup-email">@email</p> }
+                                </div>
+                            </div>
+                            @{ var role = GetUserRole(authCtx.User); }
+                            @if (!string.IsNullOrEmpty(role))
+                            {
+                                <span class="user-popup-role-badge @(IsDevScheme() ? "dev" : "")">@role</span>
+                            }
+                            <span class="user-popup-scheme-badge">@_authScheme</span>
+                            <hr class="user-popup-divider" />
+                            @if (IsEntraScheme())
+                            {
+                                <a href="/MicrosoftIdentity/Account/SignOut" class="user-popup-logout">
+                                    <i class="bi bi-box-arrow-right me-1"></i>Sign out
+                                </a>
+                            }
+                            else
+                            {
+                                <div class="user-popup-devnote">
+                                    <i class="bi bi-info-circle me-1"></i>Development mode — all requests are authenticated as Admin.
+                                </div>
+                            }
+                        </div>
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    <div class="topbar-user-btn" title="Not authenticated">
+                        <div class="user-avatar user-avatar-none">?</div>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </div>
+
+    <!-- Page body -->
     <div class="mate-page">
         @Body
     </div>
 </div>
 
+<!-- Close popup overlay -->
+@if (_userPopupOpen)
+{
+    <div class="sidebar-backdrop" @onclick="CloseUserPopup"></div>
+}
+
 @code {
     private bool _expanded = true;
     private string _currentPage = "home";
+    private bool _darkMode;
+    private bool _layoutFirstRender;
+    private bool _userPopupOpen;
+    private string _authScheme = "None";
 
     protected override void OnInitialized()
     {
         Navigation.LocationChanged += OnLocationChanged;
         UpdateCurrentPage(Navigation.Uri);
+        _authScheme = Configuration["Authentication:Scheme"] ?? "None";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_layoutFirstRender)
+        {
+            _layoutFirstRender = true;
+            try
+            {
+                _darkMode = await JS.InvokeAsync<bool>("mateInitDarkMode");
+            }
+            catch (Exception)
+            {
+                // JS not ready yet — dark mode defaults to light
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        _darkMode = !_darkMode;
+        await JS.InvokeVoidAsync("mateSetDarkMode", _darkMode);
+    }
+
+    private void ToggleUserPopup() => _userPopupOpen = !_userPopupOpen;
+    private void CloseUserPopup()  => _userPopupOpen = false;
+
+    private bool IsEntraScheme() => string.Equals(_authScheme, "EntraId", StringComparison.OrdinalIgnoreCase);
+    private bool IsDevScheme()   => string.Equals(_authScheme, "Generic", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(_authScheme, "None",    StringComparison.OrdinalIgnoreCase);
+
+    private static string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][0].ToString().ToUpper()
+            : (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
+    }
+
+    private static string GetUserRole(ClaimsPrincipal user)
+    {
+        return user.FindFirst(ClaimTypes.Role)?.Value
+            ?? user.FindFirst("roles")?.Value
+            ?? user.FindFirst("mate:role")?.Value
+            ?? "";
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => InvokeAsync(() => { UpdateCurrentPage(e.Location); StateHasChanged(); });
+        => InvokeAsync(() => { UpdateCurrentPage(e.Location); _userPopupOpen = false; StateHasChanged(); });
 
     private void UpdateCurrentPage(string uri)
     {
@@ -68,17 +192,17 @@
         _currentPage = path switch
         {
             "" or "home" => "home",
-            var p when p.StartsWith("wizard") => "wizard",
+            var p when p.StartsWith("wizard")     => "wizard",
             var p when p.StartsWith("test-suite") => "test-suites",
-            var p when p.StartsWith("document") => "documents",
-            var p when p.StartsWith("agent") => "agents",
-            var p when p.StartsWith("discover") => "discover",
-            var p when p.StartsWith("dashboard") => "dashboard",
-            var p when p.StartsWith("rubric") => "rubrics",
-            var p when p.StartsWith("help") => "help",
-            var p when p.StartsWith("audit-log") => "audit-log",
-            var p when p.StartsWith("api-key") => "api-keys",
-            var p when p.StartsWith("setting") => "settings",
+            var p when p.StartsWith("document")   => "documents",
+            var p when p.StartsWith("agent")      => "agents",
+            var p when p.StartsWith("discover")   => "discover",
+            var p when p.StartsWith("dashboard")  => "dashboard",
+            var p when p.StartsWith("rubric")     => "rubrics",
+            var p when p.StartsWith("help")       => "help",
+            var p when p.StartsWith("audit-log")  => "audit-log",
+            var p when p.StartsWith("api-key")    => "api-keys",
+            var p when p.StartsWith("setting")    => "settings",
             _ => "home"
         };
     }

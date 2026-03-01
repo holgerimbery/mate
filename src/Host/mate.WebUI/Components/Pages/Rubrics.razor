@@ -1,3 +1,4 @@
+@attribute [Authorize]
 @page "/rubrics"
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
@@ -5,100 +6,92 @@
 
 <PageTitle>Rubrics — @BrandInfo.BrandName</PageTitle>
 
-<div class="mate-header">
-    <div>
-        <h1>Judge Rubrics</h1>
-        <p>Define deterministic evaluation criteria for scoring agent responses without an LLM.</p>
-    </div>
-    <button class="btn btn-primary" @onclick="OpenNewRubricSet">
-        <i class="bi bi-plus-lg"></i> New Rubric Set
-    </button>
-</div>
-<div class="mate-page">
-
-@if (!string.IsNullOrEmpty(_error))
+@if (!_showForm)
 {
-    <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_error <button type="button" class="btn-close float-end" @onclick="() => _error = string.Empty"></button></div>
-}
-
-@if (_loading)
-{
-    <div class="d-flex align-items-center gap-2 mb-3"><span class="spinner"></span><span>Loading rubric sets…</span></div>
-}
-else if (!_rubricSets.Any())
-{
-    <div class="empty-state">
-        <i class="bi bi-list-check"></i>
-        <h3>No rubric sets yet</h3>
-        <p>Create your first rubric set to define weighted evaluation criteria.</p>
-        <button class="btn btn-primary mt-2" @onclick="OpenNewRubricSet"><i class="bi bi-plus-lg"></i> New Rubric Set</button>
-    </div>
-}
-else
-{
-    @foreach (var rubricSet in _rubricSets)
-    {
-        <div class="section-card mb-3">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <h3 style="font-size:16px;font-weight:600;margin:0">@rubricSet.Name</h3>
-                    @if (!string.IsNullOrWhiteSpace(rubricSet.Description))
-                    {
-                        <p class="text-muted mb-1" style="font-size:13px">@rubricSet.Description</p>
-                    }
-                    <div class="d-flex gap-3 mt-1" style="font-size:12px;color:var(--text-secondary)">
-                        <span><i class="bi bi-bar-chart"></i> @rubricSet.Criteria.Count criteria</span>
-                        @if (rubricSet.RequireAllMandatory)
-                        { <span class="badge badge-pending"><i class="bi bi-shield-check"></i> Mandatory fail override</span> }
-                        <span>Created @rubricSet.CreatedAt.ToString("yyyy-MM-dd")</span>
-                    </div>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-secondary btn-sm" @onclick="() => EditRubricSet(rubricSet)"><i class="bi bi-pencil"></i> Edit</button>
-                    <button class="btn btn-secondary btn-sm" @onclick="() => ManageCriteria(rubricSet)"><i class="bi bi-list-nested"></i> Criteria (@rubricSet.Criteria.Count)</button>
-                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteRubricSet(rubricSet)"><i class="bi bi-trash"></i></button>
-                </div>
-            </div>
-
-            @if (_expandedRubricSetId == rubricSet.Id && rubricSet.Criteria.Any())
-            {
-                <div class="mt-3">
-                    <table class="data-table">
-                        <thead>
-                            <tr><th>Criterion</th><th>Type</th><th>Pattern</th><th>Weight</th><th>Mandatory</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var c in rubricSet.Criteria.OrderBy(c => c.SortOrder))
-                            {
-                                <tr>
-                                    <td><strong>@c.Name</strong></td>
-                                    <td><span class="connector-badge">@c.EvaluationType</span></td>
-                                    <td><code style="font-size:11px;color:var(--text-secondary)">@c.Pattern</code></td>
-                                    <td>@c.Weight.ToString("F2")</td>
-                                    <td>@(c.IsMandatory ? "✓" : "—")</td>
-                                    <td>
-                                        <button class="btn btn-secondary btn-sm" @onclick="() => EditCriterion(rubricSet, c)"><i class="bi bi-pencil"></i></button>
-                                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteCriterion(c)"><i class="bi bi-trash"></i></button>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
+    <div class="mate-header">
+        <div>
+            <h1>Rubrics</h1>
+            <p>Define deterministic evaluation criteria for scoring agent responses without an LLM.</p>
         </div>
-    }
-}
-
-<!-- RubricSet Modal -->
-@if (_showSetModal)
-{
-    <div class="modal-overlay" @onclick="CloseSetModal">
-        <div class="modal-box" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 style="margin:0">@(_editSetId.HasValue ? "Edit Rubric Set" : "New Rubric Set")</h3>
-                <button type="button" class="btn-close" @onclick="CloseSetModal"></button>
+        <button class="btn btn-primary" @onclick="OpenNewRubricSet">
+            <i class="bi bi-plus-lg"></i> New Rubric Set
+        </button>
+    </div>
+    <div class="mate-page">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-danger mb-3"><i class="bi bi-exclamation-circle me-1"></i>@_error
+                <button type="button" class="btn-close float-end" @onclick='() => _error = string.Empty'></button>
             </div>
+        }
+        @if (_loading)
+        {
+            <div class="d-flex align-items-center gap-2"><span class="spinner"></span><span>Loading rubric sets…</span></div>
+        }
+        else if (!_rubricSets.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-card-checklist"></i>
+                <h3>No rubric sets yet</h3>
+                <p>Create your first rubric set to define weighted evaluation criteria for deterministic scoring.</p>
+                <button class="btn btn-primary mt-2" @onclick="OpenNewRubricSet"><i class="bi bi-plus-lg me-1"></i>New Rubric Set</button>
+            </div>
+        }
+        else
+        {
+            <div class="section-card">
+                <div class="section-header mb-3">
+                    <span class="section-title">All Rubric Sets</span>
+                    <button class="btn btn-primary btn-sm" @onclick="OpenNewRubricSet">
+                        <i class="bi bi-plus-lg me-1"></i>New Rubric Set
+                    </button>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Criteria</th>
+                            <th>Mandatory Override</th>
+                            <th>Created</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rs in _rubricSets)
+                        {
+                            <tr>
+                                <td><strong>@rs.Name</strong></td>
+                                <td style="font-size:13px;color:var(--text-secondary)">@(rs.Description ?? "—")</td>
+                                <td>
+                                    <span class="connector-badge">@rs.Criteria.Count criterion@(rs.Criteria.Count == 1 ? "" : "a")</span>
+                                </td>
+                                <td>@(rs.RequireAllMandatory ? "Yes — mandatory fail overrides score" : "No")</td>
+                                <td style="font-size:12px">@rs.CreatedAt.ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(rs)"><i class="bi bi-pencil me-1"></i>Edit</button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenCriteria(rs)"><i class="bi bi-list-nested me-1"></i>Criteria</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(rs)"><i class="bi bi-trash"></i></button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+else if (_formMode == "set")
+{
+    <!-- Edit / New Rubric Set -->
+    <div class="mate-header">
+        <div>
+            <h1>@(_editSetId.HasValue ? "Edit Rubric Set" : "New Rubric Set")</h1>
+            <p>@(_editSetId.HasValue ? "Update the rubric set name, description, and scoring options." : "Define a new set of weighted evaluation criteria.")</p>
+        </div>
+    </div>
+    <div class="mate-page">
+        <div class="section-card">
             <div class="form-group">
                 <label class="form-label">Name *</label>
                 <input class="form-control" @bind="_setForm.Name" placeholder="e.g. Safety Criteria" />
@@ -110,135 +103,194 @@ else
             <div class="form-group">
                 <label class="form-label d-flex align-items-center gap-2">
                     <input type="checkbox" @bind="_setForm.RequireAllMandatory" />
-                    Require All Mandatory — any mandatory failure overrides weighted score to Fail
+                    Require All Mandatory Criteria — any mandatory failure overrides the weighted score to Fail
                 </label>
             </div>
             @if (!string.IsNullOrEmpty(_formError))
             {
-                <div class="alert alert-danger">@_formError</div>
+                <div class="alert alert-danger mt-2">@_formError</div>
             }
             <div class="d-flex gap-2 mt-3">
-                <button class="btn btn-primary" @onclick="SaveRubricSet">Save</button>
-                <button class="btn btn-secondary" @onclick="CloseSetModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveRubricSet"><i class="bi bi-check-lg me-1"></i>@(_editSetId.HasValue ? "Save Changes" : "Create Rubric Set")</button>
+                <button class="btn btn-secondary" @onclick="CloseForm"><i class="bi bi-x-lg me-1"></i>Cancel</button>
             </div>
         </div>
     </div>
 }
-
-<!-- Criteria Modal -->
-@if (_showCriteriaModal && _selectedRubricSet is not null)
+else if (_formMode == "criteria" && _selectedRubricSet is not null)
 {
-    <div class="modal-overlay" @onclick="CloseCriteriaModal">
-        <div class="modal-box" style="max-width:700px" @onclick:stopPropagation="true">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 style="margin:0">Criteria — @_selectedRubricSet.Name</h3>
-                <button type="button" class="btn-close" @onclick="CloseCriteriaModal"></button>
-            </div>
+    <!-- Manage Criteria for a Rubric Set -->
+    <div class="mate-header">
+        <div>
+            <h1>Criteria — @_selectedRubricSet.Name</h1>
+            <p>Add, edit, and reorder evaluation criteria for this rubric set.</p>
+        </div>
+        <button class="btn btn-secondary" @onclick="CloseForm"><i class="bi bi-arrow-left me-1"></i>Back to Rubrics</button>
+    </div>
+    <div class="mate-page">
+        @if (!string.IsNullOrEmpty(_formError))
+        {
+            <div class="alert alert-danger mb-3">@_formError</div>
+        }
 
-            <div class="section-card mb-3" style="background:var(--light-bg)">
-                <h4 style="font-size:14px;font-weight:600;margin-bottom:12px">@(_editCriterionId.HasValue ? "Edit Criterion" : "Add Criterion")</h4>
-                <div class="row g-2">
-                    <div class="col-md-6">
+        <!-- Add / Edit criterion form -->
+        <div class="section-card mb-3">
+            <h2 class="section-title mb-3">@(_editCriterionId.HasValue ? "Edit Criterion" : "Add Criterion")</h2>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-group">
                         <label class="form-label">Name *</label>
                         <input class="form-control" @bind="_criterionForm.Name" placeholder="e.g. Mentions refund policy" />
                     </div>
-                    <div class="col-md-6">
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
                         <label class="form-label">Evaluation Type</label>
                         <select class="form-control" @bind="_criterionForm.EvaluationType">
-                            <option value="Contains">Contains</option>
-                            <option value="NotContains">NotContains</option>
-                            <option value="Regex">Regex</option>
-                            <option value="Custom">Custom</option>
+                            <option value="Contains">Contains — response must include substring</option>
+                            <option value="NotContains">NotContains — response must NOT include substring</option>
+                            <option value="Regex">Regex — response must match regex</option>
+                            <option value="Custom">Custom — resolved by custom code</option>
                         </select>
                     </div>
-                    <div class="col-12">
+                </div>
+                <div class="col-md-8">
+                    <div class="form-group">
                         <label class="form-label">Pattern *</label>
-                        <input class="form-control" @bind="_criterionForm.Pattern" placeholder="Substring, regex, or custom key" />
+                        <input class="form-control" @bind="_criterionForm.Pattern" placeholder="Substring, regex pattern, or custom key" />
                     </div>
-                    <div class="col-md-4">
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
                         <label class="form-label">Weight</label>
                         <input type="number" class="form-control" @bind="_criterionForm.Weight" min="0" max="10" step="0.1" />
                     </div>
-                    <div class="col-md-4">
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
                         <label class="form-label">Sort Order</label>
                         <input type="number" class="form-control" @bind="_criterionForm.SortOrder" min="0" />
                     </div>
-                    <div class="col-md-4 d-flex align-items-end pb-2">
-                        <label class="d-flex align-items-center gap-2">
-                            <input type="checkbox" @bind="_criterionForm.IsMandatory" />
-                            Mandatory
-                        </label>
-                    </div>
                 </div>
-                @if (!string.IsNullOrEmpty(_criterionError))
-                {
-                    <div class="alert alert-danger mt-2">@_criterionError</div>
-                }
-                <div class="d-flex gap-2 mt-2">
-                    <button class="btn btn-primary btn-sm" @onclick="SaveCriterion">@(_editCriterionId.HasValue ? "Update" : "Add")</button>
-                    @if (_editCriterionId.HasValue)
-                    {
-                        <button class="btn btn-secondary btn-sm" @onclick="ClearCriterionForm">Cancel Edit</button>
-                    }
+                <div class="col-12">
+                    <label class="form-label d-flex align-items-center gap-2">
+                        <input type="checkbox" @bind="_criterionForm.IsMandatory" />
+                        Mandatory — failure of this criterion forces overall result to Fail (when Require All Mandatory is enabled)
+                    </label>
                 </div>
             </div>
-
-            @if (_selectedRubricSet.Criteria.Any())
+            @if (!string.IsNullOrEmpty(_criterionError))
             {
+                <div class="alert alert-danger mt-2">@_criterionError</div>
+            }
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-primary" @onclick="SaveCriterion">
+                    <i class="bi bi-check-lg me-1"></i>@(_editCriterionId.HasValue ? "Update Criterion" : "Add Criterion")
+                </button>
+                @if (_editCriterionId.HasValue)
+                {
+                    <button class="btn btn-secondary" @onclick="ClearCriterionForm"><i class="bi bi-x-lg me-1"></i>Cancel Edit</button>
+                }
+            </div>
+        </div>
+
+        <!-- Criteria list -->
+        @if (_selectedRubricSet.Criteria.Any())
+        {
+            <div class="section-card">
+                <h2 class="section-title mb-3">Criteria (@_selectedRubricSet.Criteria.Count)</h2>
                 <table class="data-table">
                     <thead>
-                        <tr><th>#</th><th>Name</th><th>Type</th><th>Weight</th><th>Mandatory</th><th></th></tr>
+                        <tr>
+                            <th style="width:50px">#</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Pattern</th>
+                            <th style="width:80px">Weight</th>
+                            <th style="width:90px">Mandatory</th>
+                            <th style="width:100px"></th>
+                        </tr>
                     </thead>
                     <tbody>
                         @foreach (var c in _selectedRubricSet.Criteria.OrderBy(x => x.SortOrder))
                         {
                             <tr>
-                                <td>@c.SortOrder</td>
-                                <td>@c.Name</td>
-                                <td>@c.EvaluationType</td>
+                                <td style="font-size:12px;color:var(--text-secondary)">@c.SortOrder</td>
+                                <td><strong>@c.Name</strong></td>
+                                <td><span class="connector-badge">@c.EvaluationType</span></td>
+                                <td><code style="font-size:11px">@c.Pattern</code></td>
                                 <td>@c.Weight.ToString("F2")</td>
-                                <td>@(c.IsMandatory ? "✓" : "—")</td>
+                                <td>@(c.IsMandatory ? "✓ Mandatory" : "—")</td>
                                 <td>
-                                    <button class="btn btn-secondary btn-sm" @onclick="() => EditCriterion(_selectedRubricSet, c)"><i class="bi bi-pencil"></i></button>
-                                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteCriterion(c)"><i class="bi bi-trash"></i></button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => EditCriterion(c)"><i class="bi bi-pencil"></i></button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteCriterion(c)"><i class="bi bi-trash"></i></button>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
-                <div class="mt-2" style="font-size:12px;color:var(--text-secondary)">
-                    Total weight: @_selectedRubricSet.Criteria.Sum(c => c.Weight).ToString("F2")
-                </div>
-            }
-            else
-            {
-                <div class="empty-state"><i class="bi bi-list-check"></i><p>No criteria yet. Add one above.</p></div>
-            }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <i class="bi bi-list-check"></i>
+                <h3>No criteria yet</h3>
+                <p>Add criteria above to define how responses are evaluated.</p>
+            </div>
+        }
+    </div>
+}
+
+<!-- Delete confirmation modal -->
+@if (_deleteTarget is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteTarget = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Delete Rubric Set</h2>
+            <p>Delete <strong>@_deleteTarget.Name</strong> and all its criteria? This cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="DeleteRubricSet">Delete</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+            </div>
         </div>
     </div>
 }
 
-</div>
-
 @code {
-    private bool _loading = true;
+    private bool _showForm;
+    private string _formMode = ""; // "set" | "criteria"
+
+    private bool _loading;
     private string _error = string.Empty;
-    private string _formError = string.Empty;
-    private string _criterionError = string.Empty;
-
     private List<RubricSet> _rubricSets = [];
-    private Guid? _expandedRubricSetId;
-    private RubricSet? _selectedRubricSet;
 
-    // RubricSet form
-    private bool _showSetModal;
     private Guid? _editSetId;
-    private RubricSetForm _setForm = new();
+    private RubricSet? _selectedRubricSet;
+    private RubricSet? _deleteTarget;
 
-    // Criteria form
-    private bool _showCriteriaModal;
-    private Guid? _editCriterionId;
+    private class SetForm
+    {
+        public string  Name                { get; set; } = string.Empty;
+        public string? Description         { get; set; }
+        public bool    RequireAllMandatory { get; set; }
+    }
+
+    private class CriterionForm
+    {
+        public string Name            { get; set; } = string.Empty;
+        public string EvaluationType  { get; set; } = "Contains";
+        public string Pattern         { get; set; } = string.Empty;
+        public double Weight          { get; set; } = 1.0;
+        public bool   IsMandatory     { get; set; }
+        public int    SortOrder       { get; set; }
+    }
+
+    private SetForm       _setForm       = new();
+    private string        _formError     = string.Empty;
     private CriterionForm _criterionForm = new();
+    private string        _criterionError = string.Empty;
+    private Guid?         _editCriterionId;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -256,106 +308,128 @@ else
         finally { _loading = false; }
     }
 
-    // ── RubricSet CRUD ───────────────────────────────────────────────────────────
+    // ── RubricSet CRUD ────────────────────────────────────────────────────────
+
     private void OpenNewRubricSet()
     {
-        _editSetId = null;
-        _setForm = new();
-        _formError = string.Empty;
-        _showSetModal = true;
+        _editSetId  = null;
+        _setForm    = new();
+        _formError  = string.Empty;
+        _formMode   = "set";
+        _showForm   = true;
     }
 
-    private void EditRubricSet(RubricSet rs)
+    private void OpenEdit(RubricSet rs)
     {
         _editSetId = rs.Id;
-        _setForm = new() { Name = rs.Name, Description = rs.Description, RequireAllMandatory = rs.RequireAllMandatory };
+        _setForm   = new() { Name = rs.Name, Description = rs.Description, RequireAllMandatory = rs.RequireAllMandatory };
         _formError = string.Empty;
-        _showSetModal = true;
+        _formMode  = "set";
+        _showForm  = true;
+    }
+
+    private void OpenCriteria(RubricSet rs)
+    {
+        _selectedRubricSet = rs;
+        ClearCriterionForm();
+        _formMode  = "criteria";
+        _showForm  = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm         = false;
+        _formMode         = "";
+        _selectedRubricSet = null;
+        _formError        = string.Empty;
+        _criterionError   = string.Empty;
     }
 
     private async Task SaveRubricSet()
     {
         if (string.IsNullOrWhiteSpace(_setForm.Name)) { _formError = "Name is required."; return; }
+
         if (_editSetId.HasValue)
         {
             var rs = _rubricSets.First(r => r.Id == _editSetId.Value);
-            rs.Name = _setForm.Name;
-            rs.Description = _setForm.Description;
+            rs.Name                = _setForm.Name;
+            rs.Description         = _setForm.Description;
             rs.RequireAllMandatory = _setForm.RequireAllMandatory;
         }
         else
         {
             Db.RubricSets.Add(new RubricSet
             {
-                Id = Guid.NewGuid(),
-                TenantId = Guid.Empty,
-                Name = _setForm.Name,
-                Description = _setForm.Description,
+                Id                 = Guid.NewGuid(),
+                TenantId           = Guid.Empty,
+                Name               = _setForm.Name,
+                Description        = _setForm.Description,
                 RequireAllMandatory = _setForm.RequireAllMandatory,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt          = DateTime.UtcNow
             });
         }
         await Db.SaveChangesAsync();
-        CloseSetModal();
+        CloseForm();
         await LoadAsync();
     }
 
-    private async Task DeleteRubricSet(RubricSet rs)
+    private void ConfirmDelete(RubricSet rs) => _deleteTarget = rs;
+
+    private async Task DeleteRubricSet()
     {
-        Db.RubricSets.Remove(rs);
+        if (_deleteTarget is null) return;
+        Db.RubricSets.Remove(_deleteTarget);
         await Db.SaveChangesAsync();
+        _deleteTarget = null;
         await LoadAsync();
     }
 
-    private void CloseSetModal() { _showSetModal = false; _formError = string.Empty; }
+    // ── Criteria CRUD ─────────────────────────────────────────────────────────
 
-    // ── Criteria CRUD ────────────────────────────────────────────────────────────
-    private void ManageCriteria(RubricSet rs)
+    private void EditCriterion(RubricCriteria c)
     {
-        _selectedRubricSet = rs;
-        _expandedRubricSetId = rs.Id;
-        ClearCriterionForm();
-        _showCriteriaModal = true;
-    }
-
-    private void EditCriterion(RubricSet rs, RubricCriteria c)
-    {
-        _selectedRubricSet = rs;
-        _expandedRubricSetId = rs.Id;
         _editCriterionId = c.Id;
-        _criterionForm = new() { Name = c.Name, EvaluationType = c.EvaluationType, Pattern = c.Pattern, Weight = c.Weight, IsMandatory = c.IsMandatory, SortOrder = c.SortOrder };
-        _showCriteriaModal = true;
+        _criterionForm   = new()
+        {
+            Name           = c.Name,
+            EvaluationType = c.EvaluationType,
+            Pattern        = c.Pattern,
+            Weight         = c.Weight,
+            IsMandatory    = c.IsMandatory,
+            SortOrder      = c.SortOrder
+        };
+        _criterionError = string.Empty;
     }
 
     private async Task SaveCriterion()
     {
-        if (string.IsNullOrWhiteSpace(_criterionForm.Name)) { _criterionError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_criterionForm.Name))    { _criterionError = "Name is required.";    return; }
         if (string.IsNullOrWhiteSpace(_criterionForm.Pattern)) { _criterionError = "Pattern is required."; return; }
         if (_selectedRubricSet is null) return;
 
         if (_editCriterionId.HasValue)
         {
             var existing = _selectedRubricSet.Criteria.First(c => c.Id == _editCriterionId.Value);
-            existing.Name = _criterionForm.Name;
+            existing.Name           = _criterionForm.Name;
             existing.EvaluationType = _criterionForm.EvaluationType;
-            existing.Pattern = _criterionForm.Pattern;
-            existing.Weight = _criterionForm.Weight;
-            existing.IsMandatory = _criterionForm.IsMandatory;
-            existing.SortOrder = _criterionForm.SortOrder;
+            existing.Pattern        = _criterionForm.Pattern;
+            existing.Weight         = _criterionForm.Weight;
+            existing.IsMandatory    = _criterionForm.IsMandatory;
+            existing.SortOrder      = _criterionForm.SortOrder;
         }
         else
         {
             _selectedRubricSet.Criteria.Add(new RubricCriteria
             {
-                Id = Guid.NewGuid(),
-                RubricSetId = _selectedRubricSet.Id,
-                TenantId = Guid.Empty,
-                Name = _criterionForm.Name,
+                Id             = Guid.NewGuid(),
+                RubricSetId    = _selectedRubricSet.Id,
+                TenantId       = Guid.Empty,
+                Name           = _criterionForm.Name,
                 EvaluationType = _criterionForm.EvaluationType,
-                Pattern = _criterionForm.Pattern,
-                Weight = _criterionForm.Weight,
-                IsMandatory = _criterionForm.IsMandatory,
-                SortOrder = _criterionForm.SortOrder
+                Pattern        = _criterionForm.Pattern,
+                Weight         = _criterionForm.Weight,
+                IsMandatory    = _criterionForm.IsMandatory,
+                SortOrder      = _criterionForm.SortOrder
             });
         }
         await Db.SaveChangesAsync();
@@ -366,6 +440,7 @@ else
 
     private async Task DeleteCriterion(RubricCriteria c)
     {
+        if (_selectedRubricSet is null) return;
         Db.RubricCriterias.Remove(c);
         await Db.SaveChangesAsync();
         await LoadAsync();
@@ -375,26 +450,7 @@ else
     private void ClearCriterionForm()
     {
         _editCriterionId = null;
-        _criterionForm = new();
-        _criterionError = string.Empty;
-    }
-
-    private void CloseCriteriaModal() { _showCriteriaModal = false; ClearCriterionForm(); }
-
-    private class RubricSetForm
-    {
-        public string Name { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public bool RequireAllMandatory { get; set; } = true;
-    }
-
-    private class CriterionForm
-    {
-        public string Name { get; set; } = string.Empty;
-        public string EvaluationType { get; set; } = "Contains";
-        public string Pattern { get; set; } = string.Empty;
-        public double Weight { get; set; } = 1.0;
-        public bool IsMandatory { get; set; }
-        public int SortOrder { get; set; }
+        _criterionForm   = new();
+        _criterionError  = string.Empty;
     }
 }

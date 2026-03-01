@@ -1,15 +1,34 @@
+@attribute [Authorize]
 @page "/"
 @using mate.Data
 @using mate.Domain.Entities
+@using mate.Domain.Contracts.Modules
+@using mate.Domain.Contracts.Monitoring
 @using Microsoft.EntityFrameworkCore
+@using System.Net.Http.Json
 @inject mateDbContext Db
 @inject NavigationManager Navigation
+@inject mate.Core.mateModuleRegistry Registry
+@inject IWebHostEnvironment HostEnv
+@inject IHttpClientFactory HttpFactory
 
 <PageTitle>Home — @BrandInfo.BrandName</PageTitle>
 
 <div class="mate-header">
-    <h1>Welcome to @BrandInfo.BrandName</h1>
-    <p>@BrandInfo.BrandTagline</p>
+    <div>
+        <h1>@BrandInfo.BrandName</h1>
+        <p>@BrandInfo.BrandTagline</p>
+    </div>
+    @if (!string.IsNullOrEmpty(_version))
+    {
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+            <span style="background:var(--primary);color:#fff;font-size:11px;font-weight:600;padding:2px 10px;border-radius:10px">@_version</span>
+            @if (!string.IsNullOrEmpty(_changelogEntry))
+            {
+                <span style="font-size:12px;color:var(--text-secondary)"><i class="bi bi-journal-text me-1"></i>@_changelogEntry</span>
+            }
+        </div>
+    }
 </div>
 <div class="mate-page">
 
@@ -19,81 +38,81 @@
 }
 else
 {
-    <!-- Quick-start actions -->
+    <!-- Action cards -->
+    <div class="home-action-grid mb-4">
+        <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/wizard")'>
+            <div class="home-action-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)"><i class="bi bi-magic"></i></div>
+            <div class="fw-600">Setup Wizard</div>
+            <div class="text-muted" style="font-size:12px">Guided setup</div>
+        </div>
+        <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/test-suites")'>
+            <div class="home-action-icon" style="background:linear-gradient(135deg,#0066cc,#003d99)"><i class="bi bi-list-check"></i></div>
+            <div class="fw-600">Test Suites</div>
+            <div class="text-muted" style="font-size:12px">Manage &amp; run</div>
+        </div>
+        <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/documents")'>
+            <div class="home-action-icon" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)"><i class="bi bi-file-earmark-text"></i></div>
+            <div class="fw-600">Documents</div>
+            <div class="text-muted" style="font-size:12px">Upload &amp; manage</div>
+        </div>
+        <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/agents")'>
+            <div class="home-action-icon" style="background:linear-gradient(135deg,#06b6d4,#0891b2)"><i class="bi bi-robot"></i></div>
+            <div class="fw-600">Agents</div>
+            <div class="text-muted" style="font-size:12px">Configure connectors</div>
+        </div>
+        <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/dashboard")'>
+            <div class="home-action-icon" style="background:linear-gradient(135deg,#10b981,#047857)"><i class="bi bi-graph-up"></i></div>
+            <div class="fw-600">Dashboard</div>
+            <div class="text-muted" style="font-size:12px">KPIs &amp; history</div>
+        </div>
+        <div class="home-action-card" @onclick="OpenQuickRun">
+            <div class="home-action-icon" style="background:linear-gradient(135deg,#ef4444,#b91c1c)"><i class="bi bi-play-fill"></i></div>
+            <div class="fw-600">Quick Run</div>
+            <div class="text-muted" style="font-size:12px">Run suite now</div>
+        </div>
+    </div>
+
+    <!-- KPI stats row -->
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="section-card h-100" style="cursor:pointer" @onclick='() => Navigation.NavigateTo("/wizard")'>
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div style="width:48px;height:48px;background:linear-gradient(135deg,#0066cc,#8b5cf6);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white">
-                        <i class="bi bi-magic fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="fw-600">Setup Wizard</div>
-                        <div class="text-muted" style="font-size:12px">Onboard tenants &amp; agents</div>
-                    </div>
-                </div>
-                <p class="text-muted mb-0" style="font-size:13px">New here? Use the wizard to configure tenants, add agents, and create your first test suite in minutes.</p>
+        <div class="col-6 col-md-2">
+            <div class="kpi-card" style="cursor:pointer" @onclick='() => Navigation.NavigateTo("/agents")'>
+                <div class="kpi-value">@_agentCount</div>
+                <div class="kpi-label">Active Agents</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="section-card h-100" style="cursor:pointer" @onclick='() => Navigation.NavigateTo("/test-suites")'>
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div style="width:48px;height:48px;background:linear-gradient(135deg,#10b981,#06b6d4);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white">
-                        <i class="bi bi-list-check fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="fw-600">Test Suites</div>
-                        <div class="text-muted" style="font-size:12px">Manage &amp; run test cases</div>
-                    </div>
-                </div>
-                <p class="text-muted mb-0" style="font-size:13px">Create test suites, define test cases, and run evaluations against your registered agents.</p>
+        <div class="col-6 col-md-2">
+            <div class="kpi-card" style="cursor:pointer" @onclick='() => Navigation.NavigateTo("/test-suites")'>
+                <div class="kpi-value">@_suiteCount</div>
+                <div class="kpi-label">Test Suites</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="section-card h-100" style="cursor:pointer" @onclick='() => Navigation.NavigateTo("/dashboard")'>
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div style="width:48px;height:48px;background:linear-gradient(135deg,#f59e0b,#ef4444);border-radius:12px;display:flex;align-items:center;justify-content:center;color:white">
-                        <i class="bi bi-graph-up fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="fw-600">Dashboard</div>
-                        <div class="text-muted" style="font-size:12px">KPIs &amp; run history</div>
-                    </div>
+        <div class="col-6 col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-value">@_testCaseCount</div>
+                <div class="kpi-label">Test Cases</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="kpi-card" style="cursor:pointer" @onclick='() => Navigation.NavigateTo("/dashboard")'>
+                <div class="kpi-value">@_runCount</div>
+                <div class="kpi-label">Total Runs</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="kpi-card" style="cursor:pointer" @onclick='() => Navigation.NavigateTo("/dashboard")'>
+                <div class="kpi-value" style="color:@(_passRate >= 0.8 ? "var(--success)" : _passRate >= 0.5 ? "var(--warning)" : "var(--danger)")">
+                    @(_runCount > 0 ? $"{_passRate:P0}" : "—")
                 </div>
-                <p class="text-muted mb-0" style="font-size:13px">View pass rates, latency trends, and a full history of test runs across all agents.</p>
+                <div class="kpi-label">Overall Pass Rate</div>
             </div>
         </div>
     </div>
 
-    <!-- Platform health + stats -->
+    <!-- Recent runs + Module status -->
     <div class="row g-3 mb-4">
         <div class="col-md-6">
-            <div class="section-card">
-                <h2 class="section-title mb-3">Platform Status</h2>
-                <div class="d-flex flex-column gap-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span><span class="health-dot healthy"></span>Database</span>
-                        <span class="badge badge-pass">Healthy</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span><span class="health-dot @(_agentCount > 0 ? "healthy" : "unknown")"></span>Agents registered</span>
-                        <span class="badge badge-info">@_agentCount active</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span><span class="health-dot @(_suiteCount > 0 ? "healthy" : "unknown")"></span>Test suites</span>
-                        <span class="badge badge-info">@_suiteCount configured</span>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <a href="/health/ready" target="_blank" class="btn btn-sm btn-secondary">
-                        <i class="bi bi-activity"></i> Full health report
-                    </a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="section-card">
-                <h2 class="section-title mb-3">Recent Activity</h2>
+            <div class="section-card h-100">
+                <h2 class="section-title mb-3"><i class="bi bi-clock-history me-2" style="color:var(--primary)"></i>Recent Runs</h2>
                 @if (_recentRuns.Count == 0)
                 {
                     <div class="empty-state py-2">
@@ -103,55 +122,298 @@ else
                 else
                 {
                     <div class="d-flex flex-column gap-2">
-                        @foreach (var run in _recentRuns.Take(5))
+                        @foreach (var run in _recentRuns)
                         {
-                            <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid var(--border)">
                                 <div>
-                                    <div style="font-size:13px;font-weight:500">@(run.Suite?.Name ?? "—")</div>
-                                    <div style="font-size:11px;color:var(--text-secondary)">@run.StartedAt.ToString("MMM d, HH:mm")</div>
+                                    <div style="font-size:13px;font-weight:500">@(run.Suite?.Name ?? "—") / @(run.Agent?.Name ?? "—")</div>
+                                    <div style="font-size:11px;color:var(--text-secondary)">@run.StartedAt.ToString("MMM d, HH:mm") · @run.TotalTestCases cases</div>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge badge-@run.Status">@run.Status</span>
+                                    @if (run.TotalTestCases > 0 && run.Status == "completed")
+                                    {
+                                        <span style="font-size:11px;font-weight:600;color:@(run.PassedCount * 1.0 / run.TotalTestCases >= 0.8 ? "var(--success)" : "var(--danger)")">
+                                            @((run.PassedCount * 100 / run.TotalTestCases))%
+                                        </span>
+                                    }
                                     <a href="/runs/@run.Id" class="btn btn-sm btn-secondary">→</a>
                                 </div>
                             </div>
                         }
                     </div>
+                    <div class="mt-3">
+                        <a href="/dashboard" class="btn btn-sm btn-secondary">View all runs →</a>
+                    </div>
                 }
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="section-card h-100">
+                <h2 class="section-title mb-3"><i class="bi bi-puzzle me-2" style="color:var(--primary)"></i>Module Status</h2>
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var m in _connectorModules)
+                    {
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><span class="health-dot healthy"></span>@m.DisplayName</span>
+                            <span class="badge badge-info" style="font-size:10px">Connector</span>
+                        </div>
+                    }
+                    @foreach (var m in _judgeModules)
+                    {
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><span class="health-dot healthy"></span>@m.ProviderType</span>
+                            <span class="badge badge-info" style="font-size:10px">Judge</span>
+                        </div>
+                    }
+                    @foreach (var m in _qgenModules)
+                    {
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><span class="health-dot healthy"></span>@m.ProviderType</span>
+                            <span class="badge badge-info" style="font-size:10px">Q-Gen</span>
+                        </div>
+                    }
+                    @if (!_connectorModules.Any() && !_judgeModules.Any() && !_qgenModules.Any())
+                    {
+                        <div class="empty-state py-2"><p>No modules registered.</p></div>
+                    }
+                </div>
+                <div class="mt-3">
+                    <a href="/settings" class="btn btn-sm btn-secondary"><i class="bi bi-gear me-1"></i>Configure modules</a>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Quick links -->
-    <div class="section-card">
-        <h2 class="section-title mb-3">Quick Links</h2>
-        <div class="d-flex gap-3 flex-wrap">
-            <a href="/agents"          class="btn btn-secondary"><i class="bi bi-robot"></i> Agents</a>
-            <a href="/rubrics"         class="btn btn-secondary"><i class="bi bi-award"></i> Rubrics</a>
-            <a href="/documents"       class="btn btn-secondary"><i class="bi bi-file-earmark"></i> Documents</a>
-            <a href="/discover"        class="btn btn-secondary"><i class="bi bi-compass"></i> Discover</a>
-            <a href="/settings"        class="btn btn-secondary"><i class="bi bi-gear"></i> Settings</a>
-            <a href="/scalar/v1" target="_blank" class="btn btn-secondary"><i class="bi bi-code-slash"></i> API Reference ↗</a>
+    <!-- Getting Started -->
+    @if (_suiteCount == 0 || _agentCount == 0)
+    {
+        <div class="section-card mb-4">
+            <h2 class="section-title mb-3"><i class="bi bi-rocket-takeoff me-2" style="color:var(--primary)"></i>Getting Started</h2>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="d-flex gap-3">
+                        <div style="width:32px;height:32px;background:#e6f0ff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:#0066cc">1</span>
+                        </div>
+                        <div>
+                            <div style="font-size:13px;font-weight:600">Configure Settings</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Set up your AI Judge and connector endpoints</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex gap-3">
+                        <div style="width:32px;height:32px;background:#f3e8ff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:#8b5cf6">2</span>
+                        </div>
+                        <div>
+                            <div style="font-size:13px;font-weight:600">Register an Agent</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Add the AI agent you want to test</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex gap-3">
+                        <div style="width:32px;height:32px;background:#d1fae5;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:#059669">3</span>
+                        </div>
+                        <div>
+                            <div style="font-size:13px;font-weight:600">Create a Test Suite</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Define test cases or generate them from documents</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex gap-3">
+                        <div style="width:32px;height:32px;background:#fff7ed;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:#ea580c">4</span>
+                        </div>
+                        <div>
+                            <div style="font-size:13px;font-weight:600">Run &amp; Evaluate</div>
+                            <div style="font-size:12px;color:var(--text-secondary)">Launch a test run and review AI-judged results</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <a href="/wizard" class="btn btn-primary btn-sm"><i class="bi bi-magic me-1"></i>Launch Setup Wizard</a>
+            </div>
+        </div>
+    }
+}
+
+<!-- Quick Run modal -->
+@if (_showQuickRun)
+{
+    <div class="modal-backdrop" @onclick="CloseQuickRun">
+        <div class="modal-box" @onclick:stopPropagation style="width:460px">
+            <h2><i class="bi bi-play-fill me-2" style="color:#10b981"></i>Quick Run</h2>
+            @if (!string.IsNullOrEmpty(_quickRunMsg))
+            {
+                <div class="alert @(_quickRunSuccess ? "alert-success" : "alert-danger") mb-3" style="font-size:13px">@_quickRunMsg</div>
+            }
+            <div class="mb-3">
+                <label class="form-label fw-600" style="font-size:13px">Test Suite</label>
+                <select class="form-control" @bind="_quickSuiteId">
+                    <option value="">— select a suite —</option>
+                    @foreach (var s in _quickSuites)
+                    {
+                        <option value="@s.Id">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-600" style="font-size:13px">Agent <span class="fw-400 text-muted">(optional)</span></label>
+                <select class="form-control" @bind="_quickAgentId" disabled="@(_quickSuiteId == Guid.Empty)">
+                    <option value="">— select an agent —</option>
+                    @foreach (var a in _quickAgents)
+                    {
+                        <option value="@a.Id">@a.Name (@a.Environment)</option>
+                    }
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="TriggerQuickRun" disabled="@(_isRunning || _quickSuiteId == Guid.Empty || _quickAgentId == Guid.Empty)">
+                    @if (_isRunning) { <span class="spinner me-1" style="width:14px;height:14px"></span> } else { <i class="bi bi-play-fill me-1"></i> }
+                    Run Now
+                </button>
+                <button class="btn btn-secondary" @onclick="CloseQuickRun" disabled="@_isRunning">Cancel</button>
+            </div>
         </div>
     </div>
 }
+
 </div>
 
 @code {
     private bool _loading = true;
+    private string _version = string.Empty;
+    private string _changelogEntry = string.Empty;
+
+    // Stats
     private int _agentCount;
     private int _suiteCount;
+    private int _testCaseCount;
+    private int _runCount;
+    private double _passRate;
+
+    // Module registry
+    private List<IAgentConnectorModule> _connectorModules = [];
+    private List<IJudgeProvider> _judgeModules = [];
+    private List<IQuestionGenerationProvider> _qgenModules = [];
+
+    // Recent runs
     private List<Run> _recentRuns = [];
+
+    // Quick Run
+    private bool _showQuickRun;
+    private Guid _quickSuiteId;
+    private Guid _quickAgentId;
+    private List<TestSuite> _quickSuites = [];
+    private List<Agent> _quickAgents = [];
+    private bool _isRunning;
+    private string _quickRunMsg = string.Empty;
+    private bool _quickRunSuccess;
 
     protected override async Task OnInitializedAsync()
     {
-        _agentCount = await Db.Agents.CountAsync(a => a.IsActive);
-        _suiteCount = await Db.TestSuites.CountAsync();
+        // Version + changelog
+        var versionFile = Path.Combine(HostEnv.ContentRootPath, "VERSION");
+        if (!File.Exists(versionFile))
+            versionFile = Path.Combine(Directory.GetCurrentDirectory(), "VERSION");
+        if (File.Exists(versionFile))
+            _version = (await File.ReadAllTextAsync(versionFile)).Trim();
+
+        var changelogFile = Path.Combine(HostEnv.ContentRootPath, "CHANGELOG.md");
+        if (!File.Exists(changelogFile))
+            changelogFile = Path.Combine(Directory.GetCurrentDirectory(), "CHANGELOG.md");
+        if (File.Exists(changelogFile))
+        {
+            var lines = await File.ReadAllLinesAsync(changelogFile);
+            _changelogEntry = lines.FirstOrDefault(l => l.StartsWith("## ") || l.StartsWith("### ")) ?? string.Empty;
+            if (_changelogEntry.StartsWith("#"))
+                _changelogEntry = _changelogEntry.TrimStart('#').Trim();
+        }
+
+        // Stats
+        _agentCount    = await Db.Agents.CountAsync(a => a.IsActive);
+        _suiteCount    = await Db.TestSuites.CountAsync();
+        _testCaseCount = await Db.TestCases.CountAsync();
+        _runCount      = await Db.Runs.CountAsync();
+
+        var completedRuns = await Db.Runs.Where(r => r.Status == "completed").ToListAsync();
+        _passRate = completedRuns.Count > 0
+            ? completedRuns.Average(r => r.TotalTestCases > 0 ? (double)r.PassedCount / r.TotalTestCases : 0)
+            : 0;
+
+        // Recent runs
         _recentRuns = await Db.Runs
             .Include(r => r.Suite)
+            .Include(r => r.Agent)
             .OrderByDescending(r => r.StartedAt)
             .Take(5)
             .ToListAsync();
+
+        // Module registry
+        _connectorModules = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
+        _judgeModules     = Registry.GetAllJudgeProviders().ToList();
+        _qgenModules      = Registry.GetAllQuestionProviders().ToList();
+
         _loading = false;
     }
+
+    private async Task OpenQuickRun()
+    {
+        _quickSuites = await Db.TestSuites.Where(s => s.IsActive).OrderBy(s => s.Name).ToListAsync();
+        _quickAgents = await Db.Agents.Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync();
+        _quickSuiteId = Guid.Empty;
+        _quickAgentId = Guid.Empty;
+        _quickRunMsg = string.Empty;
+        _showQuickRun = true;
+    }
+
+    private void CloseQuickRun() { if (!_isRunning) _showQuickRun = false; }
+
+    private async Task TriggerQuickRun()
+    {
+        if (_quickSuiteId == Guid.Empty || _quickAgentId == Guid.Empty) return;
+        _isRunning = true;
+        _quickRunMsg = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient();
+            http.BaseAddress = new Uri(Navigation.BaseUri);
+            var res = await http.PostAsJsonAsync("/api/runs", new
+            {
+                suiteId = _quickSuiteId,
+                agentId = _quickAgentId,
+                requestedBy = "home"
+            });
+            if (res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                var runId = body.GetProperty("id").GetGuid();
+                _quickRunSuccess = true;
+                _quickRunMsg = "Run started!";
+                await Task.Delay(800);
+                Navigation.NavigateTo($"/runs/{runId}");
+            }
+            else
+            {
+                _quickRunSuccess = false;
+                _quickRunMsg = $"Failed to start run: {res.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _quickRunSuccess = false;
+            _quickRunMsg = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isRunning = false;
+        }
+    }
 }
+

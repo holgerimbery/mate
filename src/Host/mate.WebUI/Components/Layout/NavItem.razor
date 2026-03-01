@@ -2,11 +2,17 @@
 
 <a class="nav-item @(CurrentPage == PageKey ? "active" : "")"
    href="@Href"
-   title="@Label">
+   title="@(string.IsNullOrEmpty(Subtitle) ? Label : $"{Label} - {Subtitle}")">
     <i class="bi @Icon"></i>
     @if (Expanded)
     {
-        <span>@Label</span>
+        <span class="nav-item-text">
+            @Label
+            @if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <span class="nav-item-subtitle">@Subtitle</span>
+            }
+        </span>
     }
 </a>
 
@@ -14,6 +20,7 @@
     [Parameter] public string Href        { get; set; } = "/";
     [Parameter] public string Icon        { get; set; } = "bi-circle";
     [Parameter] public string Label       { get; set; } = "";
+    [Parameter] public string Subtitle    { get; set; } = "";
     [Parameter] public bool   Expanded    { get; set; } = true;
     [Parameter] public string CurrentPage { get; set; } = "";
     [Parameter] public string PageKey     { get; set; } = "";

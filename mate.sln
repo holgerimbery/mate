@@ -53,6 +53,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mate.Modules.Testing.Rubric
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mate.Modules.Testing.CopilotStudioJudge", "src\Modules\Testing\mate.Modules.Testing.CopilotStudioJudge\mate.Modules.Testing.CopilotStudioJudge.csproj", "{4C2E1F8B-9A73-4D56-B2E7-0F1C3A4E5D6B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mate.Modules.Testing.ModelQGen", "src\Modules\Testing\mate.Modules.Testing.ModelQGen\mate.Modules.Testing.ModelQGen.csproj", "{2D7F4A1E-5B3C-4E8D-A9F6-1C0B2D3E4F5A}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mate.Tests.EndToEnd", "tests\mate.Tests.EndToEnd\mate.Tests.EndToEnd.csproj", "{E4452150-696D-4C0B-AA57-4577AADC39AA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "mate.Tests.Integration", "tests\mate.Tests.Integration\mate.Tests.Integration.csproj", "{04B84C3D-192F-4529-893F-BF76031881D8}"

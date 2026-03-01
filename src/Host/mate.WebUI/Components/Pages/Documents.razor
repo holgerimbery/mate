@@ -1,80 +1,120 @@
+@attribute [Authorize]
 @page "/documents"
 @using mate.Core.DocumentProcessing
 @using mate.Data
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
+@using System.Security.Cryptography
 @inject mateDbContext Db
 @inject DocumentIngestor Ingestor
+@inject DocumentChunker Chunker
+@inject IHttpClientFactory HttpClientFactory
 @inject ITenantContext TenantCtx
 
 <PageTitle>Documents — @BrandInfo.BrandName</PageTitle>
 
-<h1>Documents</h1>
-
-<div class="upload-section">
-    <h2>Upload Document</h2>
-    <p>Supported formats: <strong>PDF</strong>, <strong>DOCX</strong>. Files are chunked and used for AI-powered test question generation.</p>
-
-    <InputFile OnChange="HandleFileSelected" accept=".pdf,.docx" />
-
-    @if (_uploading)
-    {
-        <p><em>Uploading and processing…</em></p>
-    }
-    @if (!string.IsNullOrWhiteSpace(_uploadError))
-    {
-        <div class="alert alert-error">@_uploadError</div>
-    }
-    @if (!string.IsNullOrWhiteSpace(_uploadSuccess))
-    {
-        <div class="alert alert-success">@_uploadSuccess</div>
-    }
+<div class="mate-header">
+    <h1>Documents</h1>
+    <p>Upload and manage documents for AI-powered test question generation.</p>
 </div>
+<div class="mate-page">
 
-<h2>Uploaded Documents</h2>
+    <div class="section-card">
+        <h2 class="section-title mb-3">Upload Document</h2>
+        <p class="text-muted mb-3">Supported formats: <strong>PDF</strong>, <strong>DOCX</strong>. Files are chunked and used for AI-powered test question generation.</p>
+        <InputFile OnChange="HandleFileSelected" accept=".pdf,.docx" />
+        @if (_uploading)
+        {
+            <div class="d-flex align-items-center gap-2 mt-3"><span class="spinner"></span><span>Uploading and processing…</span></div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_uploadError))
+        {
+            <div class="alert alert-danger mt-3"><i class="bi bi-exclamation-circle"></i> @_uploadError</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_uploadSuccess))
+        {
+            <div class="alert alert-success mt-3"><i class="bi bi-check-circle-fill"></i> @_uploadSuccess</div>
+        }
+    </div>
 
-@if (_loading)
-{
-    <p><em>Loading…</em></p>
-}
-else
-{
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>File Name</th>
-                <th>Type</th>
-                <th>Size</th>
-                <th>Pages</th>
-                <th>Chunks</th>
-                <th>Uploaded</th>
-                <th>By</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var doc in _documents)
-            {
-                <tr>
-                    <td>@doc.FileName</td>
-                    <td>@doc.ContentType</td>
-                    <td>@FormatSize(doc.FileSizeBytes)</td>
-                    <td>@doc.PageCount</td>
-                    <td>@doc.ChunkCount</td>
-                    <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                    <td>@doc.UploadedBy</td>
-                    <td>
-                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
-                    </td>
-                </tr>
-            }
-            @if (!_documents.Any())
-            {
-                <tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>
-            }
-        </tbody>
-    </table>
-}
+    <div class="section-card">
+        <h2 class="section-title mb-3">Import from URL</h2>
+        <p class="text-muted mb-3">Fetch plain-text content from a public HTTP/HTTPS URL and import it as a document.</p>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="url" class="form-control" style="max-width:480px;font-size:14px"
+                   placeholder="https://example.com/document.txt"
+                   @bind="_importUrl" @bind:event="oninput"
+                   disabled="@_importingUrl" />
+            <button class="btn btn-secondary" @onclick="ImportFromUrl"
+                    disabled="@(_importingUrl || string.IsNullOrWhiteSpace(_importUrl))">
+                @if (_importingUrl)
+                {
+                    <span class="spinner me-1"></span><span>Importing…</span>
+                }
+                else
+                {
+                    <i class="bi bi-link-45deg me-1"></i><span>Import</span>
+                }
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_importError))
+        {
+            <div class="alert alert-danger mt-3"><i class="bi bi-exclamation-circle"></i> @_importError</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_importSuccess))
+        {
+            <div class="alert alert-success mt-3"><i class="bi bi-check-circle-fill"></i> @_importSuccess</div>
+        }
+    </div>
+
+    <div class="section-card">
+        <div class="section-header">
+            <span class="section-title">Uploaded Documents</span>
+        </div>
+        @if (_loading)
+        {
+            <p><em>Loading…</em></p>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>File Name</th>
+                        <th>Type</th>
+                        <th>Size</th>
+                        <th>Pages</th>
+                        <th>Chunks</th>
+                        <th>Uploaded</th>
+                        <th>By</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var doc in _documents)
+                    {
+                        <tr>
+                            <td>@doc.FileName</td>
+                            <td>@doc.ContentType</td>
+                            <td>@FormatSize(doc.FileSizeBytes)</td>
+                            <td>@doc.PageCount</td>
+                            <td>@doc.ChunkCount</td>
+                            <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@doc.UploadedBy</td>
+                            <td>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (!_documents.Any())
+                    {
+                        <tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
 
 @if (_deleteDoc is not null)
 {
@@ -97,6 +137,10 @@ else
     private Document? _deleteDoc;
     private string _uploadError = string.Empty;
     private string _uploadSuccess = string.Empty;
+    private string _importUrl = string.Empty;
+    private bool _importingUrl;
+    private string _importError = string.Empty;
+    private string _importSuccess = string.Empty;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -147,6 +191,101 @@ else
         await Db.SaveChangesAsync();
         _deleteDoc = null;
         await LoadAsync();
+    }
+
+    private async Task ImportFromUrl()
+    {
+        if (string.IsNullOrWhiteSpace(_importUrl)) return;
+
+        if (!Uri.TryCreate(_importUrl.Trim(), UriKind.Absolute, out var uri) ||
+            (uri.Scheme != "http" && uri.Scheme != "https"))
+        {
+            _importError = "Please enter a valid HTTP or HTTPS URL.";
+            return;
+        }
+
+        var host = uri.Host.ToLowerInvariant();
+        if (host is "localhost" or "127.0.0.1" or "::1")
+        {
+            _importError = "Local addresses are not allowed.";
+            return;
+        }
+
+        _importingUrl = true;
+        _importError = string.Empty;
+        _importSuccess = string.Empty;
+
+        try
+        {
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var client = HttpClientFactory.CreateClient();
+            var response = await client.GetAsync(_importUrl.Trim(), cts.Token);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync(cts.Token);
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _importError = "The URL returned empty content.";
+                return;
+            }
+
+            var fileName = System.IO.Path.GetFileName(uri.LocalPath.TrimEnd('/'));
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = uri.Host + ".txt";
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+            var contentHash = Convert.ToHexString(SHA256.HashData(bytes));
+
+            var existing = await Db.Documents
+                .Where(d => d.TenantId == TenantCtx.TenantId && d.ContentHash == contentHash)
+                .FirstOrDefaultAsync();
+            if (existing is not null)
+            {
+                _importSuccess = $"'{existing.FileName}' already exists — skipped duplicate.";
+                _importUrl = string.Empty;
+                return;
+            }
+
+            var chunkTexts = Chunker.Chunk(content);
+            var docId = Guid.NewGuid();
+            var doc = new Document
+            {
+                Id = docId,
+                TenantId = TenantCtx.TenantId,
+                FileName = fileName,
+                ContentType = "text/plain",
+                ContentHash = contentHash,
+                FileSizeBytes = bytes.Length,
+                ChunkCount = chunkTexts.Count,
+                BlobContainer = string.Empty,
+                BlobName = string.Empty,
+                UploadedAt = DateTime.UtcNow,
+                UploadedBy = "url-import",
+                Chunks = chunkTexts.Select((text, idx) => new Chunk
+                {
+                    Id = Guid.NewGuid(),
+                    DocumentId = docId,
+                    TenantId = TenantCtx.TenantId,
+                    Text = text,
+                    TokenCount = (int)Math.Ceiling(text.Length / 4.0),
+                    ChunkIndex = idx,
+                }).ToList()
+            };
+
+            Db.Documents.Add(doc);
+            await Db.SaveChangesAsync();
+
+            _importSuccess = $"\u2713 Imported '{fileName}' — {chunkTexts.Count} chunk{(chunkTexts.Count == 1 ? "" : "s")} created.";
+            _importUrl = string.Empty;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _importError = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            _importingUrl = false;
+        }
     }
 
     private static string FormatSize(long bytes)

@@ -1,70 +1,127 @@
 using System.Security.Claims;
 using mate.Domain.Contracts.Modules;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
 
 namespace mate.Modules.Auth.EntraId;
 
 /// <summary>
-/// Microsoft Entra ID (Azure AD) authentication module.
+/// Microsoft Entra ID (Azure AD) OIDC authentication module for Blazor Server.
 ///
-/// Uses Microsoft.Identity.Web to validate Bearer tokens issued by Entra ID.
-/// Tenant isolation is derived from the 'tid' claim (Entra tenant ID = external tenant ID).
+/// Registers cookie-based OIDC (browser sign-in) via Microsoft.Identity.Web.
+/// A separate named JwtBearer scheme ("EntraId_Bearer") handles headless API clients
+/// that supply an Authorization: Bearer token; this does NOT override the default
+/// cookie/OIDC scheme selection used by Blazor pages.
 ///
-/// Required configuration section: "AzureAd" with:
-///   - TenantId
-///   - ClientId (audience)
-///   - Scope (optional, for delegated flows)
+/// ── Proxy / ForwardedHeaders requirement ──────────────────────────────────────
+/// This module REQUIRES that app.UseForwardedHeaders() is called BEFORE
+/// app.UseAuthentication() in the middleware pipeline (handled in Program.cs).
+/// Without it, OIDC redirect_uri is built from the internal container address
+/// (http://webui:8080) instead of the real public URL, and Entra ID rejects it.
+///
+/// ── IClaimsTransformation registration ────────────────────────────────────────
+/// This class does NOT self-register IClaimsTransformation inside ConfigureAuthentication.
+/// Program.cs registers the *same* IAuthModule instance as IClaimsTransformation
+/// to guarantee a single instance handles both concerns.
+///
+/// Required configuration section "AzureAd":
+///   Instance, TenantId, ClientId, ClientSecret, CallbackPath (/signin-oidc)
 /// </summary>
-public sealed class EntraIdAuthModule : IAuthModule
+public sealed class EntraIdAuthModule : IAuthModule, IClaimsTransformation
 {
+    // Separate scheme name for bearer token validation so it NEVER overrides the
+    // DefaultScheme / DefaultChallengeScheme that Program.cs explicitly sets to Cookies/OIDC.
+    public const string BearerSchemeName = "EntraId_Bearer";
+
     public string SchemeName => "EntraId";
     public string DisplayName => "Microsoft Entra ID";
     public bool SupportsDevelopmentBypass => true;
 
     public void ConfigureAuthentication(AuthenticationBuilder builder, IConfiguration config)
     {
-        builder.AddMicrosoftIdentityWebApi(config.GetSection("AzureAd"));
+        // ── Browser / Blazor OIDC path ─────────────────────────────────────────
+        // AddMicrosoftIdentityWebApp registers:
+        //   • "Cookies"       — session cookie (DefaultScheme, DefaultSignInScheme)
+        //   • "OpenIdConnect" — OIDC redirect handler (DefaultChallengeScheme)
+        //
+        // Deliberately no PostConfigure<OpenIdConnectOptions> override here.
+        // Microsoft.Identity.Web V4 internally configures the correct ResponseType,
+        // ResponseMode, PKCE, nonce handling and cookie policies for the current
+        // flow. Overriding those settings (e.g. ResponseType="code", custom
+        // NonceCookie/CorrelationCookie) breaks nonce validation because the
+        // library's own PostConfigure sets RequireNonce=false for PKCE/code flows —
+        // but if our PostConfigure runs after theirs it re-enables nonce cookie
+        // behaviour that then fails (IDX21323). MaaJforMCS works for the same
+        // reason: it also has zero PostConfigure overrides.
+        // AddMicrosoftIdentityWebApp owns ALL cookie, OIDC, and nonce configuration.
+        // No PostConfigure overrides — any override runs after the library's own
+        // PostConfigure and silently breaks nonce/correlation/session cookie handling.
+        // This matches MaaJforMCS exactly: zero PostConfigure, zero manual options.
+        builder.AddMicrosoftIdentityWebApp(config.GetSection("AzureAd"));
+
+        // ── API / Bearer token path ────────────────────────────────────────────
+        // Named scheme "EntraId_Bearer" – only used when callers explicitly supply
+        // "Authorization: Bearer <jwt>" and the middleware triggers it.
+        // Registering with a non-default name ensures it NEVER hijacks the Blazor
+        // browser flow (which uses Cookies as DefaultScheme).
+        builder.AddMicrosoftIdentityWebApi(
+            config.GetSection("AzureAd"),
+            jwtBearerScheme: BearerSchemeName);
+
+        // ── IClaimsTransformation ──────────────────────────────────────────────
+        // NOT registered here. Program.cs registers the same IAuthModule singleton
+        // instance as IClaimsTransformation to prevent a second instance being created.
     }
+
+    /// <summary>Register /MicrosoftIdentity/Account/* controller routes for sign-in/sign-out UI.</summary>
+    public static void AddMicrosoftIdentityUI(IServiceCollection services)
+        => services.AddControllersWithViews().AddMicrosoftIdentityUI();
 
     public void ConfigureAuthorization(AuthorizationOptions options, IConfiguration config)
     {
-        // Require authenticated user by default on all API endpoints
-        options.FallbackPolicy = new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser()
-            .Build();
-
-        // Role-based policies
-        options.AddPolicy("AdminOnly",   p => p.RequireRole("Admin", "PlatformAdmin"));
-        options.AddPolicy("TesterOrAbove", p => p.RequireRole("Admin", "PlatformAdmin", "Tester"));
-        options.AddPolicy("ViewerOrAbove", p => p.RequireRole("Admin", "PlatformAdmin", "Tester", "Viewer"));
+        // No FallbackPolicy — matches MaaJforMCS. Each page declares [Authorize] individually.
+        options.AddPolicy("AnyAuthenticated", p => p.RequireAuthenticatedUser());
+        options.AddPolicy("AdminOnly",        p => p.RequireRole("Admin", "PlatformAdmin"));
+        options.AddPolicy("TesterOrAbove",    p => p.RequireRole("Admin", "PlatformAdmin", "Tester"));
+        options.AddPolicy("ViewerOrAbove",    p => p.RequireRole("Admin", "PlatformAdmin", "Tester", "Viewer"));
     }
 
+    // ── IClaimsTransformation ──────────────────────────────────────────────────
+
+    /// <summary>Called by the ASP.NET Core auth pipeline on every authenticated request.</summary>
+    public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
+        => TransformClaimsAsync(principal);
+
+    /// <summary>Maps Entra ID claims → mate internal claim set (IAuthModule contract).</summary>
     public Task<ClaimsPrincipal> TransformClaimsAsync(ClaimsPrincipal external)
     {
-        // Map Entra-specific claims to mate internal claims
         var claims = new List<Claim>(external.Claims);
 
-        // ExternalTenantId from 'tid' (Entra tenant ID)
+        // mate:externalTenantId — from 'tid' (Entra tenant GUID)
         var tid = external.FindFirst("tid")?.Value
                ?? external.FindFirst("http://schemas.microsoft.com/identity/claims/tenantid")?.Value;
         if (!string.IsNullOrEmpty(tid))
             claims.Add(new Claim("mate:externalTenantId", tid));
 
-        // UserId from oid (object ID) — unique per user per directory
+        // mate:userId — from 'oid' (object ID, unique per user per directory)
         var oid = external.FindFirst("oid")?.Value
                ?? external.FindFirst("http://schemas.microsoft.com/identity/claims/objectidentifier")?.Value;
         if (!string.IsNullOrEmpty(oid))
             claims.Add(new Claim("mate:userId", oid));
 
-        // Role from 'roles' claim array, defaulting to Viewer
+        // mate:role — from app role or default to Viewer
         var role = external.FindAll("roles").FirstOrDefault()?.Value ?? "Viewer";
         claims.Add(new Claim("mate:role", role));
 
-        var identity = new ClaimsIdentity(claims, external.Identity?.AuthenticationType ?? "EntraId");
+        var identity = new ClaimsIdentity(claims, external.Identity?.AuthenticationType ?? "EntraId",
+            nameType: "name", roleType: ClaimTypes.Role);
         return Task.FromResult(new ClaimsPrincipal(identity));
     }
 }

@@ -4,6 +4,12 @@
    Design system matches MaaJforMCS look & feel.
    ============================================================ */
 
+/* Suppress focus ring on headings (set by Blazor enhanced navigation).
+   Keyboard-only users still get focus rings on interactive elements. */
+h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
+    outline: none;
+}
+
 /* ── Color Palette ─────────────────────────────────────────── */
 :root {
     --primary:        #0066cc;
@@ -20,9 +26,79 @@
     --text-primary:   #1f1f23;
     --text-secondary: #5f5f5f;
     --text-tertiary:  #8a8d91;
+    --text-muted:     #6b7280;
+    --surface-2:      #f8f9fa;
     --sidebar-width-expanded:  220px;
     --sidebar-width-collapsed: 60px;
 }
+
+/* ── Dark Mode ──────────────────────────────────────────────── */
+[data-theme="dark"] {
+    --primary:        #4d9fff;
+    --primary-dark:   #2b7fd4;
+    --secondary:      #a78bfa;
+    --accent:         #fbbf24;
+    --success:        #34d399;
+    --danger:         #f87171;
+    --warning:        #fbbf24;
+    --info:           #60a5fa;
+    --light-bg:       #1a1b1e;
+    --card-bg:        #25262b;
+    --border:         #373a40;
+    --text-primary:   #e8e9ea;
+    --text-secondary: #adadb8;
+    --text-tertiary:  #78787f;
+    --text-muted:     #9ca3af;
+    --surface-2:      #2c2d32;
+}
+
+[data-theme="dark"] body {
+    background-color: var(--light-bg);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .mate-sidebar {
+    background: var(--card-bg);
+    box-shadow: 2px 0 8px rgba(0,0,0,0.4);
+}
+
+[data-theme="dark"] .sidebar-toggle-btn:hover { background: #373a40; }
+
+[data-theme="dark"] .sidebar-darkmode-btn:hover { background: #373a40; }
+[data-theme="dark"] .sidebar-darkmode-btn { color: var(--text-secondary); }
+
+[data-theme="dark"] .nav-item:hover { background: #373a40; }
+
+[data-theme="dark"] .tab-pill.active { background: #373a40; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+[data-theme="dark"] .tab-pills { background: #1e1f22; }
+
+[data-theme="dark"] pre { background: #141417; }
+
+[data-theme="dark"] code { color: var(--text-secondary); background: #1e1f22; padding: 1px 4px; border-radius: 3px; }
+
+[data-theme="dark"] .data-table th { background: #1e1f22; }
+
+[data-theme="dark"] .data-table tr:hover td { background: rgba(77,159,255,0.04); }
+
+[data-theme="dark"] .form-control { background: #1e1f22; color: var(--text-primary); border-color: var(--border); }
+
+[data-theme="dark"] .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(77,159,255,0.15); }
+
+[data-theme="dark"] select option { background: #25262b; }
+
+[data-theme="dark"] .btn-secondary { background: #373a40; color: var(--text-primary); border-color: var(--border); }
+[data-theme="dark"] .btn-secondary:hover { background: #4a4d55; }
+
+[data-theme="dark"] .filter-input, [data-theme="dark"] .filter-select { background: #1e1f22; color: var(--text-primary); }
+
+[data-theme="dark"] .modal-box { background: var(--card-bg); }
+
+[data-theme="dark"] .transcript-bubble.bot { background: #2c2d32; border-color: var(--border); }
+
+[data-theme="dark"] .kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+
+[data-theme="dark"] .home-action-card:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.4); }
 
 /* ── Reset & Base ──────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
@@ -83,6 +159,19 @@ html, body {
 }
 .sidebar-toggle-btn:hover { background: #f0f0f0; }
 
+.sidebar-darkmode-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 8px 12px;
+    color: var(--text-secondary);
+    display: flex; align-items: center; gap: 8px;
+    width: 100%;
+    border-radius: 8px;
+    transition: background 0.2s;
+    font-size: 0.9rem;
+}
+.sidebar-darkmode-btn:hover { background: var(--light-bg); }
+.sidebar-darkmode-btn i { font-size: 1.1rem; flex-shrink: 0; }
+
 .sidebar-brand {
     width: 100%;
     padding: 12px;
@@ -97,11 +186,11 @@ html, body {
     object-fit: contain;
     flex-shrink: 0;
 }
-.sidebar-brand-logo-wide {
-    height: 28px;
-    width: auto;
-    object-fit: contain;
-    margin-left: 10px;
+.sidebar-brand-text {
+    margin-left: 12px;
+    font-size: 14px; font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
 }
 
 .sidebar-nav {
@@ -147,6 +236,144 @@ html, body {
 }
 .nav-item i { font-size: 20px; flex-shrink: 0; }
 
+/* ── Nav item text (two-line helper, kept for any future use) ── */
+.nav-item-text {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    line-height: 1.25;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────── */
+.mate-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 8px 24px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    min-height: 52px;
+}
+.mate-topbar-user { position: relative; }
+.topbar-user-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.topbar-user-btn:hover { background: var(--light-bg); }
+.topbar-user-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* ── Sidebar user avatar bubble (kept for CSS variable reuse) ── */
+.sidebar-user-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s;
+    overflow: hidden;
+}
+.sidebar-user-btn:hover { background: var(--light-bg); }
+.user-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--primary, #0066cc);
+    color: #fff;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    user-select: none;
+    letter-spacing: 0.5px;
+}
+.user-avatar-dev  { background: #e65100; }
+.user-avatar-none { background: #9e9e9e; }
+.user-avatar-lg   { width: 44px; height: 44px; font-size: 16px; }
+.user-name-text {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: block;
+}
+.user-role-text {
+    font-size: 10px;
+    color: var(--text-secondary);
+    display: block;
+}
+.user-popup {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 8px; right: 8px;
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border, #e8eaed);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    z-index: 2000;
+    min-width: 180px;
+}
+/* Top-bar variant — must come AFTER .user-popup so it wins the cascade */
+.user-popup-top {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: auto;
+    bottom: auto;
+    min-width: 220px;
+    max-width: 280px;
+    width: max-content;
+}
+.user-popup-name  { font-size: 14px; font-weight: 700; color: var(--text-primary); margin: 0; }
+.user-popup-email { font-size: 11px; color: var(--text-secondary); margin: 2px 0 0; }
+.user-popup-role-badge {
+    display: inline-block;
+    background: var(--primary, #0066cc);
+    color: #fff;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 10px;
+    margin-top: 8px;
+}
+.user-popup-role-badge.dev { background: #e65100; }
+.user-popup-scheme-badge {
+    display: inline-block;
+    background: #6c757d;
+    color: #fff;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 10px;
+    margin-top: 4px; margin-left: 4px;
+}
+.user-popup-divider { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.user-popup-logout {
+    display: flex; align-items: center; gap: 8px;
+    color: #c62828; text-decoration: none;
+    font-size: 13px; font-weight: 500;
+    padding: 4px 0;
+    transition: color 0.2s;
+}
+.user-popup-logout:hover { color: #b71c1c; text-decoration: none; }
+.user-popup-devnote { font-size: 11px; color: #e65100; display: flex; align-items: flex-start; gap: 6px; line-height: 1.4; word-break: break-word; }
+.sidebar-backdrop { position: fixed; inset: 0; z-index: 1999; }
+
 /* ── Main content ──────────────────────────────────────────── */
 .mate-main {
     display: flex;
@@ -190,6 +417,31 @@ html, body {
 .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 .kpi-value { font-size: 32px; font-weight: 700; color: var(--primary); }
 .kpi-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+/* ── Home Action Cards ─────────────────────────────────────── */
+.home-action-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+}
+.home-action-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.home-action-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.12); }
+.home-action-icon {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; color: white;
+}
 
 /* ── Section Card ──────────────────────────────────────────── */
 .section-card {
@@ -295,6 +547,11 @@ html, body {
 .badge-pending, .badge-skip                   { background: rgba(245,158,11,0.12); color: #b45309; }
 .badge-running                                { background: rgba(59,130,246,0.12); color: #2563eb; }
 .badge-info                                   { background: rgba(0,102,204,0.12);  color: var(--primary); }
+/* ── Environment badges ─────────────────────────────────────── */
+.badge-development                            { background: rgba(107,114,128,0.12); color: #4b5563; }
+.badge-test                                   { background: rgba(245,158,11,0.12);  color: #b45309; }
+.badge-staging                                { background: rgba(139,92,246,0.12);  color: #7c3aed; }
+.badge-production                             { background: rgba(16,185,129,0.12);  color: #059669; }
 
 /* ── Health indicators ─────────────────────────────────────── */
 .health-dot {

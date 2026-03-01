@@ -331,7 +331,7 @@ public static class ModelAsJudgeModuleExtensions
             c.Timeout = TimeSpan.FromSeconds(120);
         });
         services.AddSingleton<ModelAsJudgeProvider>();
-        services.AddSingleton<ModelAsJudgeModule>();
+        services.AddSingleton<ITestingModule, ModelAsJudgeModule>();
         return services;
     }
 }

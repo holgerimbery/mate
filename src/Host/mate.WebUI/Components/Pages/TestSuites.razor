@@ -1,129 +1,345 @@
+@attribute [Authorize]
 @page "/test-suites"
 @using mate.Data
 @using mate.Domain.Contracts.Infrastructure
+@using mate.Domain.Contracts.Modules
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
 @inject mateDbContext Db
 @inject IMessageQueue Queue
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject mate.Core.mateModuleRegistry Registry
+@inject ISecretService SecretSvc
+@inject ITenantContext TenantCtx
 
 <PageTitle>Test Suites — @BrandInfo.BrandName</PageTitle>
 
-<h1>Test Suites</h1>
-
-<button class="btn btn-primary" @onclick="OpenCreateSuite">+ New Suite</button>
-
-@if (_loading)
+@if (!_showSuiteForm)
 {
-    <p><em>Loading…</em></p>
+    <div class="mate-header">
+        <h1>Test Suites</h1>
+        <p>Manage test suites, test cases, and run evaluations against your agents.</p>
+    </div>
+    <div class="mate-page">
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-title">All Test Suites</span>
+                <button class="btn btn-primary btn-sm" @onclick="OpenCreateSuite">
+                    <i class="bi bi-plus-lg"></i> New Suite
+                </button>
+            </div>
+            @if (_loading)
+            {
+                <p><em>Loading…</em></p>
+            }
+            else
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Cases</th>
+                            <th>Pass Threshold</th>
+                            <th>Active</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var suite in _suites)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@suite.Name</strong><br />
+                                    <small>@suite.Description</small>
+                                    @if (suite.Tags.Length > 0)
+                                    {
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @foreach (var t in suite.Tags)
+                                            {
+                                                <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px">@t</span>
+                                            }
+                                        </div>
+                                    }
+                                </td>
+                                <td>@suite.TestCases.Count</td>
+                                <td>@suite.PassThreshold.ToString("P0")</td>
+                                <td>@(suite.IsActive ? "✓" : "✗")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => ExpandSuite(suite)">
+                                        @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)"><i class="bi bi-play-fill"></i> Run</button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
+                                </td>
+                            </tr>
+                            @if (_expandedSuiteId == suite.Id)
+                            {
+                                <tr>
+                                    <td colspan="5" style="padding:0 1rem 1rem;background:var(--bg-page,#f5f7fa)">
+                                        <div class="section-header" style="margin-top:12px;margin-bottom:8px">
+                                            <strong>Test Cases</strong>
+                                            <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">
+                                                <i class="bi bi-plus-lg"></i> Add Case
+                                            </button>
+                                        </div>
+                                        <table class="data-table sub-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Name</th>
+                                                    <th>Input(s)</th>
+                                                    <th>Active</th>
+                                                    <th></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
+                                                {
+                                                    <tr>
+                                                        <td>@tc.SortOrder</td>
+                                                        <td>@tc.Name<br /><small>@tc.Description</small></td>
+                                                        <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
+                                                        <td>@(tc.IsActive ? "✓" : "✗")</td>
+                                                        <td>
+                                                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
+                                                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                                @if (!suite.TestCases.Any())
+                                                {
+                                                    <tr><td colspan="5" class="empty-row">No test cases yet.</td></tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        @if (!_suites.Any())
+                        {
+                            <tr><td colspan="5" class="empty-row">No test suites yet.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
 }
 else
 {
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Cases</th>
-                <th>Pass Threshold</th>
-                <th>Active</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var suite in _suites)
+    <div class="mate-header">
+        <h1>@(_editSuite is null ? "New Test Suite" : "Edit Test Suite — " + _editSuite.Name)</h1>
+        <p>@(_editSuite is null ? "Create a new test suite to organise test cases." : "Update test suite details.")</p>
+    </div>
+    <div class="mate-page">
+        <div class="section-card">
+            <h2 class="section-title mb-4">Suite Details</h2>
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input class="form-control" @bind="_suiteForm.Name" placeholder="Suite name" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <input class="form-control" @bind="_suiteForm.Description" placeholder="Optional description" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tags <small class="text-muted">(comma-separated)</small></label>
+                <input class="form-control" @bind="_suiteForm.TagsRaw" placeholder="regression, smoke, api" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Pass Threshold (0–1)</label>
+                <input class="form-control" type="number" min="0" max="1" step="0.05" @bind="_suiteForm.PassThreshold" style="width:140px" />
+                <small class="text-muted">Score 0–1 required to pass (e.g. 0.7 = 70%)</small>
+            </div>
+            @if (_editSuite is not null)
             {
-                <tr>
-                    <td>
-                        <strong>@suite.Name</strong><br />
-                        <small>@suite.Description</small>
-                    </td>
-                    <td>@suite.TestCases.Count</td>
-                    <td>@suite.PassThreshold.ToString("P0")</td>
-                    <td>@(suite.IsActive ? "✓" : "✗")</td>
-                    <td>
-                        <button class="btn btn-sm btn-secondary" @onclick="() => ExpandSuite(suite)">
-                            @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
-                        </button>
-                        <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)">▶ Run</button>
-                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
-                    </td>
-                </tr>
-                @if (_expandedSuiteId == suite.Id)
-                {
-                    <tr>
-                        <td colspan="5" style="padding: 0 1rem 1rem 1rem; background: #f9f9f9;">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-                                <strong>Test Cases</strong>
-                                <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">+ Add Case</button>
-                            </div>
-                            <table class="data-table sub-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Name</th>
-                                        <th>Input(s)</th>
-                                        <th>Active</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
-                                    {
-                                        <tr>
-                                            <td>@tc.SortOrder</td>
-                                            <td>@tc.Name<br /><small>@tc.Description</small></td>
-                                            <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
-                                            <td>@(tc.IsActive ? "✓" : "✗")</td>
-                                            <td>
-                                                <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
-                                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
-                                            </td>
-                                        </tr>
-                                    }
-                                    @if (!suite.TestCases.Any())
-                                    {
-                                        <tr><td colspan="5" class="empty-row">No test cases yet.</td></tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </td>
-                    </tr>
-                }
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" @bind="_suiteForm.IsActive" class="me-2" />
+                        Active
+                    </label>
+                </div>
             }
-            @if (!_suites.Any())
-            {
-                <tr><td colspan="5" class="empty-row">No test suites yet.</td></tr>
-            }
-        </tbody>
-    </table>
-}
-
-@* ── Suite form modal ─────────────────────────────────────────────────────── *@
-@if (_showSuiteForm)
-{
-    <div class="modal-backdrop" @onclick="CloseSuiteForm">
-        <div class="modal-box" @onclick:stopPropagation>
-            <h2>@(_editSuite is null ? "New Test Suite" : "Edit Test Suite")</h2>
-
-            <label>Name</label>
-            <input class="form-control" @bind="_suiteForm.Name" placeholder="Suite name" />
-
-            <label>Description</label>
-            <input class="form-control" @bind="_suiteForm.Description" placeholder="Optional description" />
-
-            <label>Pass Threshold (0–1)</label>
-            <input class="form-control" type="number" min="0" max="1" step="0.05" @bind="_suiteForm.PassThreshold" />
-
             @if (!string.IsNullOrWhiteSpace(_suiteFormError))
             {
-                <div class="alert alert-error">@_suiteFormError</div>
+                <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_suiteFormError</div>
             }
+        </div>
 
-            <div class="modal-actions">
-                <button class="btn btn-primary" @onclick="SaveSuite">Save</button>
-                <button class="btn btn-secondary" @onclick="CloseSuiteForm">Cancel</button>
+        <div class="section-card">
+            <h2 class="section-title mb-3" style="color:#6f42c1"><i class="bi bi-award me-2"></i>Judge Configuration</h2>
+            @{
+                var defaultJudge = _judgeSettings.FirstOrDefault(j => j.IsDefault);
+            }
+            @if (defaultJudge is not null)
+            {
+                <div style="background:#f5f0ff;padding:10px 14px;border-radius:6px;border-left:4px solid #6f42c1;font-size:13px;margin-bottom:16px">
+                    <strong>System default:</strong> @defaultJudge.Name (@defaultJudge.ProviderType) — threshold @defaultJudge.PassThreshold.ToString("P0")
+                </div>
+            }
+            <div class="form-group">
+                <label class="form-label">Judge Setting Override</label>
+                <select class="form-control" @bind="_suiteForm.JudgeSettingId">
+                    <option value="">— Use system default —</option>
+                    @foreach (var js in _judgeSettings)
+                    {
+                        <option value="@js.Id">@js.Name (@js.ProviderType)@(js.IsDefault ? " [default]" : "")</option>
+                    }
+                </select>
+                <small class="text-muted">Leave blank to inherit the system default judge setting.</small>
             </div>
+            @{
+                var selJudge = _judgeSettings.FirstOrDefault(j => j.Id.ToString() == _suiteForm.JudgeSettingId);
+            }
+            @if (selJudge is not null)
+            {
+                <div style="background:#f8f9fa;padding:12px;border-radius:8px;border-left:4px solid #6f42c1;font-size:13px;margin-top:8px">
+                    <div class="mb-1"><strong>Provider:</strong> @selJudge.ProviderType</div>
+                    <div class="mb-1"><strong>Pass Threshold:</strong> @selJudge.PassThreshold.ToString("P0")</div>
+                    <div class="mb-1"><strong>Weights:</strong> Task @selJudge.TaskSuccessWeight.ToString("P0") · Intent @selJudge.IntentMatchWeight.ToString("P0") · Factuality @selJudge.FactualityWeight.ToString("P0") · Helpfulness @selJudge.HelpfulnessWeight.ToString("P0") · Safety @selJudge.SafetyWeight.ToString("P0")</div>
+                    @if (!string.IsNullOrWhiteSpace(selJudge.Model))
+                    {
+                        <div><strong>Model:</strong> @selJudge.Model</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(selJudge.PromptTemplate))
+                    {
+                        <div class="mt-1"><strong>Custom prompt:</strong> <span class="text-muted">configured</span></div>
+                    }
+                </div>
+            }
+            @if (!_judgeSettings.Any())
+            {
+                <p class="text-muted" style="font-size:13px;margin-top:8px">No judge settings configured yet. Add them in <a href="/settings">Settings → AI Judge</a>.</p>
+            }
+        </div>
+
+        <div class="section-card">
+            <h2 class="section-title mb-3" style="color:#20c997"><i class="bi bi-stars me-2"></i>AI Question Generation</h2>
+            @if (_qgenSetting is not null)
+            {
+                <div style="background:#f0fdf4;padding:10px 14px;border-radius:6px;border-left:4px solid #20c997;font-size:13px;margin-bottom:16px">
+                    <strong>System default:</strong> @_qgenSetting.Model
+                    @if (!string.IsNullOrWhiteSpace(_qgenSetting.SystemPrompt))
+                    {
+                        <span class="ms-2 text-muted">(custom prompt configured)</span>
+                    }
+                    else
+                    {
+                        <span class="ms-2 text-muted">(using built-in prompt)</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info mb-3" style="font-size:13px"><i class="bi bi-info-circle me-1"></i> No global question generation settings found. Configure them in <a href="/settings">Settings → Question Generation</a>.</div>
+            }
+            <div class="form-group" style="max-width:160px">
+                <label class="form-label">Question Count</label>
+                <input class="form-control" type="number" min="1" max="50" @bind="_suiteForm.QuestionGenCount" />
+            </div>
+            <div class="form-group">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <label class="form-label mb-0">System Prompt Override <small class="text-muted">(leave blank to use system default)</small></label>
+                    @if (string.IsNullOrWhiteSpace(_suiteForm.QuestionGenPrompt))
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="LoadDefaultQGenPrompt">
+                            <i class="bi bi-clipboard-plus me-1"></i>Load default to edit
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-outline-warning" type="button" @onclick="ClearQGenPrompt">
+                            <i class="bi bi-x-circle me-1"></i>Revert to system default
+                        </button>
+                    }
+                </div>
+                <textarea class="form-control" rows="8" @bind="_suiteForm.QuestionGenPrompt"
+                    style="font-family:monospace;font-size:.85em"
+                    placeholder="Leave blank to use the system default prompt from Settings"></textarea>
+            </div>
+            @if (_editSuite is not null)
+            {
+                <div class="form-group">
+                    <label class="form-label">Source Content</label>
+                    @if (!_qgenUseManualText)
+                    {
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <select class="form-control" style="flex:1" @bind="_selectedDocumentId">
+                                <option value="">— select an uploaded document —</option>
+                                @foreach (var doc in _documents)
+                                {
+                                    <option value="@doc.Id">@doc.FileName (@FormatDocSize(doc.FileSizeBytes), @doc.ChunkCount chunk@(doc.ChunkCount == 1 ? "" : "s"))</option>
+                                }
+                            </select>
+                            <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    @onclick="LoadDocumentContent"
+                                    disabled="@(string.IsNullOrWhiteSpace(_selectedDocumentId)|| _loadingDocContent)">
+                                @if (_loadingDocContent) { <span class="spinner me-1"></span> }
+                                Load Content
+                            </button>
+                        </div>
+                        @if (_documents.Count == 0)
+                        {
+                            <small class="text-muted"><i class="bi bi-info-circle me-1"></i>No documents uploaded yet. <a href="/documents">Upload one first.</a></small>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_qgenSourceContent))
+                        {
+                            <div class="alert alert-success py-2" style="font-size:12px">
+                                <i class="bi bi-check-circle me-1"></i>Loaded <strong>@_loadedDocName</strong> — @_qgenSourceContent.Length.ToString("N0") characters ready.
+                            </div>
+                        }
+                        <div class="mt-1">
+                            <button class="btn btn-link btn-sm p-0" style="font-size:12px" type="button" @onclick="() => _qgenUseManualText = true">
+                                <i class="bi bi-pencil me-1"></i>Paste text manually instead
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <textarea class="form-control" rows="6" @bind="_qgenSourceContent"
+                            style="font-size:.85em"
+                            placeholder="Paste the document or knowledge base content here."></textarea>
+                        <div class="mt-1">
+                            <button class="btn btn-link btn-sm p-0" style="font-size:12px" type="button" @onclick="() => { _qgenUseManualText = false; _qgenSourceContent = string.Empty; }">
+                                <i class="bi bi-file-earmark-text me-1"></i>Select from uploaded documents instead
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_genMessage))
+            {
+                <div class="alert @(_genMessage.StartsWith("Error") ? "alert-danger" : (_genMessage.StartsWith("✓") ? "alert-success" : "alert-info")) mb-3">@_genMessage</div>
+            }
+            @if (_editSuite is null)
+            {
+                <p class="text-muted" style="font-size:13px"><i class="bi bi-info-circle me-1"></i>Save the suite first, then return to edit it and generate questions.</p>
+            }
+            else
+            {
+                <div class="d-flex gap-2">
+                    <button class="btn btn-secondary" disabled="@_generatingQuestions" @onclick="GenerateQuestionsAdd">
+                        @if (_generatingQuestions) { <span class="spinner me-2"></span> }
+                        <i class="bi bi-plus-lg me-1"></i> Add @_suiteForm.QuestionGenCount Questions
+                    </button>
+                    <button class="btn btn-secondary" disabled="@_generatingQuestions" @onclick="GenerateQuestionsReplace">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Replace All
+                    </button>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2 mb-4">
+            <button class="btn btn-primary" @onclick="SaveSuite">
+                <i class="bi bi-check-lg"></i> @(_editSuite is null ? "Create Suite" : "Save Changes")
+            </button>
+            <button class="btn btn-secondary" @onclick="CloseSuiteForm">
+                <i class="bi bi-x-lg"></i> Cancel
+            </button>
         </div>
     </div>
 }
@@ -133,39 +349,47 @@ else
 {
     <div class="modal-backdrop" @onclick="CloseCaseForm">
         <div class="modal-box wide-modal" @onclick:stopPropagation>
-            <h2>@(_editCase is null ? "Add Test Case" : "Edit Test Case")</h2>
-
-            <label>Name</label>
-            <input class="form-control" @bind="_caseForm.Name" placeholder="Case name" />
-
-            <label>Description</label>
-            <input class="form-control" @bind="_caseForm.Description" placeholder="Optional description" />
-
-            <label>User Input (one message per line; multi-turn = multiple lines)</label>
-            <textarea class="form-control" rows="4" @bind="_caseForm.UserInputRaw" placeholder="What can you help me with?"></textarea>
-
-            <label>Acceptance Criteria</label>
-            <textarea class="form-control" rows="3" @bind="_caseForm.AcceptanceCriteria" placeholder="The bot should…"></textarea>
-
-            <label>Expected Intent</label>
-            <input class="form-control" @bind="_caseForm.ExpectedIntent" placeholder="Optional" />
-
-            <label>Expected Entities (comma-separated)</label>
-            <input class="form-control" @bind="_caseForm.ExpectedEntitiesRaw" placeholder="city, date" />
-
-            <label>Reference Answer</label>
-            <textarea class="form-control" rows="3" @bind="_caseForm.ReferenceAnswer" placeholder="Optional golden answer"></textarea>
-
-            <label>Sort Order</label>
-            <input class="form-control" type="number" @bind="_caseForm.SortOrder" />
-
+            <h2 class="modal-title mb-4">@(_editCase is null ? "Add Test Case" : "Edit Test Case")</h2>
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input class="form-control" @bind="_caseForm.Name" placeholder="Case name" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <input class="form-control" @bind="_caseForm.Description" placeholder="Optional description" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">User Input <small class="text-muted">(one message per line; multi-turn = multiple lines)</small></label>
+                <textarea class="form-control" rows="4" @bind="_caseForm.UserInputRaw" placeholder="What can you help me with?"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Acceptance Criteria</label>
+                <textarea class="form-control" rows="3" @bind="_caseForm.AcceptanceCriteria" placeholder="The bot should…"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Expected Intent</label>
+                <input class="form-control" @bind="_caseForm.ExpectedIntent" placeholder="Optional" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Expected Entities <small class="text-muted">(comma-separated)</small></label>
+                <input class="form-control" @bind="_caseForm.ExpectedEntitiesRaw" placeholder="city, date" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Reference Answer</label>
+                <textarea class="form-control" rows="3" @bind="_caseForm.ReferenceAnswer" placeholder="Optional golden answer"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Sort Order</label>
+                <input class="form-control" type="number" @bind="_caseForm.SortOrder" style="width:100px" />
+            </div>
             @if (!string.IsNullOrWhiteSpace(_caseFormError))
             {
-                <div class="alert alert-error">@_caseFormError</div>
+                <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_caseFormError</div>
             }
-
             <div class="modal-actions">
-                <button class="btn btn-primary" @onclick="SaveCase">Save</button>
+                <button class="btn btn-primary" @onclick="SaveCase">
+                    <i class="bi bi-check-lg"></i> @(_editCase is null ? "Add Case" : "Save Changes")
+                </button>
                 <button class="btn btn-secondary" @onclick="CloseCaseForm">Cancel</button>
             </div>
         </div>
@@ -177,31 +401,29 @@ else
 {
     <div class="modal-backdrop" @onclick="CloseRunModal">
         <div class="modal-box" @onclick:stopPropagation>
-            <h2>Run: @_runSuite.Name</h2>
-
-            <label>Select Agent</label>
-            <select class="form-control" @bind="_selectedAgentId">
-                <option value="">— choose agent —</option>
-                @foreach (var agent in _agents)
-                {
-                    <option value="@agent.Id">@agent.Name (@agent.Environment)</option>
-                }
-            </select>
-
+            <h2 class="modal-title mb-4">Run: @_runSuite.Name</h2>
+            <div class="form-group">
+                <label class="form-label">Select Agent</label>
+                <select class="form-control" @bind="_selectedAgentId">
+                    <option value="">— choose agent —</option>
+                    @foreach (var agent in _agents)
+                    {
+                        <option value="@agent.Id">@agent.Name (@agent.Environment)</option>
+                    }
+                </select>
+            </div>
             @if (_runInProgress)
             {
-                <div class="progress-section">
-                    <p>Queuing run… <em>@_runStatus</em></p>
-                </div>
+                <div class="d-flex align-items-center gap-2"><span class="spinner"></span><span>@_runStatus</span></div>
             }
-
             @if (!string.IsNullOrWhiteSpace(_runError))
             {
-                <div class="alert alert-error">@_runError</div>
+                <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_runError</div>
             }
-
             <div class="modal-actions">
-                <button class="btn btn-primary" disabled="@_runInProgress" @onclick="StartRun">▶ Start Run</button>
+                <button class="btn btn-primary" disabled="@_runInProgress" @onclick="StartRun">
+                    <i class="bi bi-play-fill"></i> Start Run
+                </button>
                 <button class="btn btn-secondary" @onclick="CloseRunModal">Cancel</button>
             </div>
         </div>
@@ -241,6 +463,8 @@ else
     private bool _loading = true;
     private List<TestSuite> _suites = [];
     private List<Agent> _agents = [];
+    private List<JudgeSetting> _judgeSettings = [];
+    private GlobalQuestionGenerationSetting? _qgenSetting;
     private Guid? _expandedSuiteId;
 
     // Suite form
@@ -249,6 +473,18 @@ else
     private TestSuite? _deleteSuite;
     private string _suiteFormError = string.Empty;
     private SuiteFormModel _suiteForm = new();
+
+    // Documents list
+    private List<Document> _documents = [];
+
+    // Question generation
+    private bool _generatingQuestions;
+    private string _genMessage = string.Empty;
+    private string _qgenSourceContent = string.Empty;
+    private string _selectedDocumentId = string.Empty;
+    private bool _qgenUseManualText;
+    private bool _loadingDocContent;
+    private string _loadedDocName = string.Empty;
 
     // Case form
     private bool _showCaseForm;
@@ -269,7 +505,12 @@ else
     {
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string TagsRaw { get; set; } = string.Empty;
         public double PassThreshold { get; set; } = 0.7;
+        public bool IsActive { get; set; } = true;
+        public string JudgeSettingId { get; set; } = string.Empty;
+        public string QuestionGenPrompt { get; set; } = string.Empty;
+        public int QuestionGenCount { get; set; } = 10;
     }
 
     private class CaseFormModel
@@ -285,7 +526,10 @@ else
         public bool IsActive { get; set; } = true;
     }
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -294,6 +538,9 @@ else
             .OrderBy(s => s.Name)
             .ToListAsync();
         _agents = await Db.Agents.Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync();
+        _judgeSettings = await Db.JudgeSettings.OrderBy(j => j.Name).ToListAsync();
+        _qgenSetting = await Db.GlobalQuestionGenerationSettings.FirstOrDefaultAsync();
+        _documents = await Db.Documents.OrderBy(d => d.FileName).ToListAsync();
         _loading = false;
     }
 
@@ -307,14 +554,24 @@ else
         _editSuite = null;
         _suiteForm = new();
         _suiteFormError = string.Empty;
+        _genMessage = string.Empty;
         _showSuiteForm = true;
     }
 
     private void OpenEditSuite(TestSuite s)
     {
         _editSuite = s;
-        _suiteForm = new() { Name = s.Name, Description = s.Description, PassThreshold = s.PassThreshold };
+        _suiteForm = new()
+        {
+            Name = s.Name,
+            Description = s.Description,
+            TagsRaw = string.Join(", ", s.Tags),
+            PassThreshold = s.PassThreshold,
+            IsActive = s.IsActive,
+            JudgeSettingId = s.JudgeSettingId?.ToString() ?? string.Empty
+        };
         _suiteFormError = string.Empty;
+        _genMessage = string.Empty;
         _showSuiteForm = true;
     }
 
@@ -323,15 +580,22 @@ else
         if (string.IsNullOrWhiteSpace(_suiteForm.Name)) { _suiteFormError = "Name is required."; return; }
         if (_suiteForm.PassThreshold is < 0 or > 1) { _suiteFormError = "Pass threshold must be 0–1."; return; }
 
+        var tags = _suiteForm.TagsRaw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var judgeId = Guid.TryParse(_suiteForm.JudgeSettingId, out var jg) ? (Guid?)jg : null;
+
         if (_editSuite is null)
         {
             var suite = new TestSuite
             {
                 Id = Guid.NewGuid(),
-                TenantId = Guid.Empty,
+                TenantId = TenantCtx.TenantId,
                 Name = _suiteForm.Name,
                 Description = _suiteForm.Description,
+                Tags = tags,
                 PassThreshold = _suiteForm.PassThreshold,
+                IsActive = _suiteForm.IsActive,
+                JudgeSettingId = judgeId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -341,7 +605,10 @@ else
         {
             _editSuite.Name = _suiteForm.Name;
             _editSuite.Description = _suiteForm.Description;
+            _editSuite.Tags = tags;
             _editSuite.PassThreshold = _suiteForm.PassThreshold;
+            _editSuite.IsActive = _suiteForm.IsActive;
+            _editSuite.JudgeSettingId = judgeId;
             _editSuite.UpdatedAt = DateTime.UtcNow;
         }
         await Db.SaveChangesAsync();
@@ -349,7 +616,177 @@ else
         await LoadAsync();
     }
 
-    private void CloseSuiteForm() => _showSuiteForm = false;
+    private void CloseSuiteForm()
+    {
+        _showSuiteForm = false;
+        _genMessage = string.Empty;
+        _qgenSourceContent = string.Empty;
+        _selectedDocumentId = string.Empty;
+        _loadedDocName = string.Empty;
+        _qgenUseManualText = false;
+    }
+
+    private async Task LoadDocumentContent()
+    {
+        if (!Guid.TryParse(_selectedDocumentId, out var docId)) return;
+        _loadingDocContent = true;
+        StateHasChanged();
+        try
+        {
+            var doc = await Db.Documents
+                .Include(d => d.Chunks)
+                .FirstOrDefaultAsync(d => d.Id == docId);
+            if (doc is null) { _genMessage = "Document not found."; return; }
+            _qgenSourceContent = string.Join("\n\n", doc.Chunks.OrderBy(c => c.ChunkIndex).Select(c => c.Text));
+            _loadedDocName = doc.FileName;
+        }
+        finally
+        {
+            _loadingDocContent = false;
+        }
+    }
+
+    private static string FormatDocSize(long bytes)
+    {
+        if (bytes < 1024L) return $"{bytes} B";
+        if (bytes < 1024L * 1024L) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private void LoadDefaultQGenPrompt()
+    {
+        if (!string.IsNullOrWhiteSpace(_qgenSetting?.SystemPrompt))
+            _suiteForm.QuestionGenPrompt = _qgenSetting.SystemPrompt;
+        else
+            _suiteForm.QuestionGenPrompt = QGenBuiltInDefault;
+    }
+
+    private void ClearQGenPrompt() => _suiteForm.QuestionGenPrompt = string.Empty;
+
+    private async Task GenerateQuestionsAdd()     => await GenerateQuestionsImpl(replace: false);
+    private async Task GenerateQuestionsReplace() => await GenerateQuestionsImpl(replace: true);
+
+    private async Task GenerateQuestionsImpl(bool replace)
+    {
+        if (_editSuite is null)
+        {
+            _genMessage = "Save the suite first before generating questions.";
+            return;
+        }
+
+        var providers = Registry.GetAllQuestionProviders();
+        if (providers.Count == 0)
+        {
+            _genMessage = "No question generation provider registered. Make sure the ModelQGen module is loaded.";
+            return;
+        }
+
+        if (_qgenSetting is null)
+        {
+            _genMessage = "Configure question generation settings first (Settings → Question Generation).";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_qgenSetting.Endpoint))
+        {
+            _genMessage = "The question generation endpoint is not configured (Settings → Question Generation).";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_qgenSourceContent))
+        {
+            _genMessage = "Select and load a document (or paste text manually) into the Source Content field first.";
+            return;
+        }
+
+        _generatingQuestions = true;
+        _genMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // Resolve API key secret
+            var apiKey = string.IsNullOrWhiteSpace(_qgenSetting.ApiKeyRef)
+                ? string.Empty
+                : await SecretSvc.GetSecretAsync(_qgenSetting.ApiKeyRef) ?? string.Empty;
+
+            // Collect existing questions to avoid duplicates
+            var existingQuestions = _editSuite.TestCases
+                .Select(tc => tc.UserInput.FirstOrDefault() ?? string.Empty)
+                .Where(q => !string.IsNullOrWhiteSpace(q))
+                .ToList();
+
+            var request = new QuestionGenerationRequest
+            {
+                DocumentContent      = _qgenSourceContent,
+                NumberOfQuestions    = _suiteForm.QuestionGenCount,
+                SystemPromptOverride = string.IsNullOrWhiteSpace(_suiteForm.QuestionGenPrompt) ? null : _suiteForm.QuestionGenPrompt,
+                ExistingQuestions    = existingQuestions,
+                ResolvedEndpoint     = _qgenSetting.Endpoint,
+                ResolvedApiKey       = apiKey,
+                Model                = _qgenSetting.Model,
+            };
+
+            var generated = await providers[0].GenerateAsync(request);
+
+            if (generated.Count == 0)
+            {
+                _genMessage = "The LLM returned no questions. Check the source content and endpoint settings.";
+                return;
+            }
+
+            if (replace)
+                Db.TestCases.RemoveRange(_editSuite.TestCases);
+
+            var maxOrder = replace
+                ? 0
+                : (_editSuite.TestCases.Any() ? _editSuite.TestCases.Max(tc => tc.SortOrder) : 0);
+
+            foreach (var q in generated)
+            {
+                Db.TestCases.Add(new TestCase
+                {
+                    Id                 = Guid.NewGuid(),
+                    SuiteId            = _editSuite.Id,
+                    TenantId           = TenantCtx.TenantId,
+                    Name               = q.Question.Length > 80 ? q.Question[..77] + "…" : q.Question,
+                    Description        = q.Rationale ?? string.Empty,
+                    UserInput          = [q.Question],
+                    AcceptanceCriteria = q.ExpectedAnswer,
+                    ExpectedIntent     = q.ExpectedIntent,
+                    ExpectedEntities   = q.ExpectedEntities,
+                    ReferenceAnswer    = q.ExpectedAnswer,
+                    SortOrder          = ++maxOrder,
+                    IsActive           = true,
+                    CreatedAt          = DateTime.UtcNow,
+                    UpdatedAt          = DateTime.UtcNow,
+                });
+            }
+
+            await Db.SaveChangesAsync();
+            _genMessage = $"✓ {(replace ? "Replaced all with" : "Added")} {generated.Count} AI-generated test case{(generated.Count == 1 ? "" : "s")}.";
+            _qgenSourceContent = string.Empty;
+            await LoadAsync();
+            _editSuite = _suites.FirstOrDefault(s => s.Id == _editSuite.Id);
+        }
+        catch (Exception ex)
+        {
+            _genMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _generatingQuestions = false;
+        }
+    }
+
+    private const string QGenBuiltInDefault =
+        "You are a test case generator for AI assistants. Generate realistic, diverse user questions " +
+        "that test the assistant's capabilities.\n\nFor each question:\n" +
+        "- Make it natural and conversational\n" +
+        "- Cover different aspects of the domain\n" +
+        "- Include edge cases and varied complexity\n" +
+        "- Avoid yes/no questions; prefer open-ended or task-based questions\n\n" +
+        "Return the questions as a JSON array of strings: [\"Question 1\", \"Question 2\", ...]";
 
     private void ConfirmDeleteSuite(TestSuite s) => _deleteSuite = s;
 

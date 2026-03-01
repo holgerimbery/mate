@@ -27,10 +27,6 @@ public static class DataServiceExtensions
         {
             options.UseSqlite(connectionString, sqlite =>
                 sqlite.MigrationsAssembly(typeof(mateDbContext).Assembly.FullName));
-
-            var tenantCtx = sp.GetService<ITenantContext>();
-            // Tenant context is set via factory overload — see WithTenantContext below.
-            _ = tenantCtx; // suppress unused warning; resolved through constructor injection
         });
 
         return services;

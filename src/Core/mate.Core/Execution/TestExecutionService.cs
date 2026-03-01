@@ -308,11 +308,27 @@ public sealed class TestExecutionService
     private async Task<Dictionary<string, string>> ResolveConnectorSecretsAsync(
         AgentConnectorConfig config, CancellationToken ct)
     {
-        // The ConfigJson may contain secret-ref keys; resolution is connector-specific.
-        // Return empty dictionary here — the connector module reads its own ConfigJson
-        // and resolves refs itself using the ISecretService passed at construction.
-        await Task.CompletedTask;
-        return [];
+        // Discover fields typed "secret" or "password" via the module's ConfigFieldDefinition,
+        // read the ref name from ConfigJson, and resolve it via ISecretService.
+        // Falls back to using the ref name as the raw value if the secret store has no entry
+        // (supports local dev where the raw secret is stored directly in ConfigJson).
+        var module = _registry.GetConnector(config.ConnectorType);
+        var fieldDefs = module.GetConfigDefinition()
+            .Where(f => f.FieldType is "secret" or "password");
+
+        var configNode = System.Text.Json.JsonSerializer
+            .Deserialize<System.Text.Json.Nodes.JsonObject>(config.ConfigJson);
+        if (configNode is null) return [];
+
+        var resolved = new Dictionary<string, string>();
+        foreach (var field in fieldDefs)
+        {
+            if (!configNode.TryGetPropertyValue(field.Key, out var node) || node is null) continue;
+            var refName = node.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(refName)) continue;
+            resolved[refName] = await TryGetSecretAsync(refName, ct) ?? refName;
+        }
+        return resolved;
     }
 
     private async Task<string?> TryGetSecretAsync(string secretRef, CancellationToken ct)

@@ -84,6 +84,66 @@ NOTABLE MILESTONES
      .gitignore added. Git initialised, initial commit made.
      Remote: https://github.com/holgerimbery/mate (private).
 
+[M15] ✅ 2026-02-28 — Microsoft Entra ID (Azure AD) authentication implemented
+     EntraIdAuthModule.ConfigureAuthentication: AddMicrosoftIdentityWebApp (OIDC+cookies)
+     + AddMicrosoftIdentityWebApi (JWT Bearer under 'EntraId' scheme).
+     AddMicrosoftIdentityUI: registers /MicrosoftIdentity/Account/* MVC controllers.
+     Program.cs: explicit DefaultScheme=Cookies, DefaultChallengeScheme=OpenIdConnect.
+     ApiKey middleware runs before UseAuthorization; FallbackPolicy has no explicit
+     schemes so DefaultChallengeScheme drives browser redirect to Azure AD.
+     Azure AD TenantId: b9b61d9b-e271-44fd-9c3b-d9fff2022339
+     Azure AD ClientId: 3a5429fa-442b-4b22-b16d-efcc266533f3
+
+[M16] ✅ 2026-02-28 — Tenant isolation after EntraId auth switch
+     Problem: all data stored under dev TenantId 00000000-...0099; EntraId 'tid' claim
+     b9b61d9b-... had no mapping → queries returned nothing.
+     Fix 1: mateDbSeeder.SeedEntraIdTenantMappingAsync — updates dev tenant row's
+       ExternalTenantId to Azure AD tenant GUID (idempotent UPDATE, skips if already set).
+     Fix 2: SeedDevTenantAsync check changed to Id == DevTenantId (avoids false miss
+       after ExternalTenantId was updated).
+     Fix 3: ITenantContext factory in Program.cs: AuthenticationStateProvider fallback
+       for Blazor Server SignalR circuits where IHttpContextAccessor.HttpContext is null.
+     Fix 4: EntraIdAuthModule implements IClaimsTransformation — injects
+       mate:externalTenantId (from 'tid'), mate:userId (from 'oid'), mate:role (from 'roles').
+     Fix 5: Agents.razor, TestSuites.razor, Wizard.razor — replaced _tenantId field
+       with @inject ITenantContext TenantCtx + TenantCtx.TenantId.
+
+[M17] ✅ 2026-02-28 — OIDC correlation cookie SameSite fix
+     Problem: Azure AD uses response_mode=form_post → cross-site POST drops SameSite=Lax
+       correlation cookie → AuthenticationFailureException: Correlation failed.
+     Fix: EntraIdAuthModule.ConfigureAuthentication uses the overload with
+       configureMicrosoftIdentityOptions callback; sets
+       CorrelationCookie.SameSite = Unspecified, SecurePolicy = None
+       NonceCookie.SameSite = Unspecified, SecurePolicy = None.
+
+[M18] ✅ 2026-02-28 — Data Protection keys persisted across container restarts
+     Problem: each container restart generates new ASP.NET Core Data Protection keys;
+       existing correlation/session cookies become invalid → Correlation failed on reauth.
+     Fix: docker-compose.yml mounts named volume mate-dataprotection to
+       /root/.aspnet/DataProtection-Keys in the webui container.
+     Volume: mate-dataprotection (name: mate-dataprotection).
+
+[M19] ✅ 2026-02-28 — ModelQGen deduplicated in Settings
+     ModelQGen appeared in both 'Judge / Evaluation Modules' AND
+     'Question Generation Modules' in Settings.razor.
+     Fix: _judgeModules filter excludes ProviderType == 'ModelQGen'.
+
+[M20] ✅ 2026-03-01 — EntraId auth deadlock fixed (v0.2.0)
+     Two simultaneous deadlocks caused 504 hang after signin-oidc:
+     1. Circular DI: ITenantContext factory → TenantLookupService → mateDbContext
+        → sp.GetService<ITenantContext>() → factory again → infinite loop.
+     2. Blazor sync-context: .GetAwaiter().GetResult() on RendererSynchronizationContext
+        blocked by EF Core continuation trying to resume on same thread.
+     Fix 1: TenantLookupService injects DbContextOptions<mateDbContext>, constructs
+        new mateDbContext(options, tenantContext: null) directly — no DI, no loop.
+     Fix 2: Task.Run(() => lookup.LookupByExternalIdAsync(...)) offloads to thread
+        pool, escaping the Blazor sync context.
+     Fix 3: Removed sp.GetService<ITenantContext>() from AddDbContext factory.
+     Fix 4: Removed DataProtection PersistKeysToFileSystem — was causing cookie
+        decrypt failures on container restart (in-memory keys now, matches MaaJforMCS).
+     Fix 5: ClaimsIdentity nameType:"name" in EntraIdAuthModule — Entra sends
+        display name as "name" claim, not ClaimTypes.Name URI → UI showed "U User".
+
 --------------------------------------------------------------------------------
 CURRENT STATUS
 --------------------------------------------------------------------------------
@@ -92,7 +152,8 @@ Build   : ✅ 0 errors, 0 warnings  (dotnet build mate.sln)
 Tests   : ✅ 27/27 pass
 Containers: ✅ mate-webui (http://localhost:5000) + mate-worker — both Up/healthy
 GitHub  : ✅ https://github.com/holgerimbery/mate (private, main branch)
-Version : v0.1.0 (unreleased)
+Version : v0.2.0 (released 2026-03-01)
+Auth    : ✅ EntraId (Azure AD) — full OIDC browser flow working, user name display fixed
 
 --------------------------------------------------------------------------------
 ARCHITECTURE RULES (from SaaS-Architecture-v2.md)
@@ -126,6 +187,19 @@ KEY TECHNICAL NOTES
 - _Imports.razor includes @using mate.Data and @using mate.Domain globally
 - CopilotStudio Web Channel + Direct Line: both use same /tokens/generate endpoint;
   difference is only which secret (WebChannelSecret vs DirectLineSecret) is the Bearer token
+- EntraId auth: AddMicrosoftIdentityWebApp(AuthenticationBuilder overload) does NOT set
+  DefaultScheme/DefaultChallengeScheme automatically — must set explicitly before calling it
+- EntraId OIDC: CorrelationCookie + NonceCookie MUST be SameSite=Unspecified when
+  response_mode=form_post (Azure AD default) to survive cross-site POST callback
+- Data Protection keys: DO NOT persist to volume — use default in-memory keys (matches
+  MaaJforMCS). Persisting caused cookie decrypt failures after container restart with new keys.
+- TenantLookupService: must inject DbContextOptions<mateDbContext> and construct
+  new mateDbContext(options, tenantContext: null) directly — never resolve ITenantContext
+  from DI inside the DbContext factory, causes infinite circular DI loop.
+- EntraId ClaimsIdentity: always pass nameType:"name" and roleType:ClaimTypes.Role
+  to ClaimsIdentity ctor — Entra sends display name under "name", not ClaimTypes.Name URI.
+- ITenantContext in Blazor Server: IHttpContextAccessor.HttpContext is NULL in SignalR
+  circuits — always add AuthenticationStateProvider fallback in the factory
 
 --------------------------------------------------------------------------------
 NOTABLE MILESTONES
@@ -190,8 +264,8 @@ CURRENT STATUS
 Build   : ✅ 0 errors, 0 warnings  (dotnet build mate.sln)
 Tests   : ✅ 27/27 pass
 Containers: ✅ mate-webui (http://localhost:5000) + mate-worker — both Up/healthy
-Version : v0.1.0 (unreleased)
-Last cmd: dotnet build mate.sln 2>&1 | Select-String -Pattern "error"
+Version : v0.2.0 (released 2026-03-01)
+Last cmd: docker compose -f infra/local/docker-compose.yml --env-file infra/local/.env up -d --build webui
 Cwd     : C:\Users\HolgerImbery\Github\mate
 
 --------------------------------------------------------------------------------

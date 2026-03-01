@@ -1,3 +1,4 @@
+@attribute [Authorize]
 @page "/dashboard"
 @using mate.Data
 @using mate.Domain.Entities
@@ -44,48 +45,120 @@ else
     <div class="section-card">
         <div class="section-header">
             <h2 class="section-title">Recent Runs</h2>
-            <div class="filter-row mb-0">
-                <input class="filter-input" placeholder="Suite…" @bind="_filterSuite" @bind:event="oninput" />
-                <input class="filter-input" placeholder="Agent…" @bind="_filterAgent" @bind:event="oninput" />
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-row mb-3" style="flex-wrap:wrap;align-items:flex-end">
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Suite</label>
+                <input class="filter-input" placeholder="Filter by suite…" @bind="_filterSuite" @bind:event="oninput" />
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Agent</label>
+                <input class="filter-input" placeholder="Filter by agent…" @bind="_filterAgent" @bind:event="oninput" />
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Status</label>
                 <select class="filter-select" @bind="_filterStatus">
-                    <option value="">All statuses</option>
+                    <option value="">Any</option>
                     <option value="pending">Pending</option>
                     <option value="running">Running</option>
                     <option value="completed">Completed</option>
                     <option value="failed">Failed</option>
                 </select>
             </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">From</label>
+                <input type="date" class="filter-input" @bind="_filterDateFrom" />
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">To</label>
+                <input type="date" class="filter-input" @bind="_filterDateTo" />
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Pass Rate</label>
+                <select class="filter-select" style="width:90px" @bind="_filterPassRateOp">
+                    <option value="">Any</option>
+                    <option value="gte">≥ %</option>
+                    <option value="lte">≤ %</option>
+                </select>
+            </div>
+            @if (!string.IsNullOrEmpty(_filterPassRateOp))
+            {
+                <div>
+                    <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">% Value</label>
+                    <input type="number" class="filter-input" style="width:80px" min="0" max="100"
+                           @bind="_filterPassRateValue" @bind:event="oninput" />
+                </div>
+            }
+            <div style="align-self:flex-end">
+                <button class="btn btn-sm btn-secondary" @onclick="ClearFilters">
+                    <i class="bi bi-x-circle me-1"></i>Clear
+                </button>
+            </div>
         </div>
+
         <table class="data-table">
             <thead>
                 <tr>
                     <th>Suite</th>
                     <th>Agent</th>
-                    <th>Status</th>
-                    <th>Pass Rate</th>
-                    <th>Cases</th>
-                    <th>Avg Latency</th>
                     <th>Started</th>
-                    <th></th>
+                    <th style="text-align:center">Passed</th>
+                    <th style="text-align:center">Failed</th>
+                    <th style="text-align:center">Pass Rate</th>
+                    <th style="text-align:center">Duration</th>
+                    <th style="text-align:center">Status</th>
+                    <th style="text-align:center"></th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var run in FilteredRuns)
                 {
+                    var runPassRate = run.TotalTestCases > 0 ? (100.0 * run.PassedCount / run.TotalTestCases) : 0.0;
+                    var duration = run.CompletedAt.HasValue ? (run.CompletedAt.Value - run.StartedAt).TotalSeconds : -1;
                     <tr>
-                        <td>@(run.Suite?.Name ?? "—")</td>
+                        <td>
+                            <a href="runs/@run.Id" style="color:var(--primary);text-decoration:none;font-weight:600">
+                                @(run.Suite?.Name ?? "—")
+                            </a>
+                        </td>
                         <td>@(run.Agent?.Name ?? "—")</td>
-                        <td><span class="badge badge-@run.Status">@run.Status</span></td>
-                        <td>@(run.TotalTestCases > 0 ? $"{(double)run.PassedCount / run.TotalTestCases:P0}" : "—")</td>
-                        <td>@run.PassedCount / @run.TotalTestCases</td>
-                        <td>@($"{run.AverageLatencyMs:N0} ms")</td>
-                        <td>@run.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                        <td><a href="runs/@run.Id" class="btn btn-sm btn-secondary">Detail →</a></td>
+                        <td>@run.StartedAt.ToString("MMM dd, HH:mm:ss")</td>
+                        <td style="text-align:center">
+                            <span class="badge badge-pass">@run.PassedCount</span>
+                        </td>
+                        <td style="text-align:center">
+                            <span class="badge badge-fail">@run.FailedCount</span>
+                        </td>
+                        <td style="text-align:center;font-weight:600;color:var(--primary)">
+                            @runPassRate.ToString("F1")%
+                        </td>
+                        <td style="text-align:center;color:var(--text-secondary)">
+                            @(duration >= 0 ? $"{duration:F1}s" : "In Progress")
+                        </td>
+                        <td style="text-align:center">
+                            <span class="badge badge-@run.Status">@run.Status</span>
+                        </td>
+                        <td style="text-align:center">
+                            @if (_confirmDeleteRunId == run.Id)
+                            {
+                                <span style="font-size:12px;color:var(--danger);margin-right:4px">Delete?</span>
+                                <button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:12px;margin-right:3px" @onclick="() => ConfirmDeleteRun(run.Id)">Yes</button>
+                                <button class="btn btn-sm btn-secondary" style="padding:2px 8px;font-size:12px" @onclick="() => _confirmDeleteRunId = null">No</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:12px" @onclick="() => _confirmDeleteRunId = run.Id" title="Delete run">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            }
+                        </td>
                     </tr>
                 }
                 @if (!FilteredRuns.Any())
                 {
-                    <tr><td colspan="8">
+                    <tr><td colspan="9">
                         <div class="empty-state py-3">
                             <i class="bi bi-bar-chart-line"></i>
                             <h3>No runs yet</h3>
@@ -108,15 +181,30 @@ else
     private double _avgLatency;
     private List<Run> _recentRuns = [];
 
-    private string _filterSuite  = string.Empty;
-    private string _filterAgent  = string.Empty;
-    private string _filterStatus = string.Empty;
+    private string _filterSuite       = string.Empty;
+    private string _filterAgent       = string.Empty;
+    private string _filterStatus      = string.Empty;
+    private DateTime? _filterDateFrom;
+    private DateTime? _filterDateTo;
+    private string _filterPassRateOp  = string.Empty;
+    private double _filterPassRateValue;
+    private Guid? _confirmDeleteRunId;
 
-    private IEnumerable<Run> FilteredRuns => _recentRuns
-        .Where(r =>
-            (string.IsNullOrWhiteSpace(_filterSuite)  || (r.Suite?.Name.Contains(_filterSuite,  StringComparison.OrdinalIgnoreCase) ?? false)) &&
-            (string.IsNullOrWhiteSpace(_filterAgent)  || (r.Agent?.Name.Contains(_filterAgent,  StringComparison.OrdinalIgnoreCase) ?? false)) &&
-            (string.IsNullOrWhiteSpace(_filterStatus) || r.Status == _filterStatus));
+    private IEnumerable<Run> FilteredRuns => _recentRuns.Where(r =>
+    {
+        if (!string.IsNullOrWhiteSpace(_filterSuite) && !(r.Suite?.Name.Contains(_filterSuite, StringComparison.OrdinalIgnoreCase) ?? false)) return false;
+        if (!string.IsNullOrWhiteSpace(_filterAgent) && !(r.Agent?.Name.Contains(_filterAgent, StringComparison.OrdinalIgnoreCase) ?? false)) return false;
+        if (!string.IsNullOrWhiteSpace(_filterStatus) && r.Status != _filterStatus) return false;
+        if (_filterDateFrom.HasValue && r.StartedAt.Date < _filterDateFrom.Value.Date) return false;
+        if (_filterDateTo.HasValue   && r.StartedAt.Date > _filterDateTo.Value.Date)   return false;
+        if (!string.IsNullOrEmpty(_filterPassRateOp) && r.TotalTestCases > 0)
+        {
+            var pr = 100.0 * r.PassedCount / r.TotalTestCases;
+            if (_filterPassRateOp == "gte" && pr < _filterPassRateValue) return false;
+            if (_filterPassRateOp == "lte" && pr > _filterPassRateValue) return false;
+        }
+        return true;
+    });
 
     protected override async Task OnInitializedAsync()
     {
@@ -132,9 +220,33 @@ else
             .Include(r => r.Suite)
             .Include(r => r.Agent)
             .OrderByDescending(r => r.StartedAt)
-            .Take(50)
+            .Take(200)
             .ToListAsync();
 
         _loading = false;
+    }
+
+    private void ClearFilters()
+    {
+        _filterSuite      = string.Empty;
+        _filterAgent      = string.Empty;
+        _filterStatus     = string.Empty;
+        _filterDateFrom   = null;
+        _filterDateTo     = null;
+        _filterPassRateOp = string.Empty;
+        _filterPassRateValue = 0;
+    }
+
+    private async Task ConfirmDeleteRun(Guid runId)
+    {
+        var run = await Db.Runs.FindAsync(runId);
+        if (run is not null)
+        {
+            Db.Runs.Remove(run);
+            await Db.SaveChangesAsync();
+            _recentRuns.Remove(_recentRuns.First(r => r.Id == runId));
+            _totalRuns = await Db.Runs.CountAsync();
+        }
+        _confirmDeleteRunId = null;
     }
 }

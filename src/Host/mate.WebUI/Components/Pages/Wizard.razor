@@ -1,12 +1,17 @@
+@attribute [Authorize]
 @page "/wizard"
 @using mate.Data
 @using mate.Domain.Entities
 @using mate.Domain.Contracts.Modules
 @using Microsoft.EntityFrameworkCore
 @using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
 @inject mateDbContext Db
 @inject mate.Core.mateModuleRegistry Registry
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject mate.Domain.Contracts.Infrastructure.ISecretService SecretSvc
+@inject ITenantContext TenantCtx
 
 <PageTitle>Setup Wizard — @BrandInfo.BrandName</PageTitle>
 
@@ -107,6 +112,10 @@
                 <option value="staging">Staging</option>
                 <option value="production">Production</option>
             </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Tags (comma-separated)</label>
+            <input class="form-control" @bind="_agentTags" placeholder="tag1, tag2" />
         </div>
         @if (_configFields.Any())
         {
@@ -253,6 +262,7 @@
     private string _agentName = string.Empty;
     private string _agentDescription = string.Empty;
     private string _agentEnv = "development";
+    private string _agentTags = string.Empty;
 
     private string _suiteName = string.Empty;
     private string _suiteDescription = string.Empty;
@@ -281,6 +291,35 @@
     private void SetConfigValue(string key, string value) =>
         _configValues[key] = value;
 
+    /// <summary>
+    /// Serializes _configValues to JSON with proper types:
+    /// boolean fields → true/false, number fields → numeric, others → string.
+    /// Prevents "cannot convert string to bool/int" deserialization errors.
+    /// </summary>
+    private string BuildConfigJson()
+    {
+        var node = new System.Text.Json.Nodes.JsonObject();
+        foreach (var kv in _configValues)
+        {
+            var fieldDef = _configFields.FirstOrDefault(f => f.Key == kv.Key);
+            if (fieldDef?.FieldType == "boolean")
+            {
+                node[kv.Key] = bool.TryParse(kv.Value, out var b) ? b : false;
+            }
+            else if (fieldDef?.FieldType == "number")
+            {
+                node[kv.Key] = double.TryParse(kv.Value,
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+            }
+            else
+            {
+                node[kv.Key] = kv.Value;
+            }
+        }
+        return node.ToJsonString();
+    }
+
     private void GoStep2()
     {
         var module = _modules.FirstOrDefault(m => m.ConnectorType == _selectedConnectorType);
@@ -295,7 +334,7 @@
         var module = _modules.FirstOrDefault(m => m.ConnectorType == _selectedConnectorType);
         if (module is not null)
         {
-            var configJson = JsonSerializer.Serialize(_configValues);
+            var configJson = BuildConfigJson();
             var result = module.ValidateConfig(configJson);
             if (!result.IsValid)
             {
@@ -315,14 +354,25 @@
         StateHasChanged();
         try
         {
-            await SaveAgent();
+            // Resolve secrets for any field typed 'secret' or 'password'.
+            // Tries the secret store first (env var); falls back to using the entered value directly.
+            var resolvedSecrets = new Dictionary<string, string>();
+            foreach (var field in _configFields.Where(f => f.FieldType is "secret" or "password"))
+            {
+                var refName = GetConfigValue(field.Key);
+                if (string.IsNullOrWhiteSpace(refName)) continue;
+                try { resolvedSecrets[refName] = await SecretSvc.GetSecretAsync(refName); }
+                catch { resolvedSecrets[refName] = refName; } // direct-value fallback
+            }
+
             var module = _modules.FirstOrDefault(m => m.ConnectorType == _selectedConnectorType);
             if (module is not null)
             {
                 var connConfig = new AgentConnectionConfig
                 {
                     ConnectorType = _selectedConnectorType,
-                    ConfigJson = JsonSerializer.Serialize(_configValues)
+                    ConfigJson = BuildConfigJson(),
+                    ResolvedSecrets = resolvedSecrets
                 };
                 var connector = module.CreateConnector(connConfig);
                 var session = await connector.StartConversationAsync(connConfig, CancellationToken.None);
@@ -339,7 +389,7 @@
         catch (Exception ex)
         {
             _testPassed = false;
-            _testMessage = ex.Message;
+            _testMessage = ex.InnerException?.Message ?? ex.Message;
         }
         finally
         {
@@ -360,11 +410,11 @@
         var agent = new Agent
         {
             Id = Guid.NewGuid(),
-            TenantId = Guid.Empty,
+            TenantId = TenantCtx.TenantId,
             Name = _agentName,
             Description = _agentDescription,
             Environment = _agentEnv,
-            Tags = Array.Empty<string>(),
+            Tags = _agentTags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -373,9 +423,9 @@
         {
             Id = Guid.NewGuid(),
             AgentId = agent.Id,
-            TenantId = agent.TenantId,
+            TenantId = TenantCtx.TenantId,
             ConnectorType = _selectedConnectorType,
-            ConfigJson = JsonSerializer.Serialize(_configValues),
+            ConfigJson = BuildConfigJson(),
             IsActive = true
         });
         Db.Agents.Add(agent);

@@ -85,10 +85,11 @@ public sealed class mateModuleRegistry
         return provider;
     }
 
-    public IReadOnlyList<IAgentConnectorModule> GetAllConnectors()      => [.. _connectorModules.Values];
-    public IReadOnlyList<IJudgeProvider>          GetAllJudgeProviders() => [.. _judgeProviders.Values];
-    public IReadOnlyList<IMonitoringModule>        GetAllMonitoring()    => [.. _monitoringModules.Values];
-    public IReadOnlyList<ITestingModule>           GetAllTestingModules() => [.. _testingModules.Values];
+    public IReadOnlyList<IAgentConnectorModule>          GetAllConnectors()       => [.. _connectorModules.Values];
+    public IReadOnlyList<IJudgeProvider>                  GetAllJudgeProviders()   => [.. _judgeProviders.Values];
+    public IReadOnlyList<IMonitoringModule>               GetAllMonitoring()       => [.. _monitoringModules.Values];
+    public IReadOnlyList<ITestingModule>                  GetAllTestingModules()   => [.. _testingModules.Values];
+    public IReadOnlyList<IQuestionGenerationProvider>     GetAllQuestionProviders() => [.. _questionProviders.Values];
 }
 
 /// <summary>

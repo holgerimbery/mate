@@ -64,27 +64,25 @@ public sealed class mateDbContext : DbContext
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(mateDbContext).Assembly);
 
         // ── Global query filters (multi-tenant isolation) ─────────────────
-        // The guard `_tenantContext != null` ensures filters are skipped during
-        // migrations and platform-admin access where no tenant context is set.
-        if (_tenantContext != null)
-        {
-            var tid = _tenantContext.TenantId;
-
-            modelBuilder.Entity<Agent>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<AgentConnectorConfig>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<TestSuite>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<TestSuiteAgent>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<TestCase>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<Run>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<Result>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<TranscriptMessage>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<JudgeSetting>().HasQueryFilter(e => e.TenantId == tid || e.TenantId == PlatformTenantId);
-            modelBuilder.Entity<RubricSet>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<Document>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<Chunk>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<ApiKey>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<TenantUser>().HasQueryFilter(e => e.TenantId == tid);
-            modelBuilder.Entity<TenantSubscription>().HasQueryFilter(e => e.TenantId == tid);
-        }
+        // Reference _tenantContext as a field (not a captured local variable) so EF Core
+        // evaluates it per-instance at runtime. Capturing `var tid = _tenantContext.TenantId`
+        // would bake in the value from the first DbContext instance (usually Guid.Empty from
+        // the migration/seeder scope) across all subsequent instances since EF Core caches
+        // the compiled model.
+        modelBuilder.Entity<Agent>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<AgentConnectorConfig>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<TestSuite>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<TestSuiteAgent>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<TestCase>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<Run>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<Result>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<TranscriptMessage>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<JudgeSetting>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId || e.TenantId == PlatformTenantId);
+        modelBuilder.Entity<RubricSet>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<Document>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<Chunk>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<ApiKey>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<TenantUser>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<TenantSubscription>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
     }
 }

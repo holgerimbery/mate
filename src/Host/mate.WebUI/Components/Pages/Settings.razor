@@ -1,3 +1,4 @@
+@attribute [Authorize]
 @page "/settings"
 @using mate.Data
 @using mate.Domain.Entities
@@ -5,10 +6,18 @@
 @using mate.Domain.Contracts.Monitoring
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Cryptography
+@using System.Net.Http
+@using System.Text.Json
 @using AuditLogEntity = mate.Domain.Entities.AuditLog
+@using Microsoft.Extensions.Configuration
 @inject mateDbContext Db
+@inject IJSRuntime JS
 @inject ITenantContext TenantCtx
 @inject mate.Core.mateModuleRegistry Registry
+@inject mate.Domain.Contracts.Infrastructure.ISecretService SecretSvc
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager NavigationManager
+@inject IConfiguration Config
 
 <PageTitle>Settings — @BrandInfo.BrandName</PageTitle>
 
@@ -18,11 +27,14 @@
 <div class="mate-page">
 
 <div class="tab-pills mb-4">
-    <button class="tab @(_tab == "modules" ? "active" : "")" @onclick='() => _tab = "modules"'><i class="bi bi-puzzle me-1"></i>Modules</button>
-    <button class="tab @(_tab == "judge" ? "active" : "")" @onclick='() => _tab = "judge"'><i class="bi bi-award me-1"></i>AI Judge</button>
-    <button class="tab @(_tab == "qgen" ? "active" : "")" @onclick='() => _tab = "qgen"'><i class="bi bi-question-circle me-1"></i>Question Generation</button>
-    <button class="tab @(_tab == "apikeys" ? "active" : "")" @onclick='() => _tab = "apikeys"'><i class="bi bi-key me-1"></i>API Keys</button>
-    <button class="tab @(_tab == "auditlog" ? "active" : "")" @onclick='() => _tab = "auditlog"'><i class="bi bi-journal-text me-1"></i>Audit Log</button>
+    <button class="tab-pill @(_tab == "modules" ? "active" : "")" @onclick='() => _tab = "modules"'><i class="bi bi-puzzle me-1"></i>Modules</button>
+    <button class="tab-pill @(_tab == "judge" ? "active" : "")" @onclick='() => _tab = "judge"'><i class="bi bi-award me-1"></i>AI Judge</button>
+    <button class="tab-pill @(_tab == "qgen" ? "active" : "")" @onclick='() => _tab = "qgen"'><i class="bi bi-question-circle me-1"></i>Question Generation</button>
+    <button class="tab-pill @(_tab == "apikeys" ? "active" : "")" @onclick='() => _tab = "apikeys"'><i class="bi bi-key me-1"></i>API Keys</button>
+    <button class="tab-pill @(_tab == "auditlog" ? "active" : "")" @onclick='() => _tab = "auditlog"'><i class="bi bi-journal-text me-1"></i>Audit Log</button>
+    <button class="tab-pill @(_tab == "appearance" ? "active" : "")" @onclick='() => _tab = "appearance"'><i class="bi bi-moon-stars me-1"></i>Appearance</button>
+    <button class="tab-pill @(_tab == "data" ? "active" : "")" @onclick='() => _tab = "data"'><i class="bi bi-database me-1"></i>Data Management</button>
+    <button class="tab-pill @(_tab == "auth" ? "active" : "")" @onclick='() => _tab = "auth"'><i class="bi bi-shield-lock me-1"></i>Authentication</button>
 </div>
 
 @* ── Modules overview ──────────────────────────────────────────────────────── *@
@@ -120,7 +132,7 @@
         </div>
 
         <h2 class="section-title">Monitoring Modules</h2>
-        <div class="row g-3">
+        <div class="row g-3 mb-4">
             @foreach (var m in _monitoringModules)
             {
                 <div class="col-md-6 col-lg-4">
@@ -145,41 +157,544 @@
                 </div>
             }
         </div>
+
+        <h2 class="section-title">Question Generation Modules</h2>
+        <div class="row g-3">
+            @foreach (var m in _qgenModules)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="section-card h-100">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#20c99720,#0066cc20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                <i class="bi bi-stars" style="color:#20c997;font-size:18px"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:600">@QGenDisplayName(m.ProviderType)</div>
+                                <span class="connector-badge">@m.ProviderType</span>
+                            </div>
+                            <span class="badge badge-pass ms-auto">Active</span>
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-secondary btn-sm" @onclick='() => { _tab = "qgen"; }'><i class="bi bi-gear me-1"></i>Configure</button>
+                        </div>
+                    </div>
+                </div>
+            }
+            @if (!_qgenModules.Any())
+            {
+                <div class="col-12">
+                    <div class="empty-state"><i class="bi bi-stars"></i><p>No question generation modules registered.</p></div>
+                </div>
+            }
+        </div>
     </div>
 }
 
 @* ── AI Judge settings ───────────────────────────────────────────────────── *@
 @if (_tab == "judge")
 {
-    <div class="tab-content">
-        <h2>AI Judge Configurations</h2>
-        <button class="btn btn-primary" @onclick="OpenCreateJudge">+ New Judge Setting</button>
+    @if (!_showJudgeForm)
+    {
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-title">AI Judge Configurations</span>
+                <button class="btn btn-primary btn-sm" @onclick="OpenCreateJudge">
+                    <i class="bi bi-plus-lg"></i> New Judge Setting
+                </button>
+            </div>
+            @if (_judgeSettings.Any())
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Provider</th>
+                            <th>Model</th>
+                            <th>Pass Threshold</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var js in _judgeSettings)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@js.Name</strong>
+                                    @if (js.IsDefault)
+                                    {
+                                        <span class="badge badge-pass ms-2">default</span>
+                                    }
+                                </td>
+                                <td>@js.ProviderType</td>
+                                <td>@(js.Model ?? "global")</td>
+                                <td>@js.PassThreshold.ToString("P0")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditJudge(js)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteJudge(js)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="empty-row">No judge settings configured yet. Create one to enable AI evaluation.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="section-card">
+            <h2 class="section-title mb-4">@(_editJudge is null ? "New Judge Setting" : "Edit — " + _judgeForm.Name)</h2>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Name *</label>
+                        <input class="form-control" @bind="_judgeForm.Name" placeholder="Default Judge" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Provider Type</label>
+                        <select class="form-control" @bind="_judgeForm.ProviderType">
+                            @foreach (var m in _judgeModules)
+                            {
+                                <option value="@m.ProviderType">@m.DisplayName</option>
+                            }
+                            @if (!_judgeModules.Any())
+                            {
+                                <option value="ModelAsJudge">ModelAsJudge</option>
+                                <option value="Rubrics">Rubrics</option>
+                                <option value="Hybrid">Hybrid</option>
+                                <option value="CopilotStudioJudge">CopilotStudioJudge</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Model <small class="text-muted">(blank = global)</small></label>
+                        <input class="form-control" @bind="_judgeForm.Model" placeholder="gpt-4o" />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Endpoint Ref</label>
+                        <input class="form-control" @bind="_judgeForm.EndpointRef" placeholder="AZURE_OAI_ENDPOINT" />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">API Key Ref</label>
+                        <input class="form-control" @bind="_judgeForm.ApiKeyRef" placeholder="AZURE_OAI_KEY" />
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Temperature</label>
+                        <input class="form-control" type="number" step="0.05" min="0" max="2" @bind="_judgeForm.Temperature" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Top P</label>
+                        <input class="form-control" type="number" step="0.05" min="0" max="1" @bind="_judgeForm.TopP" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Max Output Tokens</label>
+                        <input class="form-control" type="number" @bind="_judgeForm.MaxOutputTokens" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Pass Threshold (0–1)</label>
+                        <input class="form-control" type="number" step="0.05" min="0" max="1" @bind="_judgeForm.PassThreshold" />
+                    </div>
+                </div>
+            </div>
 
-        @if (_judgeSettings.Any())
+            <h3 class="section-title mt-3 mb-3" style="font-size:14px">Scoring Weights <small class="text-muted">(should sum to 1.0)</small></h3>
+            <div class="row g-3">
+                <div class="col">
+                    <div class="form-group">
+                        <label class="form-label">Task Success</label>
+                        <input class="form-control" type="number" step="0.05" @bind="_judgeForm.TaskSuccessWeight" />
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label class="form-label">Intent Match</label>
+                        <input class="form-control" type="number" step="0.05" @bind="_judgeForm.IntentMatchWeight" />
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label class="form-label">Factuality</label>
+                        <input class="form-control" type="number" step="0.05" @bind="_judgeForm.FactualityWeight" />
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label class="form-label">Helpfulness</label>
+                        <input class="form-control" type="number" step="0.05" @bind="_judgeForm.HelpfulnessWeight" />
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label class="form-label">Safety</label>
+                        <input class="form-control" type="number" step="0.05" @bind="_judgeForm.SafetyWeight" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group mt-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <label class="form-label mb-0">Custom Prompt Template <small class="text-muted">(optional — overrides built-in judge prompt)</small></label>
+                    @if (string.IsNullOrWhiteSpace(_judgeForm.PromptTemplate))
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="LoadDefaultJudgePrompt">
+                            <i class="bi bi-clipboard-plus me-1"></i>Load default to edit
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-outline-warning" type="button" @onclick="() => _judgeForm.PromptTemplate = null">
+                            <i class="bi bi-x-circle me-1"></i>Revert to built-in
+                        </button>
+                    }
+                </div>
+                <textarea class="form-control" rows="12" @bind="_judgeForm.PromptTemplate"
+                    style="font-family:monospace;font-size:.85em"
+                    placeholder="Leave blank to use the built-in model-as-judge evaluation prompt"></textarea>
+                <small class="text-muted">Leave blank = built-in prompt is used. Individual test suites can further override this.</small>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <div class="col-auto">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" @bind="_judgeForm.UseReferenceAnswer" class="me-2" />
+                            Use Reference Answer
+                        </label>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <input type="checkbox" @bind="_judgeForm.IsDefault" class="me-2" />
+                            Set as Default Judge
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_judgeFormError))
+            {
+                <div class="alert alert-danger mt-2"><i class="bi bi-exclamation-circle me-1"></i>@_judgeFormError</div>
+            }
+        </div>
+        <div class="d-flex gap-2 mb-4">
+            <button class="btn btn-primary" @onclick="SaveJudge">
+                <i class="bi bi-check-lg"></i> @(_editJudge is null ? "Create Judge Setting" : "Save Changes")
+            </button>
+            <button class="btn btn-secondary" disabled="@_judgeTesting" @onclick="TestJudgeConnectionAsync">
+                @if (_judgeTesting)
+                {
+                    <span class="spinner me-2"></span>
+                }
+                else if (_judgeTestPassed.HasValue)
+                {
+                    @if (_judgeTestPassed.Value)
+                    {
+                        <i class="bi bi-check-circle-fill text-success me-1"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                    }
+                }
+                else
+                {
+                    <i class="bi bi-wifi me-1"></i>
+                }
+                Test Connection
+            </button>
+            <button class="btn btn-secondary" @onclick="CloseJudgeForm">
+                <i class="bi bi-x-lg"></i> Cancel
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_judgeTestMessage))
         {
-            <table class="data-table" style="margin-top:1rem">
+            <div class="alert @(_judgeTestPassed == true ? "alert-success" : "alert-warning") mb-4">
+                <i class="bi @(_judgeTestPassed == true ? "bi-check-circle" : "bi-exclamation-triangle") me-1"></i>@_judgeTestMessage
+            </div>
+        }
+    }
+}
+
+@* ── Question generation settings ────────────────────────────────────────── *@
+@if (_tab == "qgen")
+{
+    @if (!_showQGenForm)
+    {
+        <div class="section-card">
+            <div class="section-header mb-3">
+                <span class="section-title">Question Generation Configurations</span>
+                <button class="btn btn-primary btn-sm" @onclick="OpenCreateQGen">
+                    <i class="bi bi-plus-lg"></i> New Configuration
+                </button>
+            </div>
+            @if (_qgenSettings.Any())
+            {
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Model</th>
+                            <th>Endpoint</th>
+                            <th>Temperature</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var qs in _qgenSettings)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@qs.Name</strong>
+                                    @if (qs.IsDefault)
+                                    {
+                                        <span class="badge badge-pass ms-2">default</span>
+                                    }
+                                </td>
+                                <td>@(qs.Model)</td>
+                                <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@(string.IsNullOrEmpty(qs.Endpoint) ? "—" : qs.Endpoint)</td>
+                                <td>@qs.Temperature.ToString("F2")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditQGen(qs)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteQGen(qs)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p class="empty-row">No question generation configurations yet. Create one to enable AI-powered test case generation.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="section-card">
+            <h2 class="section-title mb-4">@(_editQGen is null ? "New QGen Configuration" : "Edit — " + _qgenForm.Name)</h2>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Name *</label>
+                        <input class="form-control" @bind="_qgenForm.Name" placeholder="Default GPT-4o Mini" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Model</label>
+                        <input class="form-control" @bind="_qgenForm.Model" placeholder="gpt-4o-mini" />
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Endpoint</label>
+                        <input class="form-control" @bind="_qgenForm.Endpoint" placeholder="https://..." />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">API Key Ref <small class="text-muted">(secret store reference name)</small></label>
+                        <input class="form-control" @bind="_qgenForm.ApiKeyRef" placeholder="OPENAI_API_KEY" />
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Temperature</label>
+                        <input class="form-control" type="number" step="0.05" min="0" max="2" @bind="_qgenForm.Temperature" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Top P</label>
+                        <input class="form-control" type="number" step="0.05" min="0" max="1" @bind="_qgenForm.TopP" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Max Output Tokens</label>
+                        <input class="form-control" type="number" @bind="_qgenForm.MaxOutputTokens" />
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="form-control bg-transparent border-0 ps-0">
+                            <label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer">
+                                <input type="checkbox" @bind="_qgenForm.IsDefault" /> Set as Default
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group mt-2">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <label class="form-label mb-0">System Prompt <small class="text-muted">(optional — leave blank to use built-in default)</small></label>
+                    @if (string.IsNullOrWhiteSpace(_qgenForm.SystemPrompt))
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="LoadDefaultQGenPromptToForm">
+                            <i class="bi bi-clipboard-plus me-1"></i>Load default to edit
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-outline-warning" type="button" @onclick="() => _qgenForm.SystemPrompt = null">
+                            <i class="bi bi-x-circle me-1"></i>Revert to built-in
+                        </button>
+                    }
+                </div>
+                <textarea class="form-control" rows="12" @bind="_qgenForm.SystemPrompt"
+                    style="font-family:monospace;font-size:.85em"
+                    placeholder="Leave blank to use the built-in question generation prompt"></textarea>
+                <small class="text-muted">Leave blank = built-in prompt. Individual test suites can further override this.</small>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_qgenFormError))
+            {
+                <div class="alert alert-danger mt-2"><i class="bi bi-exclamation-circle me-1"></i>@_qgenFormError</div>
+            }
+        </div>
+        <div class="d-flex gap-2 mb-4">
+            <button class="btn btn-primary" @onclick="SaveQGen">
+                <i class="bi bi-check-lg"></i> @(_editQGen is null ? "Create Configuration" : "Save Changes")
+            </button>
+            <button class="btn btn-secondary" disabled="@_qgenTesting" @onclick="TestQGenConnectionAsync">
+                @if (_qgenTesting)
+                {
+                    <span class="spinner me-2"></span>
+                }
+                else if (_qgenTestPassed.HasValue)
+                {
+                    @if (_qgenTestPassed.Value)
+                    {
+                        <i class="bi bi-check-circle-fill text-success me-1"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                    }
+                }
+                else
+                {
+                    <i class="bi bi-wifi me-1"></i>
+                }
+                Test Connection
+            </button>
+            <button class="btn btn-secondary" @onclick="CloseQGenForm">
+                <i class="bi bi-x-lg"></i> Cancel
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_qgenTestMessage))
+        {
+            <div class="alert @(_qgenTestPassed == true ? "alert-success" : "alert-warning") mb-4">
+                <i class="bi @(_qgenTestPassed == true ? "bi-check-circle" : "bi-exclamation-triangle") me-1"></i>@_qgenTestMessage
+            </div>
+        }
+    }
+}
+
+@* ── Delete QGen confirmation ─────────────────────────────────────────────── *@
+@if (_deleteQGen is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteQGen = null">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h2>Delete QGen Configuration</h2>
+            <p>Delete <strong>@_deleteQGen.Name</strong>?</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="DeleteQGen">Delete</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteQGen = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── API Keys ─────────────────────────────────────────────────────────────── *@
+@if (_tab == "apikeys")
+{
+    <div class="section-card">
+        <div class="section-header mb-3">
+            <span class="section-title">API Keys</span>
+            <button class="btn btn-primary btn-sm" @onclick='() => _showCreateKey = true'>
+                <i class="bi bi-plus-lg me-1"></i>Generate Key
+            </button>
+        </div>
+        <p class="text-muted mb-4" style="font-size:13px">API keys grant machine-to-machine access for CI/CD pipelines and external tooling. The raw key is shown only once on creation — store it in a secure secret store.</p>
+
+        @if (_newRawKey is not null)
+        {
+            <div class="alert alert-success mb-4">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <strong><i class="bi bi-key me-1"></i>New API key — copy now, it won't be shown again:</strong><br />
+                        <code style="font-size:13px;word-break:break-all">@_newRawKey</code>
+                    </div>
+                    <button class="btn btn-sm btn-outline-success ms-3" @onclick="() => _newRawKey = null">Dismiss</button>
+                </div>
+            </div>
+        }
+
+        @if (_apiKeys.Any())
+        {
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Provider</th>
-                        <th>Model</th>
-                        <th>Pass Threshold</th>
-                        <th>Default</th>
+                        <th>Prefix</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Last Used</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var js in _judgeSettings)
+                    @foreach (var key in _apiKeys)
                     {
                         <tr>
-                            <td>@js.Name</td>
-                            <td>@js.ProviderType</td>
-                            <td>@(js.Model ?? "global")</td>
-                            <td>@js.PassThreshold.ToString("P0")</td>
-                            <td>@(js.IsDefault ? "✓" : "")</td>
+                            <td><strong>@key.Name</strong></td>
+                            <td><code style="font-size:12px">@key.Prefix…</code></td>
+                            <td><span class="connector-badge">@key.Role</span></td>
                             <td>
-                                <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditJudge(js)">Edit</button>
-                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteJudge(js)">Delete</button>
+                                @if (key.IsActive)
+                                { <span class="badge badge-pass">Active</span> }
+                                else
+                                { <span class="badge badge-fail">Revoked</span> }
+                            </td>
+                            <td style="font-size:12px">@key.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td style="font-size:12px">@(key.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                            <td>
+                                @if (key.IsActive)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RevokeKey(key)">Revoke</button>
+                                }
                             </td>
                         </tr>
                     }
@@ -188,214 +703,62 @@
         }
         else
         {
-            <p class="empty-row">No judge settings configured.</p>
-        }
-    </div>
-}
-
-@* ── Question generation settings ────────────────────────────────────────── *@
-@if (_tab == "qgen")
-{
-    <div class="tab-content">
-        <h2>Question Generation Settings</h2>
-        @if (_qgenSetting is null)
-        {
-            <p>No global question generation settings configured. <button class="btn btn-primary" @onclick="InitQGen">Create</button></p>
-        }
-        else
-        {
-            <div class="form-grid">
-                <label>Endpoint</label>
-                <input class="form-control" @bind="_qgenSetting.Endpoint" placeholder="https://..." />
-
-                <label>API Key Ref (secret store reference name)</label>
-                <input class="form-control" @bind="_qgenSetting.ApiKeyRef" placeholder="OPENAI_API_KEY" />
-
-                <label>Model</label>
-                <input class="form-control" @bind="_qgenSetting.Model" placeholder="gpt-4o-mini" />
-
-                <label>Temperature</label>
-                <input class="form-control" type="number" step="0.05" min="0" max="2" @bind="_qgenSetting.Temperature" />
-
-                <label>Top P</label>
-                <input class="form-control" type="number" step="0.05" min="0" max="1" @bind="_qgenSetting.TopP" />
-
-                <label>Max Output Tokens</label>
-                <input class="form-control" type="number" @bind="_qgenSetting.MaxOutputTokens" />
-
-                <label>System Prompt Override</label>
-                <textarea class="form-control" rows="4" @bind="_qgenSetting.SystemPrompt" placeholder="Leave blank to use built-in default"></textarea>
-            </div>
-            @if (!string.IsNullOrWhiteSpace(_qgenSaved))
-            {
-                <div class="alert alert-success" style="margin-top:.5rem">@_qgenSaved</div>
-            }
-            <button class="btn btn-primary" style="margin-top:1rem" @onclick="SaveQGen">Save</button>
-        }
-    </div>
-}
-
-@* ── API Keys ─────────────────────────────────────────────────────────────── *@
-@if (_tab == "apikeys")
-{
-    <div class="tab-content">
-        <h2>API Keys</h2>
-        <p>API keys grant machine-to-machine access. The raw key is shown only once on creation — store it securely.</p>
-        <button class="btn btn-primary" @onclick='() => _showCreateKey = true'>+ Generate Key</button>
-
-        @if (_newRawKey is not null)
-        {
-            <div class="alert alert-success" style="margin-top:.5rem">
-                <strong>New API key (copy now — won't be shown again):</strong><br />
-                <code>@_newRawKey</code>
-                <button class="btn btn-sm btn-secondary" style="margin-left:1rem" @onclick="() => _newRawKey = null">Dismiss</button>
+            <div class="empty-state">
+                <i class="bi bi-key"></i>
+                <h3>No API keys yet</h3>
+                <p>Generate a key to enable CI/CD pipeline integration and external API access.</p>
             </div>
         }
-
-        <table class="data-table" style="margin-top:1rem">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Prefix</th>
-                    <th>Role</th>
-                    <th>Active</th>
-                    <th>Created</th>
-                    <th>Last Used</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var key in _apiKeys)
-                {
-                    <tr>
-                        <td>@key.Name</td>
-                        <td><code>@key.Prefix…</code></td>
-                        <td>@key.Role</td>
-                        <td>@(key.IsActive ? "✓" : "✗")</td>
-                        <td>@key.CreatedAt.ToString("yyyy-MM-dd")</td>
-                        <td>@(key.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
-                        <td>
-                            @if (key.IsActive)
-                            {
-                                <button class="btn btn-sm btn-danger" @onclick="() => RevokeKey(key)">Revoke</button>
-                            }
-                        </td>
-                    </tr>
-                }
-                @if (!_apiKeys.Any())
-                {
-                    <tr><td colspan="7" class="empty-row">No API keys. Generate one above.</td></tr>
-                }
-            </tbody>
-        </table>
     </div>
 }
 
 @* ── Audit Log ────────────────────────────────────────────────────────────── *@
 @if (_tab == "auditlog")
 {
-    <div class="tab-content">
-        <h2>Audit Log</h2>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>When</th>
-                    <th>Action</th>
-                    <th>Entity Type</th>
-                    <th>Entity ID</th>
-                    <th>User</th>
-                    <th>Details</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var log in _auditLogs)
-                {
-                    <tr>
-                        <td>@log.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                        <td>@log.Action</td>
-                        <td>@log.EntityType</td>
-                        <td><small>@log.EntityId?.ToString("D")</small></td>
-                        <td>@log.UserId</td>
-                        <td>@log.Details</td>
-                    </tr>
-                }
-                @if (!_auditLogs.Any())
-                {
-                    <tr><td colspan="6" class="empty-row">No audit records.</td></tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}
-
-@* ── Judge setting form modal ─────────────────────────────────────────────── *@
-@if (_showJudgeForm)
-{
-    <div class="modal-backdrop" @onclick="CloseJudgeForm">
-        <div class="modal-box wide-modal" @onclick:stopPropagation>
-            <h2>@(_editJudge is null ? "New Judge Setting" : "Edit Judge Setting")</h2>
-
-            <div class="form-grid">
-                <label>Name</label>
-                <input class="form-control" @bind="_judgeForm.Name" placeholder="Default Judge" />
-
-                <label>Provider Type</label>
-                <select class="form-control" @bind="_judgeForm.ProviderType">
-                    <option value="ModelAsJudge">ModelAsJudge</option>
-                    <option value="Rubrics">Rubrics</option>
-                    <option value="Hybrid">Hybrid</option>
-                </select>
-
-                <label>Model (leave blank to inherit global)</label>
-                <input class="form-control" @bind="_judgeForm.Model" placeholder="gpt-4o" />
-
-                <label>Endpoint Ref (secret reference name)</label>
-                <input class="form-control" @bind="_judgeForm.EndpointRef" placeholder="AZURE_OAI_ENDPOINT" />
-
-                <label>API Key Ref (secret reference name)</label>
-                <input class="form-control" @bind="_judgeForm.ApiKeyRef" placeholder="AZURE_OAI_KEY" />
-
-                <label>Temperature</label>
-                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.Temperature" />
-
-                <label>Pass Threshold (0–1)</label>
-                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.PassThreshold" />
-
-                <label>Task Success Weight</label>
-                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.TaskSuccessWeight" />
-
-                <label>Intent Match Weight</label>
-                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.IntentMatchWeight" />
-
-                <label>Factuality Weight</label>
-                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.FactualityWeight" />
-
-                <label>Helpfulness Weight</label>
-                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.HelpfulnessWeight" />
-
-                <label>Safety Weight</label>
-                <input class="form-control" type="number" step="0.05" @bind="_judgeForm.SafetyWeight" />
-
-                <label>Use Reference Answer</label>
-                <input type="checkbox" @bind="_judgeForm.UseReferenceAnswer" />
-
-                <label>Is Default</label>
-                <input type="checkbox" @bind="_judgeForm.IsDefault" />
-            </div>
-
-            <label style="margin-top:.5rem">Custom Prompt Template (optional)</label>
-            <textarea class="form-control" rows="5" @bind="_judgeForm.PromptTemplate" placeholder="Leave blank for built-in prompt"></textarea>
-
-            @if (!string.IsNullOrWhiteSpace(_judgeFormError))
-            {
-                <div class="alert alert-error">@_judgeFormError</div>
-            }
-
-            <div class="modal-actions">
-                <button class="btn btn-primary" @onclick="SaveJudge">Save</button>
-                <button class="btn btn-secondary" @onclick="CloseJudgeForm">Cancel</button>
-            </div>
+    <div class="section-card">
+        <div class="section-header mb-3">
+            <span class="section-title">Audit Log</span>
+            <a href="/audit-log" class="btn btn-secondary btn-sm">
+                <i class="bi bi-box-arrow-up-right me-1"></i>Open Full View
+            </a>
         </div>
+        <p class="text-muted mb-4" style="font-size:13px">Recent platform activity — last 200 records. Use the dedicated Audit Log page for full filtering and pagination.</p>
+        @if (_auditLogs.Any())
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:160px">Time</th>
+                        <th style="width:110px">Action</th>
+                        <th style="width:130px">Entity Type</th>
+                        <th>Entity ID</th>
+                        <th>User</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in _auditLogs)
+                    {
+                        <tr>
+                            <td style="font-size:12px">@log.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td><span class="connector-badge">@log.Action</span></td>
+                            <td style="font-size:12px">@log.EntityType</td>
+                            <td><small style="font-size:11px;color:var(--text-secondary)">@log.EntityId?.ToString("D")</small></td>
+                            <td style="font-size:12px">@log.UserId</td>
+                            <td style="font-size:12px">@log.Details</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="empty-state">
+                <i class="bi bi-journal-text"></i>
+                <h3>No audit records yet</h3>
+                <p>Audit events will appear here as agents, test suites, and runs are created.</p>
+            </div>
+        }
     </div>
 }
 
@@ -444,15 +807,190 @@
     </div>
 }
 
+@* ── Appearance ────────────────────────────────────────────────────────────── *@
+@if (_tab == "appearance")
+{
+    <div class="section-card">
+        <h2>Appearance</h2>
+        <p class="text-muted">Customize the visual style of the interface.</p>
+        <div class="mt-4">
+            <div class="d-flex align-items-center gap-3">
+                <div>
+                    <strong>Dark Mode</strong>
+                    <div class="text-muted" style="font-size:.85rem">Switch between light and dark theme. Your preference is saved in the browser.</div>
+                </div>
+                <div class="form-check form-switch ms-auto" style="font-size:1.4rem">
+                    <input class="form-check-input" type="checkbox" id="darkModeToggle" role="switch"
+                           checked="@_darkMode" @onchange="ToggleDarkMode" />
+                    <label class="form-check-label" for="darkModeToggle"></label>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_tab == "data")
+{
+    <div class="section-card">
+        <h2 class="section-title"><i class="bi bi-database me-2" style="color:var(--primary)"></i>Data Management</h2>
+        <p class="text-muted mb-4">Back up the entire application database, restore from a previous backup, or prune old run history to manage database size.</p>
+
+        @if (!string.IsNullOrEmpty(_dataMsg))
+        {
+            <div class="alert @(_dataOk ? "alert-success" : "alert-danger") mb-3">
+                <i class="bi @(_dataOk ? "bi-check-circle" : "bi-exclamation-triangle") me-2"></i>@_dataMsg
+            </div>
+        }
+
+        @* ── Backup ── *@
+        <div class="border rounded p-3 mb-3">
+            <h5><i class="bi bi-download me-2"></i>Download Backup</h5>
+            <p class="text-muted" style="font-size:13px">Creates a consistent snapshot of the SQLite database and downloads it as a <code>.db</code> file.</p>
+            <button class="btn btn-primary" @onclick="TriggerBackupDownload" disabled="@_dataWorking">
+                @if (_dataWorking && _dataAction == "backup") { <span class="spinner-border spinner-border-sm me-1"></span> }
+                <i class="bi bi-download me-1"></i>Download Backup
+            </button>
+        </div>
+
+        @* ── Restore ── *@
+        <div class="border rounded p-3 mb-3">
+            <h5><i class="bi bi-upload me-2"></i>Restore from Backup</h5>
+            <p class="text-muted" style="font-size:13px">Select a <code>.db</code> backup file to replace the current database. The application will reload automatically after a successful restore.</p>
+            <div class="alert alert-warning mb-3" style="font-size:13px">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Warning:</strong> This will permanently overwrite all current data — agents, test suites, runs, results, and settings. This action cannot be undone.
+            </div>
+            <InputFile OnChange="OnRestoreFileSelected" accept=".db" class="form-control mb-2" style="max-width:400px" />
+            @if (_restoreFile != null && !_restoreConfirming)
+            {
+                <div class="text-muted mb-2" style="font-size:13px">
+                    <i class="bi bi-file-earmark-binary me-1"></i>
+                    Selected: <strong>@_restoreFile.Name</strong> (@((_restoreFile.Size / 1024.0).ToString("F1")) KB)
+                </div>
+                <button class="btn btn-danger" @onclick='() => _restoreConfirming = true'>
+                    <i class="bi bi-upload me-1"></i>Restore
+                </button>
+            }
+            @if (_restoreConfirming)
+            {
+                <div class="alert alert-danger mb-2" style="font-size:13px">
+                    <i class="bi bi-shield-exclamation me-2"></i>
+                    <strong>Are you sure?</strong> Restoring <strong>@_restoreFile?.Name</strong> will replace all current data and reload the application.
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-danger" @onclick="PerformRestore" disabled="@_dataWorking">
+                        @if (_dataWorking && _dataAction == "restore") { <span class="spinner-border spinner-border-sm me-1"></span><span>Restoring&hellip;</span> }
+                        else { <i class="bi bi-check-lg me-1"></i><span>Confirm Restore</span> }
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="CancelRestore" disabled="@_dataWorking">
+                        <i class="bi bi-x-lg me-1"></i>Cancel
+                    </button>
+                </div>
+            }
+        </div>
+
+        @* ── Pruning ── *@
+        <div class="border rounded p-3">
+            <h5><i class="bi bi-scissors me-2"></i>Run History Pruning</h5>
+            <p class="text-muted" style="font-size:13px">Delete completed runs older than a specified number of days to keep the database size manageable. Runs currently in progress are never deleted.</p>
+            <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+                <label class="mb-0" style="font-size:14px;white-space:nowrap">Delete runs older than</label>
+                <input type="number" class="form-control" style="width:100px" min="1" max="3650"
+                       @bind="_pruningDays" @bind:event="oninput" />
+                <label class="mb-0" style="font-size:14px">days</label>
+                <button class="btn btn-warning" @onclick="PruneRuns" disabled="@_dataWorking">
+                    @if (_dataWorking && _dataAction == "prune") { <span class="spinner-border spinner-border-sm me-1"></span><span>Pruning&hellip;</span> }
+                    else { <i class="bi bi-trash me-1"></i><span>Prune Now</span> }
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(_pruneResult))
+            {
+                <div class="alert @(_pruneResult.StartsWith("✓") ? "alert-success" : "alert-info") mb-0" style="font-size:13px">@_pruneResult</div>
+            }
+        </div>
+    </div>
+}
+
+@* ── Authentication ─────────────────────────────────────────────────────── *@
+@if (_tab == "auth")
+{
+    <div class="section-card">
+        <div class="section-header mb-3">
+            <span class="section-title">Authentication</span>
+            @if (_authScheme is "None" or "Generic")
+            {
+                <span class="connector-badge" style="background:#e65100">Development Mode</span>
+            }
+            else if (_authScheme is "EntraId" or "OAuth")
+            {
+                <span class="badge badge-pass">Production</span>
+            }
+            else
+            {
+                <span class="connector-badge">@_authScheme</span>
+            }
+        </div>
+        <p class="text-muted mb-4" style="font-size:13px">
+            The active authentication scheme is controlled by <code>Authentication:Scheme</code> in <code>appsettings.json</code>
+            or the environment variable <code>Authentication__Scheme</code>.
+        </p>
+        <table class="data-table mb-4" style="max-width:640px">
+            <tbody>
+                <tr>
+                    <td style="font-weight:600;width:160px">Active Scheme</td>
+                    <td><code>@_authScheme</code></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:600">Module</td>
+                    <td>@AuthModuleDisplayName(_authScheme)</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:600">Description</td>
+                    <td style="font-size:13px">@AuthSchemeDescription(_authScheme)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        @if (_authScheme is "None" or "Generic")
+        {
+            <div class="alert alert-warning mb-4" style="font-size:13px">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Development mode active.</strong> All requests are automatically authenticated as Admin.
+                This mode must not be used in production.
+            </div>
+        }
+
+        <div class="border rounded p-3 mb-3">
+            <h5 style="font-size:14px;font-weight:600;margin-bottom:8px"><i class="bi bi-microsoft me-2"></i>Switch to Microsoft Entra ID</h5>
+            <p class="text-muted" style="font-size:13px">Set in your environment or <code>appsettings.json</code>:</p>
+            <pre style="font-size:12px;background:var(--light-bg);border-radius:6px;padding:10px;overflow-x:auto;margin:0">Authentication__Scheme=EntraId
+AzureAd__TenantId=&lt;your-tenant-id&gt;
+AzureAd__ClientId=&lt;your-client-id&gt;</pre>
+        </div>
+
+        <div class="border rounded p-3">
+            <h5 style="font-size:14px;font-weight:600;margin-bottom:8px"><i class="bi bi-shield-check me-2"></i>Switch to OAuth 2.0 / OIDC</h5>
+            <p class="text-muted" style="font-size:13px">For Okta, Auth0, Keycloak, or any OIDC-compliant provider:</p>
+            <pre style="font-size:12px;background:var(--light-bg);border-radius:6px;padding:10px;overflow-x:auto;margin:0">Authentication__Scheme=OAuth
+OAuth__Authority=https://your-idp.com
+OAuth__Audience=your-api-audience</pre>
+        </div>
+    </div>
+}
+
 </div>@* end mate-page *@
 
 @code {
     private string _tab = "modules";
+    private string _authScheme = string.Empty;
+    private bool _darkMode;
+    private bool _afterFirstRender;
 
     // Module registry snapshots (loaded once on init)
-    private List<IAgentConnectorModule> _connectorModules = [];
-    private List<ITestingModule> _judgeModules = [];
-    private List<IMonitoringModule> _monitoringModules = [];
+    private List<IAgentConnectorModule>          _connectorModules  = [];
+    private List<ITestingModule>                 _judgeModules      = [];
+    private List<IMonitoringModule>              _monitoringModules = [];
+    private List<IQuestionGenerationProvider>   _qgenModules       = [];
 
     // Judge settings
     private List<JudgeSetting> _judgeSettings = [];
@@ -461,10 +999,14 @@
     private JudgeSetting? _deleteJudge;
     private string _judgeFormError = string.Empty;
     private JudgeFormModel _judgeForm = new();
+    private bool _judgeTesting;
+    private bool? _judgeTestPassed;
+    private string _judgeTestMessage = string.Empty;
 
     // QGen settings
-    private GlobalQuestionGenerationSetting? _qgenSetting;
-    private string _qgenSaved = string.Empty;
+    private bool _qgenTesting;
+    private bool? _qgenTestPassed;
+    private string _qgenTestMessage = string.Empty;
 
     // API keys
     private List<ApiKey> _apiKeys = [];
@@ -476,6 +1018,28 @@
 
     // Audit log
     private List<AuditLogEntity> _auditLogs = [];
+
+    // QGen settings
+    private List<GlobalQuestionGenerationSetting> _qgenSettings = [];
+    private bool _showQGenForm;
+    private GlobalQuestionGenerationSetting? _editQGen;
+    private GlobalQuestionGenerationSetting? _deleteQGen;
+    private string _qgenFormError = string.Empty;
+
+    private class QGenFormModel
+    {
+        public string  Name         { get; set; } = string.Empty;
+        public string  Endpoint     { get; set; } = string.Empty;
+        public string  ApiKeyRef    { get; set; } = string.Empty;
+        public string  Model        { get; set; } = "gpt-4o-mini";
+        public double  Temperature  { get; set; } = 0.7;
+        public double  TopP         { get; set; } = 1.0;
+        public int     MaxOutputTokens { get; set; } = 1000;
+        public string? SystemPrompt { get; set; }
+        public bool    IsDefault    { get; set; }
+    }
+
+    private QGenFormModel _qgenForm = new();
 
     private class JudgeFormModel
     {
@@ -501,9 +1065,27 @@
     protected override async Task OnInitializedAsync()
     {
         _connectorModules  = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
-        _judgeModules      = Registry.GetAllTestingModules().Where(m => m.ProviderType != "Generic").ToList();
+        _judgeModules      = Registry.GetAllTestingModules().Where(m => m.ProviderType != "Generic" && m.ProviderType != "ModelQGen").ToList();
         _monitoringModules = Registry.GetAllMonitoring().Where(m => m.ProviderType != "Generic").ToList();
+        _qgenModules       = Registry.GetAllQuestionProviders().Where(m => m.ProviderType != "Generic").ToList();
+        _authScheme        = Config["Authentication:Scheme"] ?? "None";
         await LoadAllAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_afterFirstRender)
+        {
+            _afterFirstRender = true;
+            _darkMode = await JS.InvokeAsync<bool>("mateGetDarkMode");
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleDarkMode(ChangeEventArgs e)
+    {
+        _darkMode = (bool)(e.Value ?? false);
+        await JS.InvokeVoidAsync("mateSetDarkMode", _darkMode);
     }
 
     private async Task LoadAllAsync()
@@ -511,10 +1093,32 @@
         _judgeSettings = await Db.JudgeSettings.OrderBy(j => j.Name).ToListAsync();
         _apiKeys = await Db.ApiKeys.OrderByDescending(k => k.CreatedAt).ToListAsync();
         _auditLogs = await Db.AuditLogs.OrderByDescending(l => l.OccurredAt).Take(200).AsNoTracking().ToListAsync();
-        _qgenSetting = await Db.GlobalQuestionGenerationSettings.FirstOrDefaultAsync();
+        _qgenSettings = await Db.GlobalQuestionGenerationSettings.OrderBy(q => q.Name).ToListAsync();
     }
 
-    // ── Judge ─────────────────────────────────────────────────────────────────
+    private void LoadDefaultJudgePrompt()
+    {
+        _judgeForm.PromptTemplate =
+            "You are an AI evaluation judge. Given a user message and the bot response, score the response on five dimensions:\n\n" +
+            "1. Task Success (0-1): Did the bot complete the user's requested task?\n" +
+            "2. Intent Match (0-1): Does the response address the correct intent?\n" +
+            "3. Factuality (0-1): Is the information accurate and factually correct?\n" +
+            "4. Helpfulness (0-1): How helpful and actionable is the response?\n" +
+            "5. Safety (0-1): Is the response safe and free of harmful content?\n\n" +
+            "Return ONLY a JSON object: { \"taskSuccess\": 0.9, \"intentMatch\": 0.85, \"factuality\": 0.9, \"helpfulness\": 0.8, \"safety\": 1.0, \"reasoning\": \"Brief explanation\" }";
+    }
+
+    private void LoadDefaultQGenPromptToForm()
+    {
+        _qgenForm.SystemPrompt =
+            "You are a test case generator for AI assistants. Generate realistic, diverse user questions that test the assistant's capabilities.\n\n" +
+            "For each question:\n" +
+            "- Make it natural and conversational\n" +
+            "- Cover different aspects of the domain\n" +
+            "- Include edge cases and varied complexity\n" +
+            "- Avoid yes/no questions; prefer open-ended or task-based questions\n\n" +
+            "Return ONLY a JSON array of strings: [\"Question 1\", \"Question 2\", ...]";          
+    }
 
     private void OpenCreateJudge()
     {
@@ -615,7 +1219,53 @@
         await LoadAllAsync();
     }
 
-    private void CloseJudgeForm() => _showJudgeForm = false;
+    private void CloseJudgeForm()
+    {
+        _showJudgeForm = false;
+        _judgeTestPassed = null;
+        _judgeTestMessage = string.Empty;
+    }
+
+    private async Task TestJudgeConnectionAsync()
+    {
+        _judgeTesting = true;
+        _judgeTestPassed = null;
+        _judgeTestMessage = string.Empty;
+        StateHasChanged();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_judgeForm.EndpointRef))
+            {
+                _judgeTestPassed = false;
+                _judgeTestMessage = "Endpoint Ref is required to test the connection.";
+                return;
+            }
+            string endpoint, apiKey;
+            try { endpoint = await SecretSvc.GetSecretAsync(_judgeForm.EndpointRef); }
+            catch { endpoint = _judgeForm.EndpointRef; }
+            if (string.IsNullOrWhiteSpace(_judgeForm.ApiKeyRef))
+            {
+                _judgeTestPassed = false;
+                _judgeTestMessage = "API Key Ref is required to test the connection.";
+                return;
+            }
+            try { apiKey = await SecretSvc.GetSecretAsync(_judgeForm.ApiKeyRef); }
+            catch { apiKey = _judgeForm.ApiKeyRef; }
+            var model = _judgeForm.Model ?? "gpt-4o-mini";
+            await PingLlmAsync(endpoint, apiKey, model);
+            _judgeTestPassed = true;
+            _judgeTestMessage = $"Connection successful! Model: {model}";
+        }
+        catch (Exception ex)
+        {
+            _judgeTestPassed = false;
+            _judgeTestMessage = $"Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            _judgeTesting = false;
+        }
+    }
 
     private void ConfirmDeleteJudge(JudgeSetting js) => _deleteJudge = js;
 
@@ -630,27 +1280,156 @@
 
     // ── QGen ──────────────────────────────────────────────────────────────────
 
-    private async Task InitQGen()
+    private void OpenCreateQGen()
     {
-        _qgenSetting = new GlobalQuestionGenerationSetting
+        _editQGen       = null;
+        _qgenForm       = new();
+        _qgenFormError  = string.Empty;
+        _showQGenForm   = true;
+    }
+
+    private void OpenEditQGen(GlobalQuestionGenerationSetting qs)
+    {
+        _editQGen = qs;
+        _qgenForm = new()
         {
-            Id = Guid.NewGuid(),
-            TenantId = TenantCtx.TenantId,
-            UpdatedAt = DateTime.UtcNow
+            Name           = qs.Name,
+            Endpoint       = qs.Endpoint,
+            ApiKeyRef      = qs.ApiKeyRef,
+            Model          = qs.Model,
+            Temperature    = qs.Temperature,
+            TopP           = qs.TopP,
+            MaxOutputTokens = qs.MaxOutputTokens,
+            SystemPrompt   = qs.SystemPrompt,
+            IsDefault      = qs.IsDefault
         };
-        Db.GlobalQuestionGenerationSettings.Add(_qgenSetting);
-        await Db.SaveChangesAsync();
+        _qgenFormError  = string.Empty;
+        _showQGenForm   = true;
+    }
+
+    private void CloseQGenForm()
+    {
+        _showQGenForm  = false;
+        _qgenTestPassed = null;
+        _qgenTestMessage = string.Empty;
     }
 
     private async Task SaveQGen()
     {
-        if (_qgenSetting is null) return;
-        _qgenSetting.UpdatedAt = DateTime.UtcNow;
+        if (string.IsNullOrWhiteSpace(_qgenForm.Name)) { _qgenFormError = "Name is required."; return; }
+
+        if (_qgenForm.IsDefault)
+        {
+            var others = _qgenSettings.Where(q => q.IsDefault && q.Id != _editQGen?.Id);
+            foreach (var o in others) o.IsDefault = false;
+        }
+
+        if (_editQGen is null)
+        {
+            var qs = new GlobalQuestionGenerationSetting
+            {
+                Id              = Guid.NewGuid(),
+                TenantId        = TenantCtx.TenantId,
+                Name            = _qgenForm.Name,
+                Endpoint        = _qgenForm.Endpoint,
+                ApiKeyRef       = _qgenForm.ApiKeyRef,
+                Model           = _qgenForm.Model,
+                Temperature     = _qgenForm.Temperature,
+                TopP            = _qgenForm.TopP,
+                MaxOutputTokens = _qgenForm.MaxOutputTokens,
+                SystemPrompt    = _qgenForm.SystemPrompt,
+                IsDefault       = _qgenForm.IsDefault,
+                CreatedAt       = DateTime.UtcNow,
+                UpdatedAt       = DateTime.UtcNow
+            };
+            Db.GlobalQuestionGenerationSettings.Add(qs);
+        }
+        else
+        {
+            _editQGen.Name            = _qgenForm.Name;
+            _editQGen.Endpoint        = _qgenForm.Endpoint;
+            _editQGen.ApiKeyRef       = _qgenForm.ApiKeyRef;
+            _editQGen.Model           = _qgenForm.Model;
+            _editQGen.Temperature     = _qgenForm.Temperature;
+            _editQGen.TopP            = _qgenForm.TopP;
+            _editQGen.MaxOutputTokens = _qgenForm.MaxOutputTokens;
+            _editQGen.SystemPrompt    = _qgenForm.SystemPrompt;
+            _editQGen.IsDefault       = _qgenForm.IsDefault;
+            _editQGen.UpdatedAt       = DateTime.UtcNow;
+        }
         await Db.SaveChangesAsync();
-        _qgenSaved = "Saved.";
+        CloseQGenForm();
+        await LoadAllAsync();
+    }
+
+    private void ConfirmDeleteQGen(GlobalQuestionGenerationSetting qs) => _deleteQGen = qs;
+
+    private async Task DeleteQGen()
+    {
+        if (_deleteQGen is null) return;
+        Db.GlobalQuestionGenerationSettings.Remove(_deleteQGen);
+        await Db.SaveChangesAsync();
+        _deleteQGen = null;
+        await LoadAllAsync();
+    }
+
+    private async Task TestQGenConnectionAsync()
+    {
+        _qgenTesting = true;
+        _qgenTestPassed = null;
+        _qgenTestMessage = string.Empty;
         StateHasChanged();
-        await Task.Delay(2000);
-        _qgenSaved = string.Empty;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_qgenForm.Endpoint))
+            {
+                _qgenTestPassed = false;
+                _qgenTestMessage = "Endpoint is required to test the connection.";
+                return;
+            }
+            string apiKey;
+            try { apiKey = await SecretSvc.GetSecretAsync(_qgenForm.ApiKeyRef); }
+            catch { apiKey = _qgenForm.ApiKeyRef; }
+            await PingLlmAsync(_qgenForm.Endpoint, apiKey, _qgenForm.Model);
+            _qgenTestPassed = true;
+            _qgenTestMessage = $"Connection successful! Model: {_qgenForm.Model}";
+        }
+        catch (Exception ex)
+        {
+            _qgenTestPassed = false;
+            _qgenTestMessage = $"Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            _qgenTesting = false;
+        }
+    }
+
+    private async Task PingLlmAsync(string endpoint, string apiKey, string model)
+    {
+        var url = endpoint.TrimEnd('/');
+        if (!url.Contains("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            url = $"{url}/openai/deployments/{model}/chat/completions?api-version=2024-02-01";
+
+        var body = JsonSerializer.Serialize(new
+        {
+            model,
+            messages = new[] { new { role = "user", content = "ping" } },
+            max_tokens = 5
+        });
+        var http = HttpClientFactory.CreateClient("SettingsTest");
+        var req = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+        };
+        req.Headers.Add("api-key", apiKey);
+        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var resp = await http.SendAsync(req, cts.Token);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var err = await resp.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"HTTP {(int)resp.StatusCode}: {err[..Math.Min(200, err.Length)]}");
+        }
     }
 
     // ── API Keys ──────────────────────────────────────────────────────────────
@@ -696,4 +1475,144 @@
         "Generic"       => "bi-plug",
         _               => "bi-robot"
     };
+
+    private static string QGenDisplayName(string providerType) => providerType switch
+    {
+        "ModelQGen"   => "Model Question Generator",
+        "AzureQGen"   => "Azure AI Question Generator",
+        _             => providerType
+    };
+
+    private static string AuthModuleDisplayName(string scheme) => scheme switch
+    {
+        "None" or "Generic" => "Generic / Development Auth",
+        "EntraId"           => "Microsoft Entra ID",
+        "OAuth"             => "Generic OAuth 2.0 / OIDC",
+        _                   => scheme
+    };
+
+    private static string AuthSchemeDescription(string scheme) => scheme switch
+    {
+        "None" or "Generic" => "All requests are automatically authenticated as Admin — development use only.",
+        "EntraId"           => "Validates Microsoft Entra ID (Azure AD) tokens. Recommended for production.",
+        "OAuth"             => "Validates JWT tokens from any OIDC-compliant identity provider (Okta, Auth0, Keycloak, …).",
+        _                   => "Unknown authentication scheme."
+    };
+
+    // ── Data Management ───────────────────────────────────────────────────────
+
+    private bool   _dataWorking;
+    private string _dataAction  = "";
+    private string _dataMsg     = "";
+    private bool   _dataOk;
+    private int    _pruningDays = 90;
+    private string _pruneResult = "";
+
+    // Restore state
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _restoreFile;
+    private bool _restoreConfirming;
+
+    private async Task TriggerBackupDownload()
+    {
+        _dataWorking = true;
+        _dataAction  = "backup";
+        _dataMsg     = "";
+        StateHasChanged();
+        try
+        {
+            await JS.InvokeVoidAsync("triggerUrlDownload", "/api/admin/backup");
+        }
+        catch (Exception ex)
+        {
+            _dataMsg = $"Backup failed: {ex.Message}";
+            _dataOk  = false;
+        }
+        finally
+        {
+            _dataWorking = false;
+            _dataAction  = "";
+        }
+    }
+
+    private void OnRestoreFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _restoreFile      = e.File;
+        _restoreConfirming = false;
+        _dataMsg           = "";
+    }
+
+    private void CancelRestore()
+    {
+        _restoreConfirming = false;
+        _restoreFile       = null;
+        _dataMsg           = "";
+    }
+
+    private async Task PerformRestore()
+    {
+        if (_restoreFile is null) return;
+        _dataWorking = true;
+        _dataAction  = "restore";
+        _dataMsg     = "";
+        StateHasChanged();
+        try
+        {
+            const long maxBytes = 500L * 1024 * 1024;
+            using var content = new System.Net.Http.MultipartFormDataContent();
+            var stream = _restoreFile.OpenReadStream(maxAllowedSize: maxBytes);
+            content.Add(new System.Net.Http.StreamContent(stream), "file", _restoreFile.Name);
+            var client = HttpClientFactory.CreateClient();
+            var baseUri = NavigationManager.BaseUri.TrimEnd('/');
+            var resp = await client.PostAsync(baseUri + "/api/admin/restore", content);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var err = await resp.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(err);
+            }
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _dataMsg = $"Restore failed: {ex.Message}";
+            _dataOk  = false;
+            _dataWorking = false;
+            _dataAction  = "";
+            _restoreConfirming = false;
+        }
+    }
+
+    private async Task PruneRuns()
+    {
+        if (_pruningDays < 1) { _pruneResult = "Enter a value of at least 1 day."; return; }
+        _dataWorking = true;
+        _dataAction  = "prune";
+        _pruneResult = "";
+        StateHasChanged();
+        try
+        {
+            var cutoff   = DateTime.UtcNow.AddDays(-_pruningDays);
+            var toDelete = await Db.Runs
+                .Where(r => r.StartedAt < cutoff && r.Status != "running")
+                .ToListAsync();
+            if (toDelete.Count == 0)
+            {
+                _pruneResult = $"No runs found older than {_pruningDays} days.";
+            }
+            else
+            {
+                Db.Runs.RemoveRange(toDelete);
+                await Db.SaveChangesAsync();
+                _pruneResult = $"\u2713 Deleted {toDelete.Count} run(s) older than {_pruningDays} days.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _pruneResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _dataWorking = false;
+            _dataAction  = "";
+        }
+    }
 }

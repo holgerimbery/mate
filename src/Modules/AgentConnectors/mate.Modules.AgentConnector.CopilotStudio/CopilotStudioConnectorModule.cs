@@ -56,27 +56,30 @@ public sealed class CopilotStudioConnectorModule : IAgentConnectorModule
             ?? throw new InvalidOperationException(
                 $"Failed to deserialize {nameof(CopilotStudioConnectorConfig)} from ConfigJson.");
 
-        // Resolve the appropriate secret based on the authentication mode
+        // Resolve the appropriate secret based on the authentication mode.
+        // Resolution order: ResolvedSecrets dictionary (populated by Core from ISecretService),
+        // then fall back to using the ref value itself (supports wizard direct-entry and
+        // local dev where the raw secret is pasted directly into the form).
         if (raw.UseWebChannelSecret)
         {
-            if (!config.ResolvedSecrets.TryGetValue(raw.WebChannelSecretRef, out var wcSecret)
-                || string.IsNullOrWhiteSpace(wcSecret))
-            {
+            config.ResolvedSecrets.TryGetValue(raw.WebChannelSecretRef, out var wcSecret);
+            if (string.IsNullOrWhiteSpace(wcSecret))
+                wcSecret = raw.WebChannelSecretRef; // direct-value fallback
+            if (string.IsNullOrWhiteSpace(wcSecret))
                 throw new InvalidOperationException(
-                    $"Web Channel Security secret reference '{raw.WebChannelSecretRef}' was not resolved. " +
-                    $"Ensure the secret is set in the secret store.");
-            }
+                    "Web Channel Security secret is not configured. " +
+                    "Enter the secret value or set an environment variable with the reference name.");
             raw.WebChannelSecret = wcSecret;
         }
         else
         {
-            if (!config.ResolvedSecrets.TryGetValue(raw.DirectLineSecretRef, out var dlSecret)
-                || string.IsNullOrWhiteSpace(dlSecret))
-            {
+            config.ResolvedSecrets.TryGetValue(raw.DirectLineSecretRef, out var dlSecret);
+            if (string.IsNullOrWhiteSpace(dlSecret))
+                dlSecret = raw.DirectLineSecretRef; // direct-value fallback
+            if (string.IsNullOrWhiteSpace(dlSecret))
                 throw new InvalidOperationException(
-                    $"Direct Line secret reference '{raw.DirectLineSecretRef}' was not resolved. " +
-                    $"Ensure the secret is set in the secret store.");
-            }
+                    "Direct Line secret is not configured. " +
+                    "Enter the secret value or set an environment variable with the reference name.");
             raw.DirectLineSecret = dlSecret;
         }
 

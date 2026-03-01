@@ -1,6 +1,35 @@
 // mate — WebUI JavaScript helpers
 // v0.1.0
 
+// ── Dark mode ────────────────────────────────────────────────────────────────
+
+window.mateInitDarkMode = function () {
+    const saved = localStorage.getItem('mate-theme');
+    if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    return saved === 'dark';
+};
+
+window.mateSetDarkMode = function (enabled) {
+    if (enabled) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('mate-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('mate-theme', 'light');
+    }
+};
+
+window.mateGetDarkMode = function () {
+    return document.documentElement.getAttribute('data-theme') === 'dark';
+};
+
+// Auto-initialise from localStorage before first render
+(function () { window.mateInitDarkMode(); })();
+
 window.downloadCsvFromBase64 = function (base64, fileName) {
     const a = document.createElement('a');
     a.href = 'data:text/csv;base64,' + base64;
@@ -32,4 +61,13 @@ window.scrollToTop = function () {
 window.focusElement = function (elementId) {
     const el = document.getElementById(elementId);
     if (el) el.focus();
+};
+
+window.triggerUrlDownload = function (url) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 };

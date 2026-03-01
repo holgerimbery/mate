@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using mate.Data;
 
@@ -10,9 +11,11 @@ using mate.Data;
 namespace mate.Data.Migrations
 {
     [DbContext(typeof(mateDbContext))]
-    partial class mateDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260228201701_AddQGenNameAndDefault")]
+    partial class AddQGenNameAndDefault
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.2");
