@@ -147,4 +147,12 @@ See [BACKLOG.md](BACKLOG.md) for planned epics and work items.
 
 ## License
 
-Private repository — © Holger Imbery. All rights reserved.
+© Holger Imbery. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to use
+the Software for personal, educational, or research purposes only, subject to
+the following conditions:
+
+Commercial use of the Software, in whole or in part, is strictly prohibited
+without prior written permission from the copyright holder
