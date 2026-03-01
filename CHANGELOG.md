@@ -15,21 +15,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Removed `DataProtection` key persistence**: `PersistKeysToFileSystem` + `SetApplicationName` were removed from `Program.cs`. Persisted keys on the Docker volume caused cookie decryption failures when the container restarted and generated new in-memory keys that couldn't decrypt the old cookies. In-memory keys (ASP.NET Core default) are correct for this deployment — matching MaaJforMCS.
 - **User display name shows "U User"** (`EntraIdAuthModule`): `ClaimsIdentity` was constructed without `nameType`, defaulting to the `ClaimTypes.Name` long URI; Entra sends the display name under the short key `"name"`. Fixed by passing `nameType: "name", roleType: ClaimTypes.Role` to the `ClaimsIdentity` constructor in `TransformClaimsAsync`.
 - **Auth log noise reduced**: `appsettings.json` Serilog override levels for `Microsoft.AspNetCore.Authentication`, `Microsoft.AspNetCore.Authentication.Cookies`, `Microsoft.AspNetCore.Authentication.OpenIdConnect`, `Microsoft.Identity.Web`, and `Microsoft.IdentityModel` restored to `Warning` (were set to `Debug` during debugging session).
+- **`EntraIdAuthModule.cs`**: removed duplicate `AddMicrosoftIdentityUI` static method and leftover `RegisterEntraIdAuth` static method introduced during session 12 experiments — restored `ConfigureAuthentication` to pre-session state (`AddMicrosoftIdentityWebApp` + `AddMicrosoftIdentityWebApi` + `IClaimsTransformation`)
+- **`Program.cs` auth section**: restored `AuthenticationBuilder` ternary pattern with explicit `DefaultScheme/DefaultChallengeScheme/DefaultSignInScheme` + `authModule.ConfigureAuthentication(authBuilder, config)` + `AddMicrosoftIdentityUI` call — removed `RegisterEntraIdAuth` branch introduced during session 12
 
 ### Changed
 - **`DataServiceExtensions.AddmateSqlite`**: removed `sp.GetService<ITenantContext>()` call from the `AddDbContext` options factory — it was a no-op that triggered the circular DI chain.
 - **`infra/local/.env`**: `Authentication__Scheme` set to `EntraId` — production deployment at `https://maaj.imbery.de` is now the default.
-
----
-
-## [Unreleased] — Session 13
-
-### Changed
 - **`.env` `Authentication__Scheme`**: switched back to `None` — unauthenticated mode for local development; EntraId flow blocked by browser Mixed Content policy (HTTPS Azure AD → HTTP localhost form POST)
-
-### Fixed
-- **`EntraIdAuthModule.cs`**: removed duplicate `AddMicrosoftIdentityUI` static method and leftover `RegisterEntraIdAuth` static method introduced during session 12 experiments — restored `ConfigureAuthentication` to pre-session state (`AddMicrosoftIdentityWebApp` + `AddMicrosoftIdentityWebApi` + `IClaimsTransformation`)
-- **`Program.cs` auth section**: restored `AuthenticationBuilder` ternary pattern with explicit `DefaultScheme/DefaultChallengeScheme/DefaultSignInScheme` + `authModule.ConfigureAuthentication(authBuilder, config)` + `AddMicrosoftIdentityUI` call — removed `RegisterEntraIdAuth` branch introduced during session 12
 
 ### Known Issue
 - **EntraId login on HTTP localhost is blocked by browser**: Azure AD's KMSI page at `https://login.microsoftonline.com/kmsi` performs a `form_post` back to `http://localhost:5000/signin-oidc`. Modern browsers (Edge, Chrome) silently block HTTPS→HTTP cross-origin form submissions as Mixed Content — even with Automatic HTTPS disabled. The container receives no callback. Resolution requires HTTPS on localhost (ASP.NET Core dev cert in Docker)
