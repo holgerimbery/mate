@@ -1,4 +1,4 @@
-![version](https://img.shields.io/github/v/release/holgerimbery/mate)
+![version](https://img.shields.io/github/v/release/holgerimbery/mate) [!License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 # **mate** — a multi-agent test environment for AI agents.
 <p align="center">
   <img src="src/Host/mate.WebUI/wwwroot/mate-logo.png" width="220" alt="Multi-Agent Assessment & Judgement Logo">
