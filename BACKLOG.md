@@ -27,6 +27,7 @@
 | E15 | Multi-Agent Execution & Comparison | High |
 | E16 | Notifications & Scheduled Runs | Medium |
 | E17 | Extended Document Sources | Medium |
+| E18 | Dynamic Binary Module System (Plugins) | High |
 
 ---
 
@@ -432,9 +433,61 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 ---
 
-## E14 — HTTPS on localhost (dev cert for Docker)
+## E18 — Dynamic Binary Module System (Plugins)
 
-### v0.1.0
+> Concept document: `dynamic-modules.md` at repo root.
+> Scope: Agent Connectors and Testing Modules only. Auth and Monitoring modules remain host-compiled.
+
+### v0.3.0 — Contracts & Infrastructure
+
+- [ ] **E18-01** Add `IModulePlugin` interface to `mate.Domain` (`Contracts/Modules/IModulePlugin.cs`) — `PluginId`, `PluginVersion`, `PluginType`, `void Register(IServiceCollection, IConfiguration)`
+- [ ] **E18-02** Add `MatePluginLoadContext` to `mate.Core` — extends `AssemblyLoadContext` (`isCollectible: true`); resolves `mate.Domain` against host's already-loaded copy to prevent duplicate interface types
+- [ ] **E18-03** Add `PluginLoader` to `mate.Core` — scans configured directory for `*.dll`, loads each into `MatePluginLoadContext`, finds types implementing `IModulePlugin`, validates `PluginType` allow-list, calls `plugin.Register(services, config)`
+- [ ] **E18-04** Wire `PluginLoader.DiscoverAndLoad(builder.Services, config)` into `Program.cs` before the `mateModuleRegistry` population loop; existing `AddmateXxxModule(...)` calls remain unchanged
+- [ ] **E18-05** Add `Plugins` config section to `appsettings.json` — `Path` (default `/app/plugins`), `Enabled` (default `false`), `SkipSignatureCheck` (default `false`, dev only)
+- [ ] **E18-06** Add `MATE_PLUGIN_PATH` environment variable override for plugin directory path
+- [ ] **E18-07** Add audit logging for plugin load/reject events — `AuditHelper.Log(db, ...)` with entity type `"Plugin"`, action `"PluginLoaded"` or `"PluginRejected"`, details containing plugin id, version, and DLL path
+
+### v0.3.0 — Security
+
+- [ ] **E18-08** Implement Authenticode signature verification in `PluginLoader` — reject unsigned DLLs when `Plugins:SkipSignatureCheck=false`; read allowed publisher thumbprints from `Plugins:AllowedThumbprints[]` config
+- [ ] **E18-09** SSRF protection for plugin-declared HTTP base URLs — validate connector `ConfigSchema` URL fields against existing SSRF block-list before secrets are passed to connectors at runtime
+- [ ] **E18-10** Dev-mode signature bypass — `Plugins:SkipSignatureCheck=true` logs a prominent warning but does not hard-fail; blocked when `ASPNETCORE_ENVIRONMENT=Production`
+
+### v0.3.0 — Plugin Discovery Modes
+
+- [ ] **E18-11** Mode 1 — Folder drop: Docker Compose `./plugins:/app/plugins:ro` volume mount; documented in `infra/local/docker-compose.yml` comments
+- [ ] **E18-12** Mode 2 — NuGet-based: `mate plugin add <package>` CLI command (`E18-CLI`) that `dotnet restore`s the package into the plugins folder; host only sees final DLLs, no NuGet restore at runtime
+- [ ] **E18-13** Mode 3 — Allow-list: `MATE_ENABLED_CONNECTORS` and `MATE_ENABLED_JUDGES` env vars; `PluginLoader` skips plugins whose `PluginId` is absent; loads all if list is absent
+
+### v0.3.0 — UI & Settings
+
+- [ ] **E18-14** Settings — Modules tab: add "Source" column showing `Built-in` vs `Plugin (v{version})` for each registered module
+- [ ] **E18-15** Settings — Plugins tab (new): list all loaded plugin DLLs with name, version, type, load status (`Loaded` / `Rejected`), and reject reason if applicable
+- [ ] **E18-16** Plugins tab: "Reload Plugins" button — triggers `PluginLoader` rescan without host restart (requires `isCollectible` unload support; blocked until OD-1 decided)
+
+### v0.3.0 — Worker Parity
+
+- [ ] **E18-17** `mate.Worker` `Program.cs`: add same `PluginLoader.DiscoverAndLoad(...)` call so execution engine picks up the same connector and judge plugins as the WebUI
+- [ ] **E18-18** Shared plugins volume: update `docker-compose.yml` to mount the same `./plugins` directory into both `mate-webui` and `mate-worker` containers
+
+### v0.3.0 — SDK & Documentation
+
+- [ ] **E18-19** Create `mate.PluginSDK` NuGet package — ships `mate.Domain` contracts + `IModulePlugin` interface + a project template (`dotnet new mate-plugin`) with the correct `<PackageReference>` and a stub `IModulePlugin` implementation
+- [ ] **E18-20** `docs/modules/plugin-authoring.md` — step-by-step guide: create project, implement `IModulePlugin`, implement `IAgentConnectorModule`/`ITestingModule`, sign the DLL, drop into plugins folder
+- [ ] **E18-21** `docs/modules/plugin-security.md` — signing requirements, thumbprint allow-list config, SSRF rules, audit log entries
+
+### Open Decisions (must resolve before implementation)
+
+- [ ] **E18-OD1** Decide: hot-reload (unload + reload without restart) vs startup-only — *recommendation: startup-only for v1*
+- [ ] **E18-OD2** Decide: Worker plugin discovery — separate directory or shared volume — *recommendation: shared volume*
+- [ ] **E18-OD3** Decide: plugin config namespacing — flat root vs `Plugins:{PluginId}:{Key}` — *recommendation: namespaced*
+- [ ] **E18-OD4** Decide: minimum plugin .NET TFM — `net9.0` only vs `netstandard2.1` — *recommendation: `net9.0` only for v1*
+- [ ] **E18-OD5** Decide: signing enforcement — dev skippable, prod always enforced — *recommendation: yes, guard with `ASPNETCORE_ENVIRONMENT` check*
+
+---
+
+## E14 — HTTPS on localhost (dev cert for Docker)
 
 - [ ] **E14-01** Generate ASP.NET Core dev certificate on host: `dotnet dev-certs https --export-path ./infra/local/certs/aspnetapp.pfx --password <pwd>`
 - [ ] **E14-02** Mount cert into `mate-webui` container; set `ASPNETCORE_Kestrel__Certificates__Default__Path` + `__Password` env vars
