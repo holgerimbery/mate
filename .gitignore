@@ -18,6 +18,7 @@ project.lock.json
 
 # Local data / secrets
 data/
+memory.txt
 logs/
 *.db
 *.db-shm
@@ -26,9 +27,11 @@ logs/
 # Docker local overrides
 infra/local/.env
 
-# Environment / secrets
+# Environment / secrets — ignore all .env files …
 *.env
-.env.*
+# … but always track the template (contains only placeholders, no real values)
+!infra/local/.env.template
+!.env.template
 appsettings.*.json
 !appsettings.Development.json
 !appsettings.template.json
