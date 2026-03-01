@@ -1,6 +1,4 @@
-# mate
-
-**mate** — a multi-agent test environment for AI agents.
+# **mate** — a multi-agent test environment for AI agents.
 
 mate connects to multiple AI agents, runs automated evaluation suites against them, and tracks quality over time. It supports Microsoft Copilot Studio, Azure AI Foundry, generic HTTP agents, and Parloa out of the box — and is extensible with custom connector and judge modules.
 
