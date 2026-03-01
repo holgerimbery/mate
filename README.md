@@ -1,4 +1,9 @@
+![version](https://img.shields.io/github/v/release/holgerimbery/mate)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 # **mate** — a multi-agent test environment for AI agents.
+<p align="center">
+  <img src="src/Host/mate.WebUI/wwwroot/mate-logo.png" width="220" alt="Multi-Agent Assessment & Judgement Logo">
+</p>
 
 mate connects to multiple AI agents, runs automated evaluation suites against them, tracks quality over time, and red-teams them for adversarial vulnerabilities. It supports Microsoft Copilot Studio, Azure AI Foundry, generic HTTP agents, and Parloa out of the box — and is extensible with custom connector, judge, and red-team modules.
 
@@ -147,4 +152,12 @@ See [BACKLOG.md](BACKLOG.md) for planned epics and work items.
 
 ## License
 
-Private repository — © Holger Imbery. All rights reserved.
+© Holger Imbery. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to use
+the Software for personal, educational, or research purposes only, subject to
+the following conditions:
+
+Commercial use of the Software, in whole or in part, is strictly prohibited
+without prior written permission from the copyright holder
