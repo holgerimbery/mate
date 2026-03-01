@@ -16,6 +16,13 @@ public class TestSuite
     /// <summary>Per-suite judge override. Null = use agent or global JudgeSetting.</summary>
     public Guid? JudgeSettingId { get; set; }
 
+    /// <summary>
+    /// Optional delay (milliseconds) between executing individual test cases.
+    /// Use to avoid triggering rate-limit errors on the target agent (e.g. GenAIToolPlannerRateLimitReached).
+    /// 0 = no delay (default).
+    /// </summary>
+    public int DelayBetweenTestsMs { get; set; } = 0;
+
     public string[] Tags { get; set; } = [];
 
     public bool IsActive { get; set; } = true;

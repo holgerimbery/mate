@@ -174,6 +174,7 @@ public static class RubricsJudgeModuleExtensions
     public static IServiceCollection AddmateRubricsJudgeModule(this IServiceCollection services)
     {
         services.AddSingleton<RubricsJudgeProvider>();
+        services.AddSingleton<IJudgeProvider>(sp => sp.GetRequiredService<RubricsJudgeProvider>());
         services.AddSingleton<ITestingModule, RubricsJudgeModule>();
         return services;
     }

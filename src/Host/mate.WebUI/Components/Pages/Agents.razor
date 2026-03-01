@@ -359,6 +359,7 @@ else
 
 @code {
     private bool _loading = true;
+    private string _userId = string.Empty;
     private List<Agent> _agents = [];
     private List<IAgentConnectorModule> _connectorModules = [];
     private bool _showForm;
@@ -451,6 +452,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.Identity?.Name ?? string.Empty;
         _connectorModules = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
         if (_connectorModules.Any())
         {
@@ -585,6 +588,7 @@ else
                 });
             }
             Db.Agents.Add(agent);
+            AuditHelper.Log(Db, TenantCtx.TenantId, "Created", "Agent", agent.Id, _userId, agent.Name);
         }
         else
         {
@@ -602,6 +606,7 @@ else
             {
                 firstConn.ConfigJson = BuildFormConfigJson();
             }
+            AuditHelper.Log(Db, _editAgent.TenantId, "Updated", "Agent", _editAgent.Id, _userId, _editAgent.Name);
         }
 
         await Db.SaveChangesAsync();
@@ -675,6 +680,7 @@ else
     private async Task DeleteAgent()
     {
         if (_deleteAgent is null) return;
+        AuditHelper.Log(Db, _deleteAgent.TenantId, "Deleted", "Agent", _deleteAgent.Id, _userId, _deleteAgent.Name);
         Db.Agents.Remove(_deleteAgent);
         await Db.SaveChangesAsync();
         _deleteAgent = null;

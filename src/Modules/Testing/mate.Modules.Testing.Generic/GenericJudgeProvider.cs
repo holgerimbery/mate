@@ -87,6 +87,7 @@ public static class GenericTestingModuleExtensions
     public static IServiceCollection AddmateGenericTestingModule(this IServiceCollection services)
     {
         services.AddSingleton<GenericJudgeProvider>();
+        services.AddSingleton<IJudgeProvider>(sp => sp.GetRequiredService<GenericJudgeProvider>());
         services.AddSingleton<GenericTestingModule>();
         return services;
     }

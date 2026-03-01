@@ -1,0 +1,330 @@
+@attribute [Authorize]
+@page "/api-keys"
+@using mate.Domain.Entities
+@using mate.Domain
+@using mate.Data
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Cryptography
+@inject mateDbContext Db
+@inject IJSRuntime JS
+@inject ITenantContext TenantCtx
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>API Keys — @BrandInfo.BrandName</PageTitle>
+
+@if (!_showCreateForm)
+{
+    <div class="mate-header">
+        <h1>API Keys</h1>
+        <p>Machine-to-machine keys for CI/CD pipelines and external tooling. The raw key is shown only once on creation — store it in a secure secret store.</p>
+    </div>
+    <div class="mate-page">
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert alert-error mb-3 d-flex justify-content-between align-items-center">
+            <span>@_error</span>
+            <button class="btn btn-sm btn-secondary" @onclick="() => _error = string.Empty">Dismiss</button>
+        </div>
+    }
+
+    @* ── Raw-key reveal banner ─────────────────────────────────────────────── *@
+    @if (_newRawKey is not null)
+    {
+        <div class="alert alert-success mb-4">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div style="min-width: 0;">
+                    <strong><i class="bi bi-key me-1"></i>New API key — copy now, it will not be shown again:</strong><br />
+                    <code style="font-size:13px;word-break:break-all">@_newRawKey</code>
+                </div>
+                <div class="d-flex gap-2 flex-shrink-0">
+                    <button class="btn btn-sm btn-outline-success" @onclick="CopyKey" title="Copy to clipboard">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" @onclick="() => _newRawKey = null">Dismiss</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Key list ────────────────────────────────────────────────────────────── *@
+    <div class="section-card">
+        <div class="section-header mb-3">
+            <span class="section-title">API Keys</span>
+            <button class="btn btn-primary btn-sm" @onclick="OpenCreateForm">
+                <i class="bi bi-plus-lg me-1"></i>Generate Key
+            </button>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="d-flex align-items-center gap-2">
+                <span class="spinner"></span><span>Loading…</span>
+            </div>
+        }
+        else if (!_keys.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-key"></i>
+                <h3>No API keys yet</h3>
+                <p>Generate a key to enable CI/CD pipeline integration and external API access.</p>
+            </div>
+        }
+        else
+        {
+            <div class="data-table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Prefix</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Created By</th>
+                            <th>Last Used</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var key in _keys)
+                        {
+                            <tr style="@(key.IsActive ? "" : "opacity:0.6")">
+                                <td><strong>@key.Name</strong></td>
+                                <td><code style="font-size:12px">@key.Prefix…</code></td>
+                                <td><span class="connector-badge">@key.Role</span></td>
+                                <td>
+                                    @if (key.IsActive)
+                                    { <span class="badge badge-pass">Active</span> }
+                                    else
+                                    { <span class="badge badge-fail">Revoked</span> }
+                                </td>
+                                <td style="font-size:12px;white-space:nowrap">@key.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td style="font-size:12px">@(string.IsNullOrEmpty(key.CreatedBy) ? "—" : key.CreatedBy)</td>
+                                <td style="font-size:12px;white-space:nowrap">@(key.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                                <td>
+                                    @if (key.IsActive)
+                                    {
+                                        <button class="btn btn-sm btn-danger" @onclick="() => RevokeKey(key)">
+                                            <i class="bi bi-x-circle me-1"></i>Revoke
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => DeleteKey(key)"
+                                                title="Permanently delete this revoked key">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @* Usage hint ────────────────────────────────────────────────────────────── *@
+    <div class="section-card mt-3" style="font-size:13px">
+        <i class="bi bi-info-circle me-1"></i>
+        Pass the key in all REST API requests via the <code>X-Api-Key</code> header.<br />
+        Role <strong>Viewer</strong> — read-only access.
+        Role <strong>Tester</strong> — can trigger runs.
+        Role <strong>Admin</strong> — full access equivalent to an authenticated admin user.
+    </div>
+
+    </div>
+}
+else
+{
+    <div class="mate-header">
+        <h1>Generate API Key</h1>
+        <p>Create a new machine-to-machine key. The raw key is shown only once — store it securely.</p>
+    </div>
+    <div class="mate-page">
+        <div class="section-card">
+            <h2 class="section-title mb-4">Key Details</h2>
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input class="form-control" @bind="_newKeyName" placeholder="e.g. GitHub Actions CI" maxlength="100" />
+                <small class="text-muted">A descriptive label so you can identify this key later.</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Role</label>
+                <select class="form-control" @bind="_newKeyRole">
+                    <option value="Viewer">Viewer — read-only access</option>
+                    <option value="Tester">Tester — can trigger test runs</option>
+                    <option value="Admin">Admin — full access</option>
+                </select>
+                <small class="text-muted">Controls what the key is authorised to do. Use the least privilege required.</small>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_createError))
+            {
+                <div class="alert alert-danger"><i class="bi bi-exclamation-circle me-1"></i>@_createError</div>
+            }
+        </div>
+
+        <div class="d-flex gap-2 mb-4">
+            <button class="btn btn-primary" disabled="@_creating" @onclick="GenerateKey">
+                @if (_creating)
+                {
+                    <span class="spinner me-2"></span>
+                }
+                <i class="bi bi-key me-1"></i> Generate Key
+            </button>
+            <button class="btn btn-secondary" @onclick="CloseCreateForm">
+                <i class="bi bi-x-lg"></i> Cancel
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ApiKey> _keys = [];
+    private bool _loading = true;
+    private string _error = string.Empty;
+    private string _userId = string.Empty;
+
+    // Create form
+    private bool _showCreateForm;
+    private bool _creating;
+    private string _newKeyName = string.Empty;
+    private string _newKeyRole = "Tester";
+    private string _createError = string.Empty;
+    private string? _newRawKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.Identity?.Name ?? string.Empty;
+        await LoadKeysAsync();
+    }
+
+    private void OpenCreateForm()
+    {
+        _newKeyName = string.Empty;
+        _newKeyRole = "Tester";
+        _createError = string.Empty;
+        _showCreateForm = true;
+    }
+
+    private void CloseCreateForm()
+    {
+        _showCreateForm = false;
+        _createError = string.Empty;
+    }
+
+    private async Task LoadKeysAsync()
+    {
+        _loading = true;
+        try
+        {
+            _keys = await Db.ApiKeys
+                .Where(k => k.TenantId == TenantCtx.TenantId)
+                .OrderByDescending(k => k.CreatedAt)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error loading API keys: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task GenerateKey()
+    {
+        _createError = string.Empty;
+        if (string.IsNullOrWhiteSpace(_newKeyName)) { _createError = "Name is required."; return; }
+
+        _creating = true;
+        try
+        {
+            var rawKey = $"mate_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
+            var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var createdBy = authState.User.Identity?.Name ?? string.Empty;
+
+            var key = new ApiKey
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantCtx.TenantId,
+                Name = _newKeyName.Trim(),
+                Prefix = rawKey[..12],
+                KeyHash = hash,
+                Role = _newKeyRole,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = createdBy
+            };
+            Db.ApiKeys.Add(key);
+            AuditHelper.Log(Db, TenantCtx.TenantId, "Created", "ApiKey", key.Id, createdBy, $"{key.Name} (role: {key.Role})");
+            await Db.SaveChangesAsync();
+
+            _newRawKey = rawKey;
+            CloseCreateForm();
+            await LoadKeysAsync();
+        }
+        catch (Exception ex)
+        {
+            _createError = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private async Task RevokeKey(ApiKey key)
+    {
+        try
+        {
+            var dbKey = await Db.ApiKeys.FindAsync(key.Id);
+            if (dbKey is not null)
+            {
+                dbKey.IsActive = false;
+                AuditHelper.Log(Db, dbKey.TenantId, "KeyRevoked", "ApiKey", dbKey.Id, _userId, dbKey.Name);
+                await Db.SaveChangesAsync();
+                key.IsActive = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error revoking key: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteKey(ApiKey key)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Permanently delete the revoked key '{key.Name}'? This cannot be undone.");
+        if (!confirmed) return;
+        try
+        {
+            var dbKey = await Db.ApiKeys.FindAsync(key.Id);
+            if (dbKey is not null)
+            {
+                AuditHelper.Log(Db, dbKey.TenantId, "Deleted", "ApiKey", dbKey.Id, _userId, dbKey.Name);
+                Db.ApiKeys.Remove(dbKey);
+                await Db.SaveChangesAsync();
+                _keys.Remove(key);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error deleting key: {ex.Message}";
+        }
+    }
+
+    private async Task CopyKey()
+    {
+        if (_newRawKey is not null)
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _newRawKey);
+    }
+}

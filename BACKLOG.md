@@ -144,7 +144,7 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 - [ ] **E4-10** **Run Report page** — results table, transcript modal, human verdict override
 - [x] **E4-11** **Help page** — documentation links, REST API reference table, OpenAPI download, Interactive API Explorer link
 - [x] **E4-12** **Audit Log page** (admin) — paginated event log with filters
-- [ ] **E4-13** **API Keys page** (admin) — generate, list, revoke keys; show scopes
+- [x] **E4-13** **API Keys page** (admin) — generate, list, revoke keys; show scopes
 - [x] **E4-14** **Settings page** (admin) — tabs: AI Judge config, Question Generation, Modules, Tenant
 
 ### v0.1.0 — Visual Design

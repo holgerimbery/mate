@@ -16,7 +16,7 @@
 
 <PageTitle>Test Suites — @BrandInfo.BrandName</PageTitle>
 
-@if (!_showSuiteForm)
+@if (!_showSuiteForm && _runSuite is null)
 {
     <div class="mate-header">
         <h1>Test Suites</h1>
@@ -129,7 +129,7 @@
         </div>
     </div>
 }
-else
+else if (_showSuiteForm)
 {
     <div class="mate-header">
         <h1>@(_editSuite is null ? "New Test Suite" : "Edit Test Suite — " + _editSuite.Name)</h1>
@@ -154,6 +154,11 @@ else
                 <label class="form-label">Pass Threshold (0–1)</label>
                 <input class="form-control" type="number" min="0" max="1" step="0.05" @bind="_suiteForm.PassThreshold" style="width:140px" />
                 <small class="text-muted">Score 0–1 required to pass (e.g. 0.7 = 70%)</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Delay Between Tests <small class="text-muted">(milliseconds)</small></label>
+                <input class="form-control" type="number" min="0" max="60000" step="500" @bind="_suiteForm.DelayBetweenTestsMs" style="width:160px" />
+                <small class="text-muted">Pause between each test case execution. Increase if the agent returns rate-limit errors (e.g. 2000 = 2 s). 0 = no delay.</small>
             </div>
             @if (_editSuite is not null)
             {
@@ -396,35 +401,94 @@ else
     </div>
 }
 
-@* ── Run modal ────────────────────────────────────────────────────────────── *@
-@if (_runSuite is not null)
+@* ── Run view (in-page, no modal) ────────────────────────────────────────── *@
+@if (_runSuite is not null && !_showSuiteForm)
 {
-    <div class="modal-backdrop" @onclick="CloseRunModal">
-        <div class="modal-box" @onclick:stopPropagation>
-            <h2 class="modal-title mb-4">Run: @_runSuite.Name</h2>
-            <div class="form-group">
-                <label class="form-label">Select Agent</label>
-                <select class="form-control" @bind="_selectedAgentId">
-                    <option value="">— choose agent —</option>
-                    @foreach (var agent in _agents)
-                    {
-                        <option value="@agent.Id">@agent.Name (@agent.Environment)</option>
-                    }
-                </select>
+    <div class="mate-header">
+        <h1>Run — @_runSuite.Name</h1>
+        <p>Configure and start a test run for this suite.</p>
+    </div>
+    <div class="mate-page">
+        <div class="section-card">
+            <h2 class="section-title mb-4">Suite Details</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Suite</label>
+                        <div class="fw-600">@_runSuite.Name</div>
+                        @if (!string.IsNullOrWhiteSpace(_runSuite.Description))
+                        {
+                            <small class="text-muted">@_runSuite.Description</small>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Active Test Cases</label>
+                        <div class="fw-600">@_runSuite.TestCases.Count(tc => tc.IsActive)</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Pass Threshold</label>
+                        <div class="fw-600">@((_runSuite.PassThreshold * 100).ToString("0"))%</div>
+                    </div>
+                </div>
             </div>
+        </div>
+
+        <div class="section-card">
+            <h2 class="section-title mb-4">Run Configuration</h2>
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <div class="form-group">
+                        <label class="form-label">Agent *</label>
+                        <select class="form-control" @bind="_selectedAgentId">
+                            <option value="">— choose agent —</option>
+                            @foreach (var agent in _agents)
+                            {
+                                <option value="@agent.Id">@agent.Name (@agent.Environment)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Judge</label>
+                        <div class="text-muted" style="font-size:13px;padding-top:6px">
+                            @if (_runSuite.JudgeSettingId.HasValue)
+                            {
+                                var j = _judgeSettings.FirstOrDefault(x => x.Id == _runSuite.JudgeSettingId);
+                                @(j?.Name ?? "Suite default")
+                            }
+                            else
+                            {
+                                <span>Tenant default</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             @if (_runInProgress)
             {
-                <div class="d-flex align-items-center gap-2"><span class="spinner"></span><span>@_runStatus</span></div>
+                <div class="d-flex align-items-center gap-3 mt-3">
+                    <span class="spinner"></span>
+                    <span>@_runStatus</span>
+                </div>
             }
+
             @if (!string.IsNullOrWhiteSpace(_runError))
             {
-                <div class="alert alert-danger"><i class="bi bi-exclamation-circle"></i> @_runError</div>
+                <div class="alert alert-danger mt-3"><i class="bi bi-exclamation-circle"></i> @_runError</div>
             }
-            <div class="modal-actions">
-                <button class="btn btn-primary" disabled="@_runInProgress" @onclick="StartRun">
+
+            <div class="d-flex gap-2 mt-4">
+                <button class="btn btn-primary" @onclick="StartRun"
+                        disabled="@(string.IsNullOrEmpty(_selectedAgentId) || _runInProgress)">
                     <i class="bi bi-play-fill"></i> Start Run
                 </button>
-                <button class="btn btn-secondary" @onclick="CloseRunModal">Cancel</button>
+                <button class="btn btn-secondary" @onclick="CloseRunModal" disabled="@_runInProgress">Cancel</button>
             </div>
         </div>
     </div>
@@ -461,6 +525,7 @@ else
 
 @code {
     private bool _loading = true;
+    private string _userId = string.Empty;
     private List<TestSuite> _suites = [];
     private List<Agent> _agents = [];
     private List<JudgeSetting> _judgeSettings = [];
@@ -509,6 +574,7 @@ else
         public double PassThreshold { get; set; } = 0.7;
         public bool IsActive { get; set; } = true;
         public string JudgeSettingId { get; set; } = string.Empty;
+        public int DelayBetweenTestsMs { get; set; } = 0;
         public string QuestionGenPrompt { get; set; } = string.Empty;
         public int QuestionGenCount { get; set; } = 10;
     }
@@ -528,6 +594,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.Identity?.Name ?? string.Empty;
         await LoadAsync();
     }
 
@@ -568,7 +636,8 @@ else
             TagsRaw = string.Join(", ", s.Tags),
             PassThreshold = s.PassThreshold,
             IsActive = s.IsActive,
-            JudgeSettingId = s.JudgeSettingId?.ToString() ?? string.Empty
+            JudgeSettingId = s.JudgeSettingId?.ToString() ?? string.Empty,
+            DelayBetweenTestsMs = s.DelayBetweenTestsMs
         };
         _suiteFormError = string.Empty;
         _genMessage = string.Empty;
@@ -596,10 +665,12 @@ else
                 PassThreshold = _suiteForm.PassThreshold,
                 IsActive = _suiteForm.IsActive,
                 JudgeSettingId = judgeId,
+                DelayBetweenTestsMs = Math.Max(0, _suiteForm.DelayBetweenTestsMs),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
             Db.TestSuites.Add(suite);
+            AuditHelper.Log(Db, TenantCtx.TenantId, "Created", "TestSuite", suite.Id, _userId, suite.Name);
         }
         else
         {
@@ -609,7 +680,9 @@ else
             _editSuite.PassThreshold = _suiteForm.PassThreshold;
             _editSuite.IsActive = _suiteForm.IsActive;
             _editSuite.JudgeSettingId = judgeId;
+            _editSuite.DelayBetweenTestsMs = Math.Max(0, _suiteForm.DelayBetweenTestsMs);
             _editSuite.UpdatedAt = DateTime.UtcNow;
+            AuditHelper.Log(Db, _editSuite.TenantId, "Updated", "TestSuite", _editSuite.Id, _userId, _editSuite.Name);
         }
         await Db.SaveChangesAsync();
         CloseSuiteForm();
@@ -705,10 +778,18 @@ else
 
         try
         {
-            // Resolve API key secret
-            var apiKey = string.IsNullOrWhiteSpace(_qgenSetting.ApiKeyRef)
-                ? string.Empty
-                : await SecretSvc.GetSecretAsync(_qgenSetting.ApiKeyRef) ?? string.Empty;
+            // Resolve API key secret — fall back to treating the ref as a raw value
+            // (supports legacy configs where the raw key was stored directly in ApiKeyRef)
+            string apiKey;
+            if (string.IsNullOrWhiteSpace(_qgenSetting.ApiKeyRef))
+            {
+                apiKey = string.Empty;
+            }
+            else
+            {
+                try { apiKey = await SecretSvc.GetSecretAsync(_qgenSetting.ApiKeyRef) ?? string.Empty; }
+                catch { apiKey = _qgenSetting.ApiKeyRef; }
+            }
 
             // Collect existing questions to avoid duplicates
             var existingQuestions = _editSuite.TestCases
@@ -793,6 +874,7 @@ else
     private async Task DeleteSuite()
     {
         if (_deleteSuite is null) return;
+        AuditHelper.Log(Db, _deleteSuite.TenantId, "Deleted", "TestSuite", _deleteSuite.Id, _userId, _deleteSuite.Name);
         Db.TestSuites.Remove(_deleteSuite);
         await Db.SaveChangesAsync();
         _deleteSuite = null;
@@ -859,6 +941,7 @@ else
                 UpdatedAt = DateTime.UtcNow
             };
             Db.TestCases.Add(tc);
+            AuditHelper.Log(Db, TenantCtx.TenantId, "Created", "TestCase", tc.Id, _userId, tc.Name);
         }
         else
         {
@@ -872,6 +955,7 @@ else
             _editCase.SortOrder = _caseForm.SortOrder;
             _editCase.IsActive = _caseForm.IsActive;
             _editCase.UpdatedAt = DateTime.UtcNow;
+            AuditHelper.Log(Db, _editCase.TenantId, "Updated", "TestCase", _editCase.Id, _userId, _editCase.Name);
         }
         await Db.SaveChangesAsync();
         CloseCaseForm();
@@ -885,6 +969,7 @@ else
     private async Task DeleteCase()
     {
         if (_deleteCase is null) return;
+        AuditHelper.Log(Db, _deleteCase.TenantId, "Deleted", "TestCase", _deleteCase.Id, _userId, _deleteCase.Name);
         Db.TestCases.Remove(_deleteCase);
         await Db.SaveChangesAsync();
         _deleteCase = null;
@@ -933,6 +1018,7 @@ else
             StartedAt = DateTime.UtcNow
         };
         Db.Runs.Add(run);
+        AuditHelper.Log(Db, run.TenantId, "RunStarted", "Run", run.Id, _userId, $"Suite: {_runSuite.Name}");
         await Db.SaveChangesAsync();
 
         var job = new TestRunJob(

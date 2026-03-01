@@ -1,9 +1,11 @@
+@implements IDisposable
 @attribute [Authorize]
 @page "/runs/{RunId:guid}"
 @using mate.Data
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using System.Text
+@using Markdig
 @inject mateDbContext Db
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -40,11 +42,46 @@ else
             </a>
         </div>
     </div>
+    @if (_transcriptResult is null && _verdictResult is null)
+    {
     <div class="mate-page">
 
-    @if (_run.Status == "running")
+    @* ── Live progress (pending / running) ───────────────────────── *@
+    @if (_run.Status is "pending" or "running")
     {
-        <div class="alert alert-info mb-3"><i class="bi bi-hourglass-split me-1"></i>This run is currently in progress. Refresh for updated results.</div>
+        var _completed = _results.Count;
+        var _total     = _run.TotalTestCases > 0 ? _run.TotalTestCases : 1;
+        var _pct       = Math.Min(100, (int)(100.0 * _completed / _total));
+        <div class="section-card mb-3" style="border-left:4px solid var(--primary)">
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <span class="spinner"></span>
+                <span style="font-weight:600">
+                    @if (_run.Status == "pending")
+                    {
+                        <span>Waiting for worker to pick up run&hellip;</span>
+                    }
+                    else
+                    {
+                        <span>Run in progress &mdash; @_completed&nbsp;/&nbsp;@_run.TotalTestCases tests completed</span>
+                    }
+                </span>
+            </div>
+            @if (_run.Status == "running" && _run.TotalTestCases > 0)
+            {
+                <div style="background:var(--border);border-radius:4px;height:8px;overflow:hidden;margin-bottom:8px">
+                    <div style="height:100%;border-radius:4px;background:var(--primary);width:@(_pct)%;transition:width 0.4s ease"></div>
+                </div>
+                @if (_results.Any())
+                {
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                        @foreach (var _pr in _results.TakeLast(10))
+                        {
+                            <span class="badge badge-@_pr.Verdict" title="@_pr.TestCase?.Name">@(_pr.TestCase?.Name is { Length: > 20 } n ? n[..18] + "\u2026" : _pr.TestCase?.Name ?? "\u2014")</span>
+                        }
+                    </div>
+                }
+            }
+        </div>
     }
 
     <!-- Summary KPI cards -->
@@ -139,6 +176,23 @@ else
         </div>
     }
 
+    @* ── Regression detection ──────────────────────────────────────────────── *@
+    @if (_regressionIds.Count > 0)
+    {
+        <div class="section-card" style="margin-bottom:20px;border-left:4px solid var(--warning)">
+            <h2 class="section-title mb-2">
+                <i class="bi bi-exclamation-triangle me-2" style="color:var(--warning)"></i>@_regressionIds.Count Regression@(_regressionIds.Count == 1 ? "" : "s") Detected
+            </h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:10px">These cases passed in the previous run but failed this time.</p>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var rn in _regressionNames)
+                {
+                    <span class="badge badge-fail"><i class="bi bi-arrow-down-circle me-1"></i>@rn</span>
+                }
+            </div>
+        </div>
+    }
+
     <!-- Results table -->
     <div class="section-card">
         <div class="section-header">
@@ -163,7 +217,9 @@ else
             <tbody>
                 @foreach (var r in _results)
                 {
-                    <tr>
+                    var isExpanded = _expandedResultId == r.Id;
+                    var isRegression = _regressionIds.Contains(r.TestCaseId);
+                    <tr style="@(isRegression ? "background:rgba(245,158,11,0.06)" : "")">
                         <td>@r.TestCase?.Name</td>
                         <td style="text-align:center"><span class="badge badge-@r.Verdict">@r.Verdict</span></td>
                         <td style="text-align:center;font-weight:600">@r.OverallScore.ToString("F2")</td>
@@ -184,10 +240,76 @@ else
                             }
                         </td>
                         <td style="text-align:center">
+                            <button class="btn btn-sm btn-secondary" @onclick="() => ToggleExpand(r)">@(isExpanded ? "▲" : "▼")</button>
                             <button class="btn btn-sm btn-secondary" @onclick="() => ShowTranscript(r)">Transcript</button>
                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenVerdict(r)">Review</button>
                         </td>
                     </tr>
+                    @if (isExpanded)
+                    {
+                        <tr style="background:var(--light-bg);border-bottom:1px solid var(--border)">
+                            <td colspan="11" style="padding:16px 20px">
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px">
+                                    @if (r.TestCase?.UserInput?.Length > 0)
+                                    {
+                                        <div style="background:white;padding:12px;border-radius:6px;border-left:3px solid var(--primary)">
+                                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">User Input</div>
+                                            <div style="font-size:13px;color:var(--text-primary);line-height:1.5">@string.Join(" → ", r.TestCase.UserInput.Take(3))@(r.TestCase.UserInput.Length > 3 ? "…" : "")</div>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(r.TestCase?.ReferenceAnswer) || !string.IsNullOrWhiteSpace(r.TestCase?.AcceptanceCriteria))
+                                    {
+                                        var _exp = r.TestCase?.ReferenceAnswer ?? r.TestCase?.AcceptanceCriteria ?? "";
+                                        <div style="background:white;padding:12px;border-radius:6px;border-left:3px solid var(--success)">
+                                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Expected</div>
+                                            <div style="font-size:13px;color:var(--text-primary);line-height:1.5">@(_exp.Length > 250 ? _exp[..248] + "…" : _exp)</div>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(r.Rationale))
+                                    {
+                                        <div style="background:white;padding:12px;border-radius:6px;border-left:3px solid var(--warning)">
+                                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Judge Rationale</div>
+                                            <div style="font-size:13px;color:var(--text-primary);line-height:1.5">@r.Rationale</div>
+                                        </div>
+                                    }
+                                </div>
+                                @* Dimension score bars *@
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px">
+                                    @foreach (var (lbl, sc) in new[] { ("Task Success", r.TaskSuccessScore), ("Intent Match", r.IntentMatchScore), ("Factuality", r.FactualityScore), ("Helpfulness", r.HelpfulnessScore), ("Safety", r.SafetyScore) })
+                                    {
+                                        var _bc = sc >= 0.8 ? "var(--success)" : sc >= 0.5 ? "var(--warning)" : "var(--danger)";
+                                        <div>
+                                            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                                                <span style="color:var(--text-secondary)">@lbl</span>
+                                                <strong style="color:@_bc">@sc.ToString("P0")</strong>
+                                            </div>
+                                            <div style="background:var(--border);border-radius:3px;height:6px;overflow:hidden">
+                                                <div style="height:100%;border-radius:3px;background:@_bc;width:@((sc * 100).ToString("F1"))%"></div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                @* Score history dots *@
+                                @if (_scoreHistory.TryGetValue(r.TestCaseId, out var _hist) && _hist.Count >= 2)
+                                {
+                                    var _delta = _hist.Last() - _hist.First();
+                                    <div style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:white;border-radius:6px;border-left:3px solid #8b5cf6">
+                                        <span style="font-weight:600;color:#6d28d9">Score history (@_hist.Count runs):</span>
+                                        <div style="display:flex;gap:3px;align-items:center">
+                                            @foreach (var _s in _hist)
+                                            {
+                                                var _dc = _s >= 80 ? "#10b981" : _s >= 60 ? "#f59e0b" : "#ef4444";
+                                                <span title="@_s.ToString("F0")%" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:@_dc"></span>
+                                            }
+                                        </div>
+                                        <span>@_hist.First().ToString("F0")% → @_hist.Last().ToString("F0")%
+                                            <strong style="color:@(_delta > 0 ? "#10b981" : _delta < 0 ? "#ef4444" : "#888");margin-left:4px">@(_delta > 0 ? "↑" : _delta < 0 ? "↓" : "→")@Math.Abs(_delta).ToString("F0")pp</strong>
+                                        </span>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
                 }
                 @if (!_results.Any())
                 {
@@ -200,19 +322,79 @@ else
     </div>
 }
 
-@* ── Transcript modal ─────────────────────────────────────────────────────── *@
-@if (_transcriptResult is not null)
-{
-    <div class="modal-backdrop" @onclick="() => _transcriptResult = null">
-        <div class="modal-box wide-modal" @onclick:stopPropagation>
-            <h2>Transcript — @_transcriptResult.TestCase?.Name</h2>
+@* ── Transcript in-page view ─────────────────────────────────────────────── *@
+    else if (_transcriptResult is not null)
+    {
+    <div class="mate-page">
+        <div class="section-card">
+            <div class="section-header" style="margin-bottom:16px">
+                <h2 class="section-title"><i class="bi bi-chat-left-text me-2"></i>Transcript — @_transcriptResult.TestCase?.Name</h2>
+                <button class="btn btn-secondary btn-sm" @onclick="() => _transcriptResult = null">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Report
+                </button>
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Test Case</label>
+                        <div class="fw-600">@_transcriptResult.TestCase?.Name</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Verdict</label>
+                        <div><span class="badge badge-@_transcriptResult.Verdict">@_transcriptResult.Verdict</span></div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Overall Score</label>
+                        <div class="fw-600">@_transcriptResult.OverallScore.ToString("P0")</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label class="form-label">Latency</label>
+                        <div class="fw-600">@_transcriptResult.LatencyMs ms</div>
+                    </div>
+                </div>
+            </div>
             <div class="transcript">
                 @foreach (var msg in _transcript)
                 {
-                    <div class="transcript-msg transcript-@msg.Role">
-                        <span class="transcript-role">@msg.Role.ToUpper()</span>
-                        <span class="transcript-content">@msg.Content</span>
-                        <span class="transcript-latency">@msg.LatencyMs ms</span>
+                    <div class="transcript-bubble @msg.Role">
+                        <div class="transcript-role">@msg.Role.ToUpper()</div>
+                        @if (msg.Role == "bot")
+                        {
+                            var citations = ExtractCitations(msg.Content);
+                            <div class="transcript-content markdown-body">@RenderMarkdown(msg.Content)</div>
+                            @if (citations.Count > 0)
+                            {
+                                <div class="transcript-sources">
+                                    <span class="sources-label">Sources</span>
+                                    @foreach (var c in citations)
+                                    {
+                                        var chipText = string.IsNullOrEmpty(c.Label) ? $"[{c.Num}]" : $"[{c.Num}] {c.Label}";
+                                        @if (c.Url is not null)
+                                        {
+                                            <a class="source-chip" href="@c.Url" target="_blank" rel="noopener noreferrer" title="@c.Url">@chipText</a>
+                                        }
+                                        else
+                                        {
+                                            <span class="source-chip" title="@c.Label">@chipText</span>
+                                        }
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="transcript-content">@msg.Content</div>
+                        }
+                        @if (msg.LatencyMs > 0)
+                        {
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">@msg.LatencyMs ms</div>
+                        }
                     </div>
                 }
                 @if (!_transcript.Any())
@@ -222,13 +404,13 @@ else
             </div>
             @if (!string.IsNullOrWhiteSpace(_transcriptResult.Rationale))
             {
-                <div class="rationale-box">
+                <div class="rationale-box mt-3">
                     <strong>AI Rationale:</strong> @_transcriptResult.Rationale
                 </div>
             }
             @if (_transcriptResult.Citations is { Length: > 0 })
             {
-                <div class="rationale-box" style="margin-top:8px">
+                <div class="rationale-box mt-2">
                     <strong>Citations:</strong>
                     <ul style="margin:6px 0 0;padding-left:20px;font-size:13px;line-height:1.6">
                         @foreach (var c in _transcriptResult.Citations)
@@ -238,44 +420,88 @@ else
                     </ul>
                 </div>
             }
-            <div class="modal-actions">
-                <button class="btn btn-secondary" @onclick="() => _transcriptResult = null">Close</button>
+            <div class="d-flex gap-2 mt-4">
+                <button class="btn btn-secondary" @onclick="() => _transcriptResult = null">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Report
+                </button>
             </div>
         </div>
     </div>
-}
-
-@* ── Human verdict modal ──────────────────────────────────────────────────── *@
-@if (_verdictResult is not null)
-{
-    <div class="modal-backdrop" @onclick="CloseVerdict">
-        <div class="modal-box" @onclick:stopPropagation>
-            <h2>Human Review — @_verdictResult.TestCase?.Name</h2>
-
-            <label class="form-label mt-3">Verdict</label>
-            <select class="form-control" @bind="_verdictValue">
-                <option value="">— select —</option>
-                <option value="pass">Pass</option>
-                <option value="fail">Fail</option>
-            </select>
-
-            <label class="form-label mt-3">Note</label>
-            <textarea class="form-control" rows="3" @bind="_verdictNote" placeholder="Optional reviewer note"></textarea>
-
-            <label class="form-label mt-3">Reviewer Name</label>
-            <input class="form-control" @bind="_verdictBy" placeholder="Your name" />
-
+    }
+@* ── Human review in-page view ────────────────────────────────────────────── *@
+    else if (_verdictResult is not null)
+    {
+    <div class="mate-page">
+        <div class="section-card">
+            <div class="section-header" style="margin-bottom:20px">
+                <h2 class="section-title"><i class="bi bi-person-check me-2"></i>Human Review — @_verdictResult.TestCase?.Name</h2>
+                <button class="btn btn-secondary btn-sm" @onclick="CloseVerdict">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Report
+                </button>
+            </div>
+            <div class="row g-3" style="margin-bottom:16px">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Test Case</label>
+                        <div class="fw-600">@_verdictResult.TestCase?.Name</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">AI Verdict</label>
+                        <div><span class="badge badge-@_verdictResult.Verdict">@_verdictResult.Verdict</span></div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Overall Score</label>
+                        <div class="fw-600">@_verdictResult.OverallScore.ToString("P0")</div>
+                    </div>
+                </div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_verdictResult.Rationale))
+            {
+                <div class="rationale-box mb-4"><strong>AI Rationale:</strong> @_verdictResult.Rationale</div>
+            }
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Human Verdict *</label>
+                        <select class="form-control" @bind="_verdictValue">
+                            <option value="">— select —</option>
+                            <option value="pass">Pass</option>
+                            <option value="fail">Fail</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label class="form-label">Reviewer Name</label>
+                        <input class="form-control" @bind="_verdictBy" placeholder="Your name" />
+                    </div>
+                </div>
+                <div class="col-md-12">
+                    <div class="form-group">
+                        <label class="form-label">Note</label>
+                        <textarea class="form-control" rows="3" @bind="_verdictNote" placeholder="Optional reviewer note"></textarea>
+                    </div>
+                </div>
+            </div>
             @if (!string.IsNullOrWhiteSpace(_verdictError))
             {
-                <div class="alert alert-danger mt-2">@_verdictError</div>
+                <div class="alert alert-danger mt-3">@_verdictError</div>
             }
-
-            <div class="modal-actions">
-                <button class="btn btn-primary" @onclick="SaveVerdict">Save</button>
-                <button class="btn btn-secondary" @onclick="CloseVerdict">Cancel</button>
+            <div class="d-flex gap-2 mt-4">
+                <button class="btn btn-primary" @onclick="SaveVerdict">
+                    <i class="bi bi-check-lg me-1"></i>Save Review
+                </button>
+                <button class="btn btn-secondary" @onclick="CloseVerdict">
+                    <i class="bi bi-x-lg me-1"></i>Cancel
+                </button>
             </div>
         </div>
     </div>
+    }
 }
 
 @code {
@@ -294,6 +520,80 @@ else
     private string _verdictBy = string.Empty;
     private string _verdictError = string.Empty;
 
+    // Detail expand
+    private Guid? _expandedResultId;
+
+    // Regression detection
+    private HashSet<Guid> _regressionIds = [];
+    private List<string> _regressionNames = [];
+
+    // Score history per test case (last 6 completed runs)
+    private Dictionary<Guid, List<double>> _scoreHistory = [];
+
+    // Auto-poll
+    private bool _disposed;
+
+    private static readonly MarkdownPipeline _mdPipeline =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+
+    private static readonly System.Text.RegularExpressions.Regex _citationLineRegex =
+        new(@"^\[(\d+)\]: cite:(\S+)(?:\s+""([^""]*)"")?", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private record CitationEntry(int Num, string? Url, string Label);
+
+    private static List<CitationEntry> ExtractCitations(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return [];
+        var result = new List<CitationEntry>();
+        foreach (System.Text.RegularExpressions.Match m in _citationLineRegex.Matches(text))
+        {
+            var num   = int.Parse(m.Groups[1].Value);
+            var citeRef = m.Groups[2].Value;                        // e.g. "1" or "https://..."
+            var title   = m.Groups[3].Success ? m.Groups[3].Value : null;
+
+            string? url = null;
+            string label;
+
+            if (citeRef.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                citeRef.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                url = citeRef;
+                if (!string.IsNullOrWhiteSpace(title) && !IsGenericTitle(title, num))
+                    label = title;
+                else
+                {
+                    // Use filename from path, fallback to hostname
+                    var uri = new Uri(citeRef);
+                    var seg = System.IO.Path.GetFileName(uri.AbsolutePath.TrimEnd('/'));
+                    label = string.IsNullOrWhiteSpace(seg) ? uri.Host : Uri.UnescapeDataString(seg);
+                }
+            }
+            else
+            {
+                // Numeric reference — use title if descriptive, otherwise just [N]
+                label = (!string.IsNullOrWhiteSpace(title) && !IsGenericTitle(title, num))
+                    ? title
+                    : string.Empty;
+            }
+
+            result.Add(new CitationEntry(num, url, label));
+        }
+        return result;
+    }
+
+    private static bool IsGenericTitle(string title, int num) =>
+        string.Equals(title, $"Citation-{num}", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(title, $"Source {num}", StringComparison.OrdinalIgnoreCase);
+
+    private static MarkupString RenderMarkdown(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return new MarkupString(string.Empty);
+        // Strip Copilot Studio citation reference lines: [1]: cite:1 "Title"
+        var cleaned = _citationLineRegex.Replace(text, string.Empty);
+        var html = Markdown.ToHtml(cleaned.Trim(), _mdPipeline);
+        return new MarkupString(html);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _run = await Db.Runs
@@ -307,8 +607,115 @@ else
                 .Include(r => r.TestCase)
                 .Where(r => r.RunId == RunId)
                 .ToListAsync();
+
+            await LoadRegressionDataAsync();
+            await LoadScoreHistoryAsync();
         }
         _loading = false;
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _run?.Status is "pending" or "running")
+            _ = PollAsync();
+        return Task.CompletedTask;
+    }
+
+    private async Task PollAsync()
+    {
+        try
+        {
+            while (!_disposed)
+            {
+                await Task.Delay(3000);
+                if (_disposed) break;
+
+                await InvokeAsync(async () =>
+                {
+                    var updated = await Db.Runs
+                        .AsNoTracking()
+                        .Include(r => r.Suite)
+                        .Include(r => r.Agent)
+                        .FirstOrDefaultAsync(r => r.Id == RunId);
+                    if (updated is not null) _run = updated;
+
+                    _results = await Db.Results
+                        .AsNoTracking()
+                        .Include(r => r.TestCase)
+                        .Where(r => r.RunId == RunId)
+                        .ToListAsync();
+
+                    StateHasChanged();
+                });
+
+                if (_run?.Status is not ("pending" or "running")) break;
+            }
+
+            // Final enrichment once run is done
+            if (!_disposed && _run?.Status is "completed" or "failed")
+            {
+                await InvokeAsync(async () =>
+                {
+                    await LoadRegressionDataAsync();
+                    await LoadScoreHistoryAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (Exception) { /* circuit disposed — swallow */ }
+    }
+
+    private async Task LoadRegressionDataAsync()
+    {
+        if (_run is null) return;
+
+        var prevRun = await Db.Runs
+            .Where(r => r.SuiteId == _run.SuiteId && r.Status == "completed" && r.Id != RunId)
+            .OrderByDescending(r => r.StartedAt)
+            .Select(r => r.Id)
+            .FirstOrDefaultAsync();
+
+        if (prevRun == default) return;
+
+        var prevPassedIds = await Db.Results
+            .Where(r => r.RunId == prevRun &&
+                        (r.HumanVerdict == "pass" || (r.HumanVerdict == null && r.Verdict == "pass")))
+            .Select(r => r.TestCaseId)
+            .ToListAsync();
+
+        var prevPassedSet = prevPassedIds.ToHashSet();
+
+        var failed = _results
+            .Where(r => (r.HumanVerdict ?? r.Verdict) == "fail" && prevPassedSet.Contains(r.TestCaseId))
+            .ToList();
+
+        _regressionIds = failed.Select(r => r.TestCaseId).ToHashSet();
+        _regressionNames = failed.Select(r => r.TestCase?.Name ?? r.TestCaseId.ToString()).ToList();
+    }
+
+    private async Task LoadScoreHistoryAsync()
+    {
+        if (!_results.Any()) return;
+
+        var tcIds = _results.Select(r => r.TestCaseId).Distinct().ToList();
+
+        var scoreRows = await Db.Results
+            .AsNoTracking()
+            .Where(r => tcIds.Contains(r.TestCaseId) && r.Run!.Status == "completed")
+            .OrderBy(r => r.EvaluatedAt)
+            .Select(r => new { r.TestCaseId, Score = r.OverallScore * 100, r.EvaluatedAt })
+            .ToListAsync();
+
+        _scoreHistory = scoreRows
+            .GroupBy(r => r.TestCaseId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(r => r.EvaluatedAt).Select(r => r.Score).TakeLast(6).ToList());
+    }
+
+    private void ToggleExpand(Result r)
+    {
+        _expandedResultId = _expandedResultId == r.Id ? null : r.Id;
     }
 
     private async Task ShowTranscript(Result r)
@@ -368,4 +775,6 @@ else
         var base64 = Convert.ToBase64String(bytes);
         await JS.InvokeVoidAsync("downloadCsvFromBase64", base64, $"run-{RunId:N}.csv");
     }
+
+    public void Dispose() => _disposed = true;
 }

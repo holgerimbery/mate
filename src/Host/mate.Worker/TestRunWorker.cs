@@ -1,7 +1,7 @@
 using mate.Core.Execution;
 using mate.Data;
-using mate.Domain.Contracts.Infrastructure;
 using mate.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -9,86 +9,135 @@ using Microsoft.Extensions.Logging;
 namespace mate.Worker;
 
 /// <summary>
-/// Background service that dequeues <see cref="TestRunJob"/> messages from the
-/// <c>"test-runs"</c> queue and delegates execution to <see cref="TestExecutionService"/>.
+/// Background service that polls the shared SQLite database for <see cref="Run"/> records
+/// in "pending" status and executes them via <see cref="TestExecutionService"/>.
 ///
-/// The worker honours graceful shutdown: it completes the current test case before
-/// exiting so that results are not lost.
-///
-/// Message flow:
-///   1. Dequeue a <see cref="TestRunJob"/> from IMessageQueue
-///   2. Create a DI scope (so EF DbContext + ITenantContext are properly scoped)
-///   3. Set the tenant context for the current scope
-///   4. Call TestExecutionService.ExecuteAsync(job.RunId)
-///   5. Loop
+/// Polling the database (rather than an in-process queue) is required because the WebUI
+/// and Worker run as separate Docker containers that share a single SQLite volume — the
+/// in-process <c>IMessageQueue</c> cannot cross process boundaries.
 /// </summary>
 public sealed class TestRunWorker : BackgroundService
 {
-    private const string QueueName = "test-runs";
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
 
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IMessageQueue _queue;
     private readonly ILogger<TestRunWorker> _logger;
 
     public TestRunWorker(
         IServiceScopeFactory scopeFactory,
-        IMessageQueue queue,
         ILogger<TestRunWorker> logger)
     {
         _scopeFactory = scopeFactory;
-        _queue        = queue;
         _logger       = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("TestRunWorker started. Listening on queue '{Queue}'.", QueueName);
+        _logger.LogInformation("TestRunWorker started. Polling database for pending runs every {Interval}s.",
+            PollInterval.TotalSeconds);
 
-        await foreach (var message in _queue.ConsumeAsync<TestRunJob>(QueueName, stoppingToken))
+        while (!stoppingToken.IsCancellationRequested)
         {
-            if (message is null) continue;
-
-            _logger.LogInformation(
-                "Dequeued TestRunJob. RunId={RunId} TenantId={TenantId} JobId={JobId}",
-                message.Payload.RunId, message.Payload.TenantId, message.Payload.JobId);
-
-            await ExecuteJobAsync(message, stoppingToken);
+            try
+            {
+                var executed = await PollAndExecuteOneAsync(stoppingToken);
+                if (!executed)
+                    await Task.Delay(PollInterval, stoppingToken);
+                // If there was work, immediately poll again for the next pending run
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in TestRunWorker poll loop.");
+                await Task.Delay(PollInterval, stoppingToken);
+            }
         }
 
         _logger.LogInformation("TestRunWorker stopped.");
     }
 
-    private async Task ExecuteJobAsync(QueueMessage<TestRunJob> message, CancellationToken ct)
+    /// <returns>true if a run was picked up and executed; false if no pending runs exist.</returns>
+    private async Task<bool> PollAndExecuteOneAsync(CancellationToken ct)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
+        // Phase 1: find the oldest pending run (short-lived scope, no tenant filter)
+        Guid runId;
+        Guid tenantId;
 
-        // Override the tenant context for this scope so EF query filters apply correctly
-        var tenantContext = scope.ServiceProvider
-            .GetRequiredService<mate.Data.ITenantContext>();
+        await using (var scope = _scopeFactory.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<mateDbContext>();
+            var pending = await db.Runs
+                .IgnoreQueryFilters()
+                .Where(r => r.Status == "pending")
+                .OrderBy(r => r.StartedAt)
+                .Select(r => new { r.Id, r.TenantId })
+                .FirstOrDefaultAsync(ct);
 
-        // If the tenant context supports mutation (e.g. StaticTenantContext), set it
-        if (tenantContext is mate.Data.StaticTenantContext staticCtx)
-            staticCtx.SetTenantId(message.Payload.TenantId);
+            if (pending is null) return false;
 
-        var executor = scope.ServiceProvider.GetRequiredService<TestExecutionService>();
+            runId   = pending.Id;
+            tenantId = pending.TenantId;
+        }
+
+        _logger.LogInformation(
+            "Picked up pending Run {RunId} (TenantId={TenantId}). Executing…",
+            runId, tenantId);
+
+        // Phase 2: execute in a dedicated scope with the correct tenant context
+        await using var execScope = _scopeFactory.CreateAsyncScope();
+
+        if (execScope.ServiceProvider.GetRequiredService<mate.Data.ITenantContext>()
+                is mate.Data.StaticTenantContext staticCtx)
+            staticCtx.SetTenantId(tenantId);
+
+        var executor = execScope.ServiceProvider.GetRequiredService<TestExecutionService>();
 
         try
         {
-            await executor.ExecuteAsync(message.Payload.RunId, ct);
-            _logger.LogInformation("TestRunJob {JobId} completed (RunId={RunId}).",
-                message.Payload.JobId, message.Payload.RunId);
+            await executor.ExecuteAsync(runId, ct);
+            _logger.LogInformation("Run {RunId} completed successfully.", runId);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("cannot be started"))
+        {
+            // Another worker (or manual status change) already claimed this run — skip silently
+            _logger.LogWarning("Run {RunId} is no longer pending: {Message}", runId, ex.Message);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("TestRunJob {JobId} was cancelled.", message.Payload.JobId);
-            // No re-throw — let the worker loop handle it via the stoppingToken
+            _logger.LogWarning("Run {RunId} was cancelled during execution.", runId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "TestRunJob {JobId} failed (RunId={RunId}).",
-                message.Payload.JobId, message.Payload.RunId);
-            // Job stays in the queue if it was peek-mode; currently message is simply dropped
-            // In a production queue-based system (AzureServiceBus) you would dead-letter here
+            _logger.LogError(ex, "Run {RunId} failed with an unhandled exception.", runId);
+
+            // Mark the run as failed so the UI doesn't show it stuck as "running"
+            try
+            {
+                await using var failScope = _scopeFactory.CreateAsyncScope();
+                if (failScope.ServiceProvider.GetRequiredService<mate.Data.ITenantContext>()
+                        is mate.Data.StaticTenantContext fCtx)
+                    fCtx.SetTenantId(tenantId);
+
+                var failDb = failScope.ServiceProvider.GetRequiredService<mateDbContext>();
+                var run = await failDb.Runs.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(r => r.Id == runId, ct);
+                if (run is not null && run.Status is "pending" or "running")
+                {
+                    run.Status      = "failed";
+                    run.CompletedAt = DateTime.UtcNow;
+                    await failDb.SaveChangesAsync(ct);
+                }
+            }
+            catch (Exception dbEx)
+            {
+                _logger.LogError(dbEx, "Failed to mark Run {RunId} as failed in the database.", runId);
+            }
         }
+
+        return true;
     }
 }
+

@@ -593,6 +593,7 @@ public static class CopilotStudioJudgeModuleExtensions
             c.Timeout = TimeSpan.FromSeconds(120);
         });
         services.AddSingleton<CopilotStudioJudgeProvider>();
+        services.AddSingleton<IJudgeProvider>(sp => sp.GetRequiredService<CopilotStudioJudgeProvider>());
         services.AddSingleton<ITestingModule, CopilotStudioJudgeModule>();
         return services;
     }

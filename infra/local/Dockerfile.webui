@@ -41,6 +41,7 @@ RUN dotnet publish "mate.WebUI.csproj" -c Release -o /app/publish /p:UseAppHost=
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY VERSION /app/VERSION
 
 # Install curl for the health check and create data directories
 RUN apt-get update && apt-get install -y --no-install-recommends curl \

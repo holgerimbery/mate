@@ -1,21 +1,18 @@
 @attribute [Authorize]
 @page "/rubrics"
+@using mate.Data
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
-@inject mate.Data.mateDbContext Db
+@inject mateDbContext Db
+@inject ITenantContext TenantCtx
 
 <PageTitle>Rubrics — @BrandInfo.BrandName</PageTitle>
 
 @if (!_showForm)
 {
     <div class="mate-header">
-        <div>
-            <h1>Rubrics</h1>
-            <p>Define deterministic evaluation criteria for scoring agent responses without an LLM.</p>
-        </div>
-        <button class="btn btn-primary" @onclick="OpenNewRubricSet">
-            <i class="bi bi-plus-lg"></i> New Rubric Set
-        </button>
+        <h1>Rubrics</h1>
+        <p>Define deterministic evaluation criteria for scoring agent responses without an LLM.</p>
     </div>
     <div class="mate-page">
         @if (!string.IsNullOrEmpty(_error))
@@ -24,28 +21,19 @@
                 <button type="button" class="btn-close float-end" @onclick='() => _error = string.Empty'></button>
             </div>
         }
-        @if (_loading)
-        {
-            <div class="d-flex align-items-center gap-2"><span class="spinner"></span><span>Loading rubric sets…</span></div>
-        }
-        else if (!_rubricSets.Any())
-        {
-            <div class="empty-state">
-                <i class="bi bi-card-checklist"></i>
-                <h3>No rubric sets yet</h3>
-                <p>Create your first rubric set to define weighted evaluation criteria for deterministic scoring.</p>
-                <button class="btn btn-primary mt-2" @onclick="OpenNewRubricSet"><i class="bi bi-plus-lg me-1"></i>New Rubric Set</button>
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-title">All Rubric Sets</span>
+                <button class="btn btn-primary btn-sm" @onclick="OpenNewRubricSet">
+                    <i class="bi bi-plus-lg me-1"></i>New Rubric Set
+                </button>
             </div>
-        }
-        else
-        {
-            <div class="section-card">
-                <div class="section-header mb-3">
-                    <span class="section-title">All Rubric Sets</span>
-                    <button class="btn btn-primary btn-sm" @onclick="OpenNewRubricSet">
-                        <i class="bi bi-plus-lg me-1"></i>New Rubric Set
-                    </button>
-                </div>
+            @if (_loading)
+            {
+                <p><em>Loading…</em></p>
+            }
+            else
+            {
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -71,24 +59,27 @@
                                 <td>
                                     <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(rs)"><i class="bi bi-pencil me-1"></i>Edit</button>
                                     <button class="btn btn-sm btn-secondary" @onclick="() => OpenCriteria(rs)"><i class="bi bi-list-nested me-1"></i>Criteria</button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => CloneRubricSet(rs)" title="Clone"><i class="bi bi-copy"></i></button>
                                     <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(rs)"><i class="bi bi-trash"></i></button>
                                 </td>
                             </tr>
                         }
+                        @if (!_rubricSets.Any())
+                        {
+                            <tr><td colspan="6" class="empty-row">No rubric sets configured yet.</td></tr>
+                        }
                     </tbody>
                 </table>
-            </div>
-        }
+            }
+        </div>
     </div>
 }
 else if (_formMode == "set")
 {
     <!-- Edit / New Rubric Set -->
     <div class="mate-header">
-        <div>
-            <h1>@(_editSetId.HasValue ? "Edit Rubric Set" : "New Rubric Set")</h1>
-            <p>@(_editSetId.HasValue ? "Update the rubric set name, description, and scoring options." : "Define a new set of weighted evaluation criteria.")</p>
-        </div>
+        <h1>@(_editSetId.HasValue ? "Edit Rubric Set" : "New Rubric Set")</h1>
+        <p>@(_editSetId.HasValue ? "Update the rubric set name, description, and scoring options." : "Define a new set of weighted evaluation criteria.")</p>
     </div>
     <div class="mate-page">
         <div class="section-card">
@@ -121,13 +112,13 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
 {
     <!-- Manage Criteria for a Rubric Set -->
     <div class="mate-header">
-        <div>
-            <h1>Criteria — @_selectedRubricSet.Name</h1>
-            <p>Add, edit, and reorder evaluation criteria for this rubric set.</p>
-        </div>
-        <button class="btn btn-secondary" @onclick="CloseForm"><i class="bi bi-arrow-left me-1"></i>Back to Rubrics</button>
+        <h1>Criteria — @_selectedRubricSet.Name</h1>
+        <p>Add, edit, and reorder evaluation criteria for this rubric set.</p>
     </div>
     <div class="mate-page">
+        <div class="d-flex justify-content-end mb-3">
+            <button class="btn btn-secondary" @onclick="CloseForm"><i class="bi bi-arrow-left me-1"></i>Back to Rubrics</button>
+        </div>
         @if (!string.IsNullOrEmpty(_formError))
         {
             <div class="alert alert-danger mb-3">@_formError</div>
@@ -349,28 +340,68 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
     {
         if (string.IsNullOrWhiteSpace(_setForm.Name)) { _formError = "Name is required."; return; }
 
-        if (_editSetId.HasValue)
+        try
         {
-            var rs = _rubricSets.First(r => r.Id == _editSetId.Value);
-            rs.Name                = _setForm.Name;
-            rs.Description         = _setForm.Description;
-            rs.RequireAllMandatory = _setForm.RequireAllMandatory;
-        }
-        else
-        {
-            Db.RubricSets.Add(new RubricSet
+            if (_editSetId.HasValue)
             {
-                Id                 = Guid.NewGuid(),
-                TenantId           = Guid.Empty,
-                Name               = _setForm.Name,
-                Description        = _setForm.Description,
-                RequireAllMandatory = _setForm.RequireAllMandatory,
-                CreatedAt          = DateTime.UtcNow
-            });
+                var rs = _rubricSets.First(r => r.Id == _editSetId.Value);
+                rs.Name                = _setForm.Name;
+                rs.Description         = _setForm.Description;
+                rs.RequireAllMandatory = _setForm.RequireAllMandatory;
+            }
+            else
+            {
+                Db.RubricSets.Add(new RubricSet
+                {
+                    Id                  = Guid.NewGuid(),
+                    TenantId            = TenantCtx.TenantId,
+                    Name                = _setForm.Name,
+                    Description         = _setForm.Description,
+                    RequireAllMandatory = _setForm.RequireAllMandatory,
+                    CreatedAt           = DateTime.UtcNow
+                });
+            }
+            await Db.SaveChangesAsync();
+            CloseForm();
+            await LoadAsync();
         }
-        await Db.SaveChangesAsync();
-        CloseForm();
-        await LoadAsync();
+        catch (Exception ex) { _formError = ex.Message; }
+    }
+
+    private async Task CloneRubricSet(RubricSet source)
+    {
+        try
+        {
+            var clone = new RubricSet
+            {
+                Id                  = Guid.NewGuid(),
+                TenantId            = TenantCtx.TenantId,
+                JudgeSettingId      = source.JudgeSettingId,
+                Name                = source.Name + " (Copy)",
+                Description         = source.Description,
+                RequireAllMandatory = source.RequireAllMandatory,
+                CreatedAt           = DateTime.UtcNow,
+            };
+            foreach (var c in source.Criteria)
+            {
+                clone.Criteria.Add(new RubricCriteria
+                {
+                    Id             = Guid.NewGuid(),
+                    RubricSetId    = clone.Id,
+                    TenantId       = TenantCtx.TenantId,
+                    Name           = c.Name,
+                    EvaluationType = c.EvaluationType,
+                    Pattern        = c.Pattern,
+                    Weight         = c.Weight,
+                    IsMandatory    = c.IsMandatory,
+                    SortOrder      = c.SortOrder,
+                });
+            }
+            Db.RubricSets.Add(clone);
+            await Db.SaveChangesAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
     }
 
     private void ConfirmDelete(RubricSet rs) => _deleteTarget = rs;
@@ -423,7 +454,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
             {
                 Id             = Guid.NewGuid(),
                 RubricSetId    = _selectedRubricSet.Id,
-                TenantId       = Guid.Empty,
+                TenantId       = TenantCtx.TenantId,
                 Name           = _criterionForm.Name,
                 EvaluationType = _criterionForm.EvaluationType,
                 Pattern        = _criterionForm.Pattern,

@@ -18,6 +18,7 @@
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager NavigationManager
 @inject IConfiguration Config
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Settings — @BrandInfo.BrandName</PageTitle>
 
@@ -282,14 +283,20 @@
                 </div>
                 <div class="col-md-4">
                     <div class="form-group">
-                        <label class="form-label">Endpoint Ref</label>
-                        <input class="form-control" @bind="_judgeForm.EndpointRef" placeholder="AZURE_OAI_ENDPOINT" />
+                        <label class="form-label">Endpoint</label>
+                        <input class="form-control" @bind="_judgeForm.EndpointRef" placeholder="https://...openai.azure.com/" />
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="form-group">
-                        <label class="form-label">API Key Ref</label>
-                        <input class="form-control" @bind="_judgeForm.ApiKeyRef" placeholder="AZURE_OAI_KEY" />
+                        <label class="form-label">
+                            API Key
+                            @if (!string.IsNullOrWhiteSpace(_judgeForm.ApiKeyRef)) {
+                                <small class="text-muted ms-1">(configured — enter new to replace)</small>
+                            }
+                        </label>
+                        <input type="password" class="form-control" @bind="_judgeForm.ApiKeyInput"
+                               placeholder="@(string.IsNullOrWhiteSpace(_judgeForm.ApiKeyRef) ? "Enter API key" : "Enter new key to replace current")" autocomplete="new-password" />
                     </div>
                 </div>
             </div>
@@ -519,8 +526,14 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label class="form-label">API Key Ref <small class="text-muted">(secret store reference name)</small></label>
-                        <input class="form-control" @bind="_qgenForm.ApiKeyRef" placeholder="OPENAI_API_KEY" />
+                        <label class="form-label">
+                            API Key
+                            @if (!string.IsNullOrWhiteSpace(_qgenForm.ApiKeyRef)) {
+                                <small class="text-muted ms-1">(configured — enter new to replace)</small>
+                            }
+                        </label>
+                        <input type="password" class="form-control" @bind="_qgenForm.ApiKeyInput"
+                               placeholder="@(string.IsNullOrWhiteSpace(_qgenForm.ApiKeyRef) ? "Enter API key" : "Enter new key to replace current")" autocomplete="new-password" />
                     </div>
                 </div>
             </div>
@@ -983,6 +996,7 @@ OAuth__Audience=your-api-audience</pre>
 @code {
     private string _tab = "modules";
     private string _authScheme = string.Empty;
+    private string _userId = string.Empty;
     private bool _darkMode;
     private bool _afterFirstRender;
 
@@ -1031,6 +1045,7 @@ OAuth__Audience=your-api-audience</pre>
         public string  Name         { get; set; } = string.Empty;
         public string  Endpoint     { get; set; } = string.Empty;
         public string  ApiKeyRef    { get; set; } = string.Empty;
+        public string  ApiKeyInput  { get; set; } = string.Empty; // raw key input — stored to DB secret on save
         public string  Model        { get; set; } = "gpt-4o-mini";
         public double  Temperature  { get; set; } = 0.7;
         public double  TopP         { get; set; } = 1.0;
@@ -1049,6 +1064,7 @@ OAuth__Audience=your-api-audience</pre>
         public string? Model { get; set; }
         public string? EndpointRef { get; set; }
         public string? ApiKeyRef { get; set; }
+        public string  ApiKeyInput { get; set; } = string.Empty; // raw key input — stored to DB secret on save
         public double Temperature { get; set; } = 0.2;
         public double TopP { get; set; } = 0.9;
         public int MaxOutputTokens { get; set; } = 800;
@@ -1064,6 +1080,8 @@ OAuth__Audience=your-api-audience</pre>
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.Identity?.Name ?? string.Empty;
         _connectorModules  = Registry.GetAllConnectors().Where(m => m.ConnectorType != "Generic").ToList();
         _judgeModules      = Registry.GetAllTestingModules().Where(m => m.ProviderType != "Generic" && m.ProviderType != "ModelQGen").ToList();
         _monitoringModules = Registry.GetAllMonitoring().Where(m => m.ProviderType != "Generic").ToList();
@@ -1165,18 +1183,30 @@ OAuth__Audience=your-api-audience</pre>
             foreach (var o in others) o.IsDefault = false;
         }
 
+        // Pre-generate the entity ID so the secret ref name matches the entity ID
+        var newJudgeId = (_editJudge is null) ? Guid.NewGuid() : Guid.Empty;
+
+        // If a new raw API key was entered, store it in the DB secret store
+        var apiKeyRef = _judgeForm.ApiKeyRef;
+        if (!string.IsNullOrWhiteSpace(_judgeForm.ApiKeyInput))
+        {
+            var settingId = _editJudge?.Id ?? newJudgeId;
+            apiKeyRef = $"judge_{settingId:N}_key";
+            await SecretSvc.SetSecretAsync(apiKeyRef, _judgeForm.ApiKeyInput);
+        }
+
         if (_editJudge is null)
         {
             var js = new JudgeSetting
             {
-                Id = Guid.NewGuid(),
+                Id = newJudgeId,
                 TenantId = TenantCtx.TenantId,
                 Name = _judgeForm.Name,
                 ProviderType = _judgeForm.ProviderType,
                 PromptTemplate = _judgeForm.PromptTemplate,
                 Model = _judgeForm.Model,
                 EndpointRef = _judgeForm.EndpointRef,
-                ApiKeyRef = _judgeForm.ApiKeyRef,
+                ApiKeyRef = apiKeyRef,
                 Temperature = _judgeForm.Temperature,
                 TopP = _judgeForm.TopP,
                 MaxOutputTokens = _judgeForm.MaxOutputTokens,
@@ -1192,6 +1222,7 @@ OAuth__Audience=your-api-audience</pre>
                 UpdatedAt = DateTime.UtcNow
             };
             Db.JudgeSettings.Add(js);
+            AuditHelper.Log(Db, TenantCtx.TenantId, "Created", "JudgeSetting", js.Id, _userId, js.Name);
         }
         else
         {
@@ -1200,7 +1231,7 @@ OAuth__Audience=your-api-audience</pre>
             _editJudge.PromptTemplate = _judgeForm.PromptTemplate;
             _editJudge.Model = _judgeForm.Model;
             _editJudge.EndpointRef = _judgeForm.EndpointRef;
-            _editJudge.ApiKeyRef = _judgeForm.ApiKeyRef;
+            _editJudge.ApiKeyRef = apiKeyRef;
             _editJudge.Temperature = _judgeForm.Temperature;
             _editJudge.TopP = _judgeForm.TopP;
             _editJudge.MaxOutputTokens = _judgeForm.MaxOutputTokens;
@@ -1213,6 +1244,7 @@ OAuth__Audience=your-api-audience</pre>
             _editJudge.UseReferenceAnswer = _judgeForm.UseReferenceAnswer;
             _editJudge.IsDefault = _judgeForm.IsDefault;
             _editJudge.UpdatedAt = DateTime.UtcNow;
+            AuditHelper.Log(Db, _editJudge.TenantId, "Updated", "JudgeSetting", _editJudge.Id, _userId, _editJudge.Name);
         }
         await Db.SaveChangesAsync();
         CloseJudgeForm();
@@ -1272,6 +1304,7 @@ OAuth__Audience=your-api-audience</pre>
     private async Task DeleteJudge()
     {
         if (_deleteJudge is null) return;
+        AuditHelper.Log(Db, _deleteJudge.TenantId, "Deleted", "JudgeSetting", _deleteJudge.Id, _userId, _deleteJudge.Name);
         Db.JudgeSettings.Remove(_deleteJudge);
         await Db.SaveChangesAsync();
         _deleteJudge = null;
@@ -1324,15 +1357,27 @@ OAuth__Audience=your-api-audience</pre>
             foreach (var o in others) o.IsDefault = false;
         }
 
+        // Pre-generate the entity ID so the secret ref name matches the entity ID
+        var newQGenId = (_editQGen is null) ? Guid.NewGuid() : Guid.Empty;
+
+        // If a new raw API key was entered, store it in the DB secret store
+        var apiKeyRef = _qgenForm.ApiKeyRef;
+        if (!string.IsNullOrWhiteSpace(_qgenForm.ApiKeyInput))
+        {
+            var settingId = _editQGen?.Id ?? newQGenId;
+            apiKeyRef = $"qgen_{settingId:N}_key";
+            await SecretSvc.SetSecretAsync(apiKeyRef, _qgenForm.ApiKeyInput);
+        }
+
         if (_editQGen is null)
         {
             var qs = new GlobalQuestionGenerationSetting
             {
-                Id              = Guid.NewGuid(),
+                Id              = newQGenId,
                 TenantId        = TenantCtx.TenantId,
                 Name            = _qgenForm.Name,
                 Endpoint        = _qgenForm.Endpoint,
-                ApiKeyRef       = _qgenForm.ApiKeyRef,
+                ApiKeyRef       = apiKeyRef,
                 Model           = _qgenForm.Model,
                 Temperature     = _qgenForm.Temperature,
                 TopP            = _qgenForm.TopP,
@@ -1343,12 +1388,13 @@ OAuth__Audience=your-api-audience</pre>
                 UpdatedAt       = DateTime.UtcNow
             };
             Db.GlobalQuestionGenerationSettings.Add(qs);
+            AuditHelper.Log(Db, TenantCtx.TenantId, "Created", "QGenSetting", qs.Id, _userId, qs.Name);
         }
         else
         {
             _editQGen.Name            = _qgenForm.Name;
             _editQGen.Endpoint        = _qgenForm.Endpoint;
-            _editQGen.ApiKeyRef       = _qgenForm.ApiKeyRef;
+            _editQGen.ApiKeyRef       = apiKeyRef;
             _editQGen.Model           = _qgenForm.Model;
             _editQGen.Temperature     = _qgenForm.Temperature;
             _editQGen.TopP            = _qgenForm.TopP;
@@ -1356,6 +1402,7 @@ OAuth__Audience=your-api-audience</pre>
             _editQGen.SystemPrompt    = _qgenForm.SystemPrompt;
             _editQGen.IsDefault       = _qgenForm.IsDefault;
             _editQGen.UpdatedAt       = DateTime.UtcNow;
+            AuditHelper.Log(Db, _editQGen.TenantId, "Updated", "QGenSetting", _editQGen.Id, _userId, _editQGen.Name);
         }
         await Db.SaveChangesAsync();
         CloseQGenForm();
@@ -1367,6 +1414,7 @@ OAuth__Audience=your-api-audience</pre>
     private async Task DeleteQGen()
     {
         if (_deleteQGen is null) return;
+        AuditHelper.Log(Db, _deleteQGen.TenantId, "Deleted", "QGenSetting", _deleteQGen.Id, _userId, _deleteQGen.Name);
         Db.GlobalQuestionGenerationSettings.Remove(_deleteQGen);
         await Db.SaveChangesAsync();
         _deleteQGen = null;
@@ -1452,6 +1500,7 @@ OAuth__Audience=your-api-audience</pre>
             CreatedAt = DateTime.UtcNow
         };
         Db.ApiKeys.Add(apiKey);
+        AuditHelper.Log(Db, TenantCtx.TenantId, "Created", "ApiKey", apiKey.Id, _userId, $"{_newKeyName} (role: {_newKeyRole})");
         await Db.SaveChangesAsync();
         _newRawKey = rawKey;
         _showCreateKey = false;
@@ -1462,6 +1511,7 @@ OAuth__Audience=your-api-audience</pre>
     private async Task RevokeKey(ApiKey key)
     {
         key.IsActive = false;
+        AuditHelper.Log(Db, key.TenantId, "KeyRevoked", "ApiKey", key.Id, _userId, key.Name);
         await Db.SaveChangesAsync();
     }
 

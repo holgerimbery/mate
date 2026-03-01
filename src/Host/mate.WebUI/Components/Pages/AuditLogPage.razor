@@ -107,7 +107,7 @@ else
                                 <span class="badge @ActionBadge(log.Action)">@log.Action</span>
                             </td>
                             <td style="font-size:12px">@log.EntityType</td>
-                            <td style="font-size:11px"><code>@(log.EntityId?.ToString("D").Substring(0, 8) + "…" ?? "—")</code></td>
+                            <td style="font-size:11px"><code>@(log.EntityId.HasValue ? log.EntityId.Value.ToString("D")[..8] + "…" : "—")</code></td>
                             <td style="font-size:12px">@(log.UserId ?? "—")</td>
                             <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="@log.Details">
                                 @(log.Details ?? "—")

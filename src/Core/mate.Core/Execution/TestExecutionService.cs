@@ -103,6 +103,13 @@ public sealed class TestExecutionService
             _monitoring?.TrackTestCaseResult(new TestCaseResultEvent(
                 result.Id, run.Id, run.TenantId,
                 result.Verdict, result.OverallScore, result.LatencyMs));
+
+            // Throttle: wait between tests to avoid rate-limit errors on the target agent
+            if (suite.DelayBetweenTestsMs > 0 && !ct.IsCancellationRequested)
+            {
+                _logger.LogDebug("Throttling: waiting {DelayMs} ms before next test case.", suite.DelayBetweenTestsMs);
+                await Task.Delay(suite.DelayBetweenTestsMs, ct);
+            }
         }
 
         // Compute run statistics
@@ -339,8 +346,10 @@ public sealed class TestExecutionService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Secret reference '{SecretRef}' could not be resolved.", secretRef);
-            return null;
+            _logger.LogWarning(ex, "Secret reference '{SecretRef}' could not be resolved; treating ref as raw value.", secretRef);
+            // Fall back to treating the ref itself as the raw value.
+            // This supports legacy configs where raw keys were stored directly in the ref field.
+            return secretRef;
         }
     }
 

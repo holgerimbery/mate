@@ -17,7 +17,7 @@
     <p>Source, author info, runtime environment and API reference for @BrandInfo.BrandName
         @if (!string.IsNullOrEmpty(_appVersion))
         {
-            <span class="badge ms-2" style="background:var(--primary,#0066cc);color:#fff;font-size:11px;font-weight:600;padding:2px 10px;border-radius:10px;vertical-align:middle">v@_appVersion</span>
+            <span class="badge ms-2" style="background:var(--primary,#0066cc);color:#fff;font-size:11px;font-weight:600;padding:2px 10px;border-radius:10px;vertical-align:middle">@_appVersion</span>
         }
     </p>
 
@@ -61,50 +61,60 @@
             </div>
             <h2 class="section-title">Runtime Environment</h2>
             <div class="d-flex flex-column gap-2" style="font-size:13px">
+                @if (!string.IsNullOrEmpty(_appVersion))
+                {
+                    <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                        <span class="text-muted"><i class="bi bi-tag me-1"></i>Version</span>
+                        <span class="badge badge-info">@_appVersion</span>
+                    </div>
+                }
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-box me-1"></i>Hosting</span>
                     @if (_inContainer)
                     {
-                        <span class="badge" style="background:#e3f2fd;color:#1565c0"><i class="bi bi-box-seam me-1"></i>Container</span>
+                        <span class="badge badge-info"><i class="bi bi-box-seam me-1"></i>Container</span>
                     }
                     else
                     {
-                        <span class="badge" style="background:#e8f5e9;color:#2e7d32"><i class="bi bi-hdd me-1"></i>Bare Metal</span>
+                        <span class="badge badge-pass"><i class="bi bi-hdd me-1"></i>Bare Metal</span>
                     }
                 </div>
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-shield-lock me-1"></i>Authentication</span>
                     @if (_authEnabled)
                     {
-                        <span class="badge" style="background:#e8f5e9;color:#2e7d32"><i class="bi bi-check-circle me-1"></i>Entra ID</span>
+                        <span class="badge badge-pass"><i class="bi bi-check-circle me-1"></i>Entra ID</span>
                     }
                     else if (string.Equals(_authScheme, "Generic", StringComparison.OrdinalIgnoreCase))
                     {
-                        <span class="badge" style="background:#fff3e0;color:#e65100"><i class="bi bi-exclamation-triangle me-1"></i>Development Mode</span>
+                        <span class="badge badge-pending"><i class="bi bi-exclamation-triangle me-1"></i>Development Mode</span>
                     }
                     else
                     {
-                        <span class="badge" style="background:#f5f5f5;color:#757575"><i class="bi bi-x-circle me-1"></i>Disabled</span>
+                        <span class="badge badge-neutral"><i class="bi bi-x-circle me-1"></i>Disabled</span>
                     }
                 </div>
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-gear me-1"></i>ASP.NET Env</span>
-                    <span class="badge" style="background:#f3e5f5;color:#6a1b9a">@HostEnv.EnvironmentName</span>
+                    <span class="badge badge-purple">@HostEnv.EnvironmentName</span>
                 </div>
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-arrow-left-right me-1"></i>Proxy Headers</span>
                     @if (_forwardedHeaders)
                     {
-                        <span class="badge" style="background:#e8f5e9;color:#2e7d32"><i class="bi bi-check-circle me-1"></i>Enabled</span>
+                        <span class="badge badge-pass"><i class="bi bi-check-circle me-1"></i>Enabled</span>
                     }
                     else
                     {
-                        <span class="badge" style="background:#f5f5f5;color:#9e9e9e">Disabled</span>
+                        <span class="badge badge-neutral">Disabled</span>
                     }
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="text-muted"><i class="bi bi-braces me-1"></i>API Explorer</span>
-                    <a href="/scalar/v1" target="_blank" style="font-size:12px">Scalar UI ↗</a>
+                    <div class="d-flex gap-2 align-items-center">
+                        <a href="/scalar/v1" target="_blank" style="font-size:12px">Scalar UI ↗</a>
+                        <a href="/openapi/v1.json" download="mate-openapi.json" style="font-size:12px">OpenAPI spec ↓</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -157,58 +167,6 @@
             {
                 <p class="text-muted mb-0">Click <strong>Run Health Check</strong> to verify database connectivity and key API endpoints.</p>
             }
-        </div>
-    </div>
-
-    <!-- REST API Reference -->
-    <div class="col-md-8">
-        <div class="section-card">
-            <h2 class="section-title"><i class="bi bi-code-slash me-2" style="color:var(--primary)"></i>REST API Reference</h2>
-            <p class="text-muted" style="font-size:13px">All endpoints are under <code>/api/</code> and accept an <code>X-Api-Key</code> header for machine access.</p>
-            <div class="d-flex gap-2 mb-3">
-                <a href="/scalar/v1" target="_blank" class="btn btn-primary btn-sm"><i class="bi bi-box-arrow-up-right me-1"></i>Interactive API Explorer</a>
-                <a href="/openapi/v1.json" download="mate-openapi.json" class="btn btn-secondary btn-sm"><i class="bi bi-download me-1"></i>Download OpenAPI spec</a>
-            </div>
-            <table class="data-table" style="font-size:12px">
-                <thead>
-                    <tr><th style="width:60px">Method</th><th>Path</th><th>Description</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="3" style="background:var(--surface-2,#f8f9fa);font-weight:600;font-size:11px;padding:4px 8px">AGENTS</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/agents</code></td><td>List all agents</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/agents/{id}</code></td><td>Get a single agent</td></tr>
-                    <tr><td><span class="badge" style="background:#49cc90;color:#fff">POST</span></td><td><code>/api/agents</code></td><td>Create an agent</td></tr>
-                    <tr><td><span class="badge" style="background:#fca130;color:#fff">PUT</span></td><td><code>/api/agents/{id}</code></td><td>Update an agent</td></tr>
-                    <tr><td><span class="badge" style="background:#f93e3e;color:#fff">DEL</span></td><td><code>/api/agents/{id}</code></td><td>Delete an agent</td></tr>
-                    <tr><td><span class="badge" style="background:#fca130;color:#fff">PUT</span></td><td><code>/api/agents/{agentId}/connectors/{connectorId}</code></td><td>Update connector config</td></tr>
-                    <tr><td colspan="3" style="background:var(--surface-2,#f8f9fa);font-weight:600;font-size:11px;padding:4px 8px">TEST SUITES &amp; CASES</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/testsuites</code></td><td>List all test suites</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/testsuites/{id}</code></td><td>Get a single test suite</td></tr>
-                    <tr><td><span class="badge" style="background:#49cc90;color:#fff">POST</span></td><td><code>/api/testsuites</code></td><td>Create a test suite</td></tr>
-                    <tr><td><span class="badge" style="background:#fca130;color:#fff">PUT</span></td><td><code>/api/testsuites/{id}</code></td><td>Update a test suite</td></tr>
-                    <tr><td><span class="badge" style="background:#f93e3e;color:#fff">DEL</span></td><td><code>/api/testsuites/{id}</code></td><td>Delete a test suite</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/testsuites/{id}/testcases</code></td><td>List test cases</td></tr>
-                    <tr><td><span class="badge" style="background:#49cc90;color:#fff">POST</span></td><td><code>/api/testsuites/{id}/testcases</code></td><td>Create a test case</td></tr>
-                    <tr><td><span class="badge" style="background:#fca130;color:#fff">PUT</span></td><td><code>/api/testcases/{id}</code></td><td>Update a test case</td></tr>
-                    <tr><td><span class="badge" style="background:#f93e3e;color:#fff">DEL</span></td><td><code>/api/testcases/{id}</code></td><td>Delete a test case</td></tr>
-                    <tr><td colspan="3" style="background:var(--surface-2,#f8f9fa);font-weight:600;font-size:11px;padding:4px 8px">RUNS &amp; RESULTS</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/runs</code></td><td>List all runs</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/runs/{id}</code></td><td>Get a single run</td></tr>
-                    <tr><td><span class="badge" style="background:#49cc90;color:#fff">POST</span></td><td><code>/api/runs</code></td><td>Start a test run</td></tr>
-                    <tr><td><span class="badge" style="background:#f93e3e;color:#fff">DEL</span></td><td><code>/api/runs/{id}</code></td><td>Delete a run</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/runs/{id}/results</code></td><td>Get results for a run</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/results/{id}/transcript</code></td><td>Get result transcript</td></tr>
-                    <tr><td><span class="badge" style="background:#49cc90;color:#fff">POST</span></td><td><code>/api/results/{id}/human-verdict</code></td><td>Set human verdict</td></tr>
-                    <tr><td colspan="3" style="background:var(--surface-2,#f8f9fa);font-weight:600;font-size:11px;padding:4px 8px">DOCUMENTS, METRICS &amp; SETTINGS</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/documents</code></td><td>List documents</td></tr>
-                    <tr><td><span class="badge" style="background:#49cc90;color:#fff">POST</span></td><td><code>/api/documents</code></td><td>Upload a document (multipart)</td></tr>
-                    <tr><td><span class="badge" style="background:#f93e3e;color:#fff">DEL</span></td><td><code>/api/documents/{id}</code></td><td>Delete a document</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/metrics/summary</code></td><td>Platform summary metrics</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/api/judgesettings</code></td><td>List judge settings</td></tr>
-                    <tr><td><span class="badge" style="background:#49cc90;color:#fff">POST</span></td><td><code>/api/judgesettings</code></td><td>Create a judge setting</td></tr>
-                    <tr><td><span class="badge" style="background:#61affe;color:#fff">GET</span></td><td><code>/health</code></td><td>Health check (anonymous)</td></tr>
-                </tbody>
-            </table>
         </div>
     </div>
 

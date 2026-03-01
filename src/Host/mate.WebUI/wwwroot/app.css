@@ -100,6 +100,29 @@ h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
 
 [data-theme="dark"] .home-action-card:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.4); }
 
+/* Badge text colours in dark mode — use semantic CSS vars for legibility */
+[data-theme="dark"] .badge-pass,
+[data-theme="dark"] .badge-completed,
+[data-theme="dark"] .badge-healthy      { color: var(--success); }
+[data-theme="dark"] .badge-fail,
+[data-theme="dark"] .badge-failed,
+[data-theme="dark"] .badge-error,
+[data-theme="dark"] .badge-unhealthy    { color: var(--danger); }
+[data-theme="dark"] .badge-running      { color: var(--info); }
+[data-theme="dark"] .badge-pending,
+[data-theme="dark"] .badge-skip         { color: var(--accent); }
+[data-theme="dark"] .badge-purple       { color: var(--secondary); }
+/* Alert text + border in dark mode */
+[data-theme="dark"] .alert-success { color: var(--success); border-color: rgba(52,211,153,0.25); }
+[data-theme="dark"] .alert-danger  { color: var(--danger);  border-color: rgba(248,113,113,0.25); }
+[data-theme="dark"] .alert-info    { color: var(--info);    border-color: rgba(96,165,250,0.25); }
+[data-theme="dark"] .alert-warning { color: var(--accent);  border-color: rgba(251,191,36,0.25); }
+/* Connector generic badge — near-black → mid-gray in dark mode */
+[data-theme="dark"] .connector-badge.generic { color: var(--text-secondary); }
+/* Bootstrap border utilities — follow our theme border colour */
+[data-theme="dark"] .border-bottom { border-bottom-color: var(--border) !important; }
+[data-theme="dark"] .border-top    { border-top-color:    var(--border) !important; }
+
 /* ── Reset & Base ──────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -542,11 +565,13 @@ html, body {
     font-size: 11px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.3px;
 }
-.badge-pass, .badge-completed, .badge-healthy { background: rgba(16,185,129,0.12); color: #059669; }
-.badge-fail, .badge-error, .badge-unhealthy   { background: rgba(239,68,68,0.12);  color: #dc2626; }
-.badge-pending, .badge-skip                   { background: rgba(245,158,11,0.12); color: #b45309; }
-.badge-running                                { background: rgba(59,130,246,0.12); color: #2563eb; }
-.badge-info                                   { background: rgba(0,102,204,0.12);  color: var(--primary); }
+.badge-pass, .badge-completed, .badge-healthy        { background: rgba(16,185,129,0.12); color: #059669; }
+.badge-fail, .badge-failed, .badge-error, .badge-unhealthy { background: rgba(239,68,68,0.12);  color: #dc2626; }
+.badge-pending, .badge-skip                          { background: rgba(245,158,11,0.12); color: #b45309; }
+.badge-running                                       { background: rgba(59,130,246,0.12); color: #2563eb; }
+.badge-info                                          { background: rgba(0,102,204,0.12);  color: var(--primary); }
+.badge-neutral                                       { background: rgba(107,114,128,0.1); color: var(--text-secondary); }
+.badge-purple                                        { background: rgba(139,92,246,0.12); color: var(--secondary); }
 /* ── Environment badges ─────────────────────────────────────── */
 .badge-development                            { background: rgba(107,114,128,0.12); color: #4b5563; }
 .badge-test                                   { background: rgba(245,158,11,0.12);  color: #b45309; }
@@ -581,6 +606,7 @@ html, body {
     box-shadow: 0 20px 60px rgba(0,0,0,0.2);
     animation: fadeIn 0.25s ease-out;
 }
+.modal-box-wide { max-width: 860px; }
 .modal-header {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 20px;
@@ -650,7 +676,7 @@ html, body {
     background: transparent; color: var(--text-secondary);
     transition: all 0.2s;
 }
-.tab-pill.active { background: white; color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.tab-pill.active { background: var(--card-bg); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .tab-pill:hover:not(.active) { color: var(--text-primary); }
 
 /* ── Filter row ────────────────────────────────────────────── */
@@ -741,6 +767,38 @@ pre {
     border-radius: 12px 12px 12px 4px;
     border: 1px solid var(--border);
 }
+/* Citation source chips below bot bubbles */
+.transcript-sources {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 5px; margin-top: 8px;
+}
+.sources-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-secondary); margin-right: 2px;
+}
+.source-chip {
+    display: inline-block; font-size: 11px;
+    padding: 1px 7px; border-radius: 999px;
+    background: rgba(0,0,0,0.07); color: var(--text-secondary);
+    border: 1px solid var(--border); cursor: default;
+    white-space: nowrap; max-width: 260px;
+    overflow: hidden; text-overflow: ellipsis;
+}
+[data-theme="dark"] .source-chip { background: rgba(255,255,255,0.08); }
+
+/* Markdown rendering inside bot bubbles */
+.transcript-content.markdown-body p { margin: 0 0 8px; }
+.transcript-content.markdown-body p:last-child { margin-bottom: 0; }
+.transcript-content.markdown-body ul,
+.transcript-content.markdown-body ol { margin: 4px 0 8px 18px; padding: 0; }
+.transcript-content.markdown-body li { margin-bottom: 2px; }
+.transcript-content.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+.transcript-content.markdown-body strong { font-weight: 600; }
+.transcript-content.markdown-body code { background: rgba(0,0,0,0.07); border-radius: 3px; padding: 1px 4px; font-size: 12px; }
+.transcript-content.markdown-body pre { background: rgba(0,0,0,0.07); border-radius: 6px; padding: 8px; overflow-x: auto; font-size: 12px; margin: 6px 0; }
+.transcript-content.markdown-body a { color: var(--primary); text-decoration: underline; }
+[data-theme="dark"] .transcript-content.markdown-body code,
+[data-theme="dark"] .transcript-content.markdown-body pre { background: rgba(255,255,255,0.08); }
 
 /* ── Empty state ───────────────────────────────────────────── */
 .empty-state {

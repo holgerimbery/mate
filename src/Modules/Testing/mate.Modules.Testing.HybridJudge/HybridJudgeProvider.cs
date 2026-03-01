@@ -159,6 +159,7 @@ public static class HybridJudgeModuleExtensions
         services.AddKeyedSingleton<IJudgeProvider, mate.Modules.Testing.ModelAsJudge.ModelAsJudgeProvider>("ModelAsJudge");
         services.AddHttpClient("ModelAsJudge", c => c.Timeout = TimeSpan.FromSeconds(120));
         services.AddSingleton<HybridJudgeProvider>();
+        services.AddSingleton<IJudgeProvider>(sp => sp.GetRequiredService<HybridJudgeProvider>());
         services.AddSingleton<ITestingModule, HybridJudgeModule>();
         return services;
     }

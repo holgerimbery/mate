@@ -55,6 +55,7 @@ public sealed class mateDbContext : DbContext
     // ── Platform ─────────────────────────────────────────────────────────────
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<GlobalQuestionGenerationSetting> GlobalQuestionGenerationSettings => Set<GlobalQuestionGenerationSetting>();
+    public DbSet<AppSecret> AppSecrets => Set<AppSecret>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -78,7 +79,8 @@ public sealed class mateDbContext : DbContext
         modelBuilder.Entity<Result>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
         modelBuilder.Entity<TranscriptMessage>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
         modelBuilder.Entity<JudgeSetting>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId || e.TenantId == PlatformTenantId);
-        modelBuilder.Entity<RubricSet>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<RubricSet>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId || e.TenantId == PlatformTenantId);
+        modelBuilder.Entity<AppSecret>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId || e.TenantId == PlatformTenantId);
         modelBuilder.Entity<Document>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
         modelBuilder.Entity<Chunk>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
         modelBuilder.Entity<ApiKey>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);

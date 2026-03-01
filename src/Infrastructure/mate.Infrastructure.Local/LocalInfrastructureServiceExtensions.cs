@@ -25,7 +25,7 @@ public static class LocalInfrastructureServiceExtensions
             config.GetSection(LocalInfrastructureOptions.Section));
 
         services.AddScoped<IBlobStorageService, LocalBlobStorageService>();
-        services.AddScoped<ISecretService, EnvironmentVariableSecretService>();
+        services.AddScoped<ISecretService, DatabaseSecretService>();
         services.AddSingleton<IMessageQueue, InProcessMessageQueue>();
         services.AddScoped<IBackupService, SqliteBackupService>();
 
