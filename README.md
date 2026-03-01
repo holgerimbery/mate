@@ -1,4 +1,8 @@
+![version](https://img.shields.io/github/v/release/holgerimbery/mate)
 # **mate** — a multi-agent test environment for AI agents.
+<p align="center">
+  <img src="src/Host/mate.WebUI/wwwroot/mate-logo.png" width="220" alt="Multi-Agent Assessment & Judgement Logo">
+</p>
 
 mate connects to multiple AI agents, runs automated evaluation suites against them, and tracks quality over time. It supports Microsoft Copilot Studio, Azure AI Foundry, generic HTTP agents, and Parloa out of the box — and is extensible with custom connector and judge modules.
 
