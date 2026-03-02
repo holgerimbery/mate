@@ -1,0 +1,62 @@
+services:
+  # ── WebUI ──────────────────────────────────────────────────────────────────
+  webui:
+    image: ghcr.io/holgerimbery/mate-webui:${IMAGE_TAG:-latest}
+    container_name: mate-webui
+    ports:
+      - "5000:8080"
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ASPNETCORE_URLS: http://+:8080
+      Authentication__Scheme: "${Authentication__Scheme:-Generic}"
+      AzureAd__Instance: "${AzureAd__Instance:-https://login.microsoftonline.com/}"
+      AzureAd__TenantId: "${AzureAd__TenantId:-}"
+      AzureAd__ClientId: "${AzureAd__ClientId:-}"
+      AzureAd__ClientSecret: "${AzureAd__ClientSecret:-}"
+      AzureAd__CallbackPath: "${AzureAd__CallbackPath:-/signin-oidc}"
+      AzureAd__SignedOutCallbackPath: "${AzureAd__SignedOutCallbackPath:-/signout-callback-oidc}"
+      AzureAd__ResponseType: code
+      AzureAd__RedirectUri: "${AzureAd__RedirectUri:-}"
+      ReverseProxy__TrustedProxyAddress: "${ReverseProxy__TrustedProxyAddress:-}"
+      Monitoring__Provider: Generic
+      ConnectionStrings__Default: "Data Source=/app/data/mate.db"
+      LocalInfrastructure__BlobStoragePath: /app/data/blobs
+      LocalInfrastructure__SqliteDatabasePath: /app/data/mate.db
+      LocalInfrastructure__BackupPath: /app/data/backups
+    volumes:
+      - mate-data:/app/data
+      - mate-logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Worker ─────────────────────────────────────────────────────────────────
+  worker:
+    image: ghcr.io/holgerimbery/mate-worker:${IMAGE_TAG:-latest}
+    container_name: mate-worker
+    env_file: .env
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Data Source=/app/data/mate.db"
+      LocalInfrastructure__BlobStoragePath: /app/data/blobs
+      LocalInfrastructure__SqliteDatabasePath: /app/data/mate.db
+      LocalInfrastructure__BackupPath: /app/data/backups
+    volumes:
+      - mate-data:/app/data
+      - mate-logs:/app/logs
+    depends_on:
+      webui:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mate-data:
+    name: mate-data
+  mate-logs:
+    name: mate-logs

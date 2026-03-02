@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.2] — 2026-03-02
+
+### Added
+- **GitHub Actions workflow** (`.github/workflows/docker-publish.yml`): automated build and publish pipeline for Docker images.
+  - Triggers on version tags (`v*.*.*`) only — no build on every `main` push.
+  - Matrix strategy builds `mate-webui` and `mate-worker` images in parallel.
+  - Pushes to **GitHub Container Registry** (`ghcr.io/holgerimbery/mate-webui`, `ghcr.io/holgerimbery/mate-worker`).
+  - Multi-arch build (`linux/amd64`, `linux/arm64`) via QEMU.
+  - Tags: full semver, `major.minor`, `sha-<short>`, and `latest` (stable releases only — skipped for pre-release tags like `-rc.1`).
+  - VERSION file guard: build fails if the `VERSION` file does not match the pushed git tag.
+  - `create-release` job: runs after images are pushed, extracts the matching section from `CHANGELOG.md`, bundles the quickstart package (with images pinned to the release tag), and creates a GitHub Release with the changelog body and zip attachment.
+- **Quickstart package** (`quickstart/`): self-contained starter kit for end-users deploying from GHCR.
+  - `docker-compose.yml` — references both `mate-webui` and `mate-worker` GHCR images; all environment variables pre-wired; health-check and named volumes configured.
+  - `.env.template` — minimal template covering `Authentication__Scheme`, `AzureAd__*` Entra ID settings, and reverse-proxy trust configuration.
+  - `README.txt` — step-by-step guide: copy `.env`, configure auth, pin image tags, `docker compose pull && up -d`, API key CI usage, backup notes, and security guidance.
+
+---
+
+## [v0.3.1] — 2026-03-02
+
+### Added
+- **Document Viewer page** (`/documents/{id}`) — full per-document view accessible from the Documents list via a new **View** (eye icon) button per row.
+  - **Metadata panel**: content type, file size, page count, total chunks, upload date, uploader — rendered in a responsive grid with a coloured left border.
+  - **Chunk browser**: all chunks rendered in sequence; each card shows the chunk index badge, token count, and optional category tag.
+  - **Full-text search**: live search field filters chunks client-side as the user types; matching terms are highlighted with a yellow mark; results counter updates in real time; **Clear** button resets the filter.
+  - **Pagination**: 20 chunks per page; Previous / Next controls with current page / total page indicator.
+  - **Breadcrumb navigation**: Documents → _filename_ breadcrumb header with a Back button.
+- **View button in Documents list** (`Documents.razor`) — each document row in `/documents` now has a `bi-eye` View link beside the Delete button, navigating to `/documents/{id}`.
+
+### Fixed
+- **`DocumentViewer.razor` RZ10008 build error**: Blazor rejects combining `@bind:event="oninput"` with a separate `@oninput` handler on the same element. Fixed by replacing `@bind` with a plain `value="@_searchQuery"` binding and updating `_searchQuery` directly inside `OnSearchChanged`.
+- **Chunk text black-on-black rendering**: the global `app.css` rule `pre { background: #1e1e2e; }` applied a dark code-block background to the chunk `<pre>` element; inline `color:var(--text-primary)` then rendered dark text on that background. Fixed by replacing `<pre>` with a `<div style="white-space:pre-wrap">` so the chunk text inherits the card background and colour in both light and dark modes.
+
+---
+
 ## [v0.3.0] — 2026-03-01
 
 ### Added

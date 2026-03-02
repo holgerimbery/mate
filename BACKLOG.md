@@ -29,7 +29,18 @@
 | E17 | Extended Document Sources | Medium |
 | E18 | Dynamic Binary Module System (Plugins) | High |
 | E19 | Red Teaming Module Category | High |
-| E19 | Red Teaming Module Category | High |
+| E20 | Document Viewer & Chunk Browser | Done |
+| E21 | CI/CD — GitHub Actions & Quickstart | Done |
+
+---
+
+## E21 — CI/CD — GitHub Actions & Quickstart *(v0.3.2)* ✅
+
+- `[x]` GitHub Actions workflow (`.github/workflows/docker-publish.yml`) — build & publish `mate-webui` and `mate-worker` to GHCR on version tags
+- `[x]` Multi-arch builds (`linux/amd64`, `linux/arm64`) via QEMU
+- `[x]` VERSION file guard — fails if tag ≠ `VERSION` file
+- `[x]` `create-release` job — extracts changelog, pins quickstart image tags, creates GitHub Release with zip attachment
+- `[x]` Quickstart package (`quickstart/docker-compose.yml`, `.env.template`, `README.txt`) — end-user GHCR deployment kit
 
 ---
 
@@ -139,7 +150,8 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 - [x] **E4-02** **Home / Welcome page** — action card grid, KPI stats, Quick Run modal, Recent Runs feed, Module Status panel, Getting Started steps
 - [ ] **E4-03** **Setup Wizard** — combined tenant + agent onboarding wizard (E2-06 + E3-01 merged)
 - [ ] **E4-04** **Test Suites page** — CRUD, test case management, run execution button
-- [ ] **E4-05** **Documents page** — upload, list, delete; displays chunk count per document
+- [x] **E4-05** **Documents page** — upload, list, delete; displays chunk count per document
+- [x] **E4-36** **Document Viewer page** — per-document view at `/documents/{id}`: metadata panel (type, size, pages, chunks, uploader), chunk browser with live text search, highlighted matches, 20-chunk pagination; View button added to documents list
 - [ ] **E4-06** **Agents page** — CRUD using dynamic config form, health badge, module type badge
 - [x] **E4-07** **Discover page** — environment & agent discovery via Entra ID + Power Platform API (mirrors MaaJforMCS `EnvironmentDiscoveryPage.razor`)
 - [ ] **E4-08** **Dashboard page** — KPI cards, pass rate trend chart, recent runs table, per-module breakdown

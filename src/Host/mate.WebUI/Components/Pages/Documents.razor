@@ -101,7 +101,8 @@
                             <td>@doc.ChunkCount</td>
                             <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
                             <td>@doc.UploadedBy</td>
-                            <td>
+                            <td class="d-flex gap-1">
+                                <a href="/documents/@doc.Id" class="btn btn-sm btn-secondary"><i class="bi bi-eye me-1"></i>View</a>
                                 <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
                             </td>
                         </tr>

@@ -1,0 +1,264 @@
+@attribute [Authorize]
+@page "/documents/{DocumentId:guid}"
+@using mate.Data
+@using mate.Domain.Entities
+@using Microsoft.EntityFrameworkCore
+@inject mateDbContext Db
+@inject NavigationManager Nav
+@inject ITenantContext TenantCtx
+
+<PageTitle>Document Viewer — @BrandInfo.BrandName</PageTitle>
+
+@if (_loading)
+{
+    <div class="mate-page">
+        <div class="d-flex align-items-center gap-2 py-4"><span class="spinner"></span><span>Loading document…</span></div>
+    </div>
+}
+else if (_document is null)
+{
+    <div class="mate-page">
+        <div class="alert alert-warning">Document not found. <a href="/documents">← Back to Documents</a></div>
+    </div>
+}
+else
+{
+    <div class="mate-header">
+        <div>
+            <nav style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">
+                <a href="/documents" style="color:var(--primary);text-decoration:none;font-weight:500">Documents</a>
+                <span style="margin:0 6px;color:var(--text-tertiary)">/</span>
+                <span>@_document.FileName</span>
+            </nav>
+            <h1>@_document.FileName</h1>
+            <p>Document viewer &amp; chunk browser</p>
+        </div>
+        <div style="flex-shrink:0">
+            <a href="/documents" class="btn btn-secondary">
+                <i class="bi bi-chevron-left me-1"></i>Back to Documents
+            </a>
+        </div>
+    </div>
+
+    <div class="mate-page">
+
+        <!-- Document metadata card -->
+        <div class="section-card" style="border-left:4px solid var(--primary)">
+            <h2 class="section-title mb-3"><i class="bi bi-file-earmark-text me-2"></i>Document Info</h2>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px">
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Type</div>
+                    <div style="font-size:14px;margin-top:2px">@_document.ContentType</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Size</div>
+                    <div style="font-size:14px;margin-top:2px">@FormatSize(_document.FileSizeBytes)</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Pages</div>
+                    <div style="font-size:14px;margin-top:2px">@(_document.PageCount > 0 ? _document.PageCount : "—")</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Total Chunks</div>
+                    <div style="font-size:14px;margin-top:2px">@_document.ChunkCount</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Uploaded</div>
+                    <div style="font-size:14px;margin-top:2px">@_document.UploadedAt.ToString("yyyy-MM-dd HH:mm")</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Uploaded By</div>
+                    <div style="font-size:14px;margin-top:2px">@(_document.UploadedBy ?? "—")</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chunk browser -->
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-title"><i class="bi bi-layers me-2"></i>Chunks (@_filteredChunks.Count of @_allChunks.Count)</span>
+            </div>
+
+            <!-- Search bar -->
+            <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+                <div style="position:relative;flex:1;min-width:200px;max-width:480px">
+                    <i class="bi bi-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-secondary);pointer-events:none"></i>
+                    <input type="search"
+                           class="form-control"
+                           style="padding-left:32px;font-size:14px"
+                           placeholder="Search chunk text…"
+                           value="@_searchQuery"
+                           @oninput="OnSearchChanged" />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_searchQuery))
+                {
+                    <button class="btn btn-secondary btn-sm" @onclick="ClearSearch">
+                        <i class="bi bi-x-lg me-1"></i>Clear
+                    </button>
+                }
+                <span style="font-size:12px;color:var(--text-secondary);margin-left:auto">
+                    Showing @(_pageStart + 1)–@Math.Min(_pageStart + PageSize, _filteredChunks.Count) of @_filteredChunks.Count
+                </span>
+            </div>
+
+            @if (_filteredChunks.Count == 0)
+            {
+                <div class="empty-row" style="padding:24px;text-align:center;color:var(--text-secondary)">
+                    @if (!string.IsNullOrWhiteSpace(_searchQuery))
+                    {
+                        <span><i class="bi bi-search me-2"></i>No chunks match "<strong>@_searchQuery</strong>"</span>
+                    }
+                    else
+                    {
+                        <span>No chunks found for this document.</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <!-- Chunk list -->
+                <div style="display:flex;flex-direction:column;gap:12px">
+                    @foreach (var chunk in _filteredChunks.Skip(_pageStart).Take(PageSize))
+                    {
+                        <div style="border:1px solid var(--border-color);border-radius:8px;overflow:hidden">
+                            <!-- Chunk header -->
+                            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--surface-2,var(--bg-secondary));border-bottom:1px solid var(--border-color)">
+                                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;flex-shrink:0">
+                                    @(chunk.ChunkIndex + 1)
+                                </span>
+                                <span style="font-size:12px;color:var(--text-secondary)">
+                                    <i class="bi bi-hash me-1"></i>Chunk @(chunk.ChunkIndex + 1)
+                                </span>
+                                <span style="margin-left:auto;font-size:11px;color:var(--text-secondary)">
+                                    ~@chunk.TokenCount tokens
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(chunk.Category))
+                                {
+                                    <span class="connector-badge" style="font-size:11px">@chunk.Category</span>
+                                }
+                            </div>
+                            <!-- Chunk text -->
+                            <div style="padding:12px 14px">
+                                <div style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;line-height:1.6;margin:0">@HighlightText(chunk.Text)</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Pagination -->
+                @if (_filteredChunks.Count > PageSize)
+                {
+                    <div class="d-flex justify-content-between align-items-center mt-4" style="font-size:14px">
+                        <button class="btn btn-secondary btn-sm" @onclick="PrevPage" disabled="@(_pageStart == 0)">
+                            <i class="bi bi-chevron-left me-1"></i>Previous
+                        </button>
+                        <span style="color:var(--text-secondary)">
+                            Page @(_currentPage + 1) of @_totalPages
+                        </span>
+                        <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_pageStart + PageSize >= _filteredChunks.Count)">
+                            Next<i class="bi bi-chevron-right ms-1"></i>
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid DocumentId { get; set; }
+
+    private const int PageSize = 20;
+
+    private bool _loading = true;
+    private Document? _document;
+    private List<Chunk> _allChunks = [];
+    private List<Chunk> _filteredChunks = [];
+    private string _searchQuery = string.Empty;
+    private int _pageStart;
+    private int _currentPage;
+    private int _totalPages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _document = await Db.Documents
+            .Where(d => d.Id == DocumentId && d.TenantId == TenantCtx.TenantId)
+            .FirstOrDefaultAsync();
+
+        if (_document is not null)
+        {
+            _allChunks = await Db.Chunks
+                .Where(c => c.DocumentId == DocumentId && c.TenantId == TenantCtx.TenantId)
+                .OrderBy(c => c.ChunkIndex)
+                .ToListAsync();
+            ApplyFilter();
+        }
+        _loading = false;
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _searchQuery = e.Value?.ToString() ?? string.Empty;
+        _pageStart = 0;
+        _currentPage = 0;
+        ApplyFilter();
+    }
+
+    private void ClearSearch()
+    {
+        _searchQuery = string.Empty;
+        _pageStart = 0;
+        _currentPage = 0;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _filteredChunks = string.IsNullOrWhiteSpace(_searchQuery)
+            ? _allChunks
+            : _allChunks
+                .Where(c => c.Text.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        _totalPages = (int)Math.Ceiling(_filteredChunks.Count / (double)PageSize);
+    }
+
+    private void PrevPage()
+    {
+        if (_pageStart == 0) return;
+        _pageStart = Math.Max(0, _pageStart - PageSize);
+        _currentPage = _pageStart / PageSize;
+    }
+
+    private void NextPage()
+    {
+        if (_pageStart + PageSize >= _filteredChunks.Count) return;
+        _pageStart += PageSize;
+        _currentPage = _pageStart / PageSize;
+    }
+
+    // Highlight matching search text inside chunk content
+    private MarkupString HighlightText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+            return (MarkupString)System.Net.WebUtility.HtmlEncode(text);
+
+        var encoded = System.Net.WebUtility.HtmlEncode(text);
+        var encodedQuery = System.Net.WebUtility.HtmlEncode(_searchQuery);
+
+        // Case-insensitive replacement preserving original casing
+        var result = System.Text.RegularExpressions.Regex.Replace(
+            encoded,
+            System.Text.RegularExpressions.Regex.Escape(encodedQuery),
+            m => $"<mark style=\"background:rgba(255,200,0,.35);border-radius:2px;padding:0 2px\">{m.Value}</mark>",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        return (MarkupString)result;
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024L) return $"{bytes} B";
+        if (bytes < 1024L * 1024L) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+}

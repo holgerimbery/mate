@@ -7,7 +7,7 @@
 
 mate connects to multiple AI agents, runs automated evaluation suites against them, tracks quality over time, and red-teams them for adversarial vulnerabilities. It supports Microsoft Copilot Studio, Azure AI Foundry, generic HTTP agents, and Parloa out of the box — and is extensible with custom connector, judge, and red-team modules.
 
-Current version: **v0.3.0**  
+Current version: **v0.3.2**  
 
 ---
 
@@ -26,13 +26,61 @@ Current version: **v0.3.0**
 
 ## Quick Start
 
-### Prerequisites
+### Option A — Quickstart package (no clone required)
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+Download the latest `mate-quickstart-<version>.zip` from the [GitHub Releases page](https://github.com/holgerimbery/mate/releases/latest) and unzip it.
 
-### Run locally with Docker
+The GHCR images are private. You need a [GitHub PAT](https://github.com/settings/tokens) with the `read:packages` scope. Log in once:
 
+**Windows (PowerShell)**
+```powershell
+$env:GITHUB_PAT = "ghp_your_token_here"
+$env:GITHUB_PAT | docker login ghcr.io --username YOUR_GITHUB_USERNAME --password-stdin
+```
+**macOS / Linux**
+```bash
+echo "ghp_your_token_here" | docker login ghcr.io --username YOUR_GITHUB_USERNAME --password-stdin
+```
+
+Then start the stack:
+
+**Windows (PowerShell)**
+```powershell
+copy .env.template .env
+# Edit .env — set Authentication__Scheme and optionally Entra ID values
+docker compose pull
+docker compose up -d
+```
+
+**macOS / Linux**
+```bash
+cp .env.template .env
+# Edit .env — set Authentication__Scheme and optionally Entra ID values
+docker compose pull
+docker compose up -d
+```
+
+Open **<http://localhost:5000>**. Images are pulled from GitHub Container Registry (`ghcr.io/holgerimbery/mate-webui`, `ghcr.io/holgerimbery/mate-worker`) — no build step required.
+
+> **Tip:** Pin a specific version by replacing `:latest` with the version tag in `docker-compose.yml`, e.g. `:0.3.2`.
+
+### Option B — Build from source
+
+**Prerequisites:** [.NET 9 SDK](https://dotnet.microsoft.com/download) · [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+**Windows (PowerShell)**
+```powershell
+git clone https://github.com/holgerimbery/mate.git
+cd mate
+
+copy infra\local\.env.template infra\local\.env
+# Edit infra\local\.env if needed — defaults work for local development
+
+cd infra\local
+docker compose up --build
+```
+
+**macOS / Linux**
 ```bash
 git clone https://github.com/holgerimbery/mate.git
 cd mate
@@ -44,10 +92,17 @@ cd infra/local
 docker compose up --build
 ```
 
-Open **<http://localhost:5000>**. No login required in the default `None` auth mode.
+Open **<http://localhost:5000>**. No login required in the default `Generic` auth mode.
 
-### Run without Docker
+### Option C — Run without Docker
 
+**Windows (PowerShell)**
+```powershell
+cd src\Host\mate.WebUI
+dotnet run
+```
+
+**macOS / Linux**
 ```bash
 cd src/Host/mate.WebUI
 dotnet run
