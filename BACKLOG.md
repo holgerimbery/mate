@@ -529,7 +529,7 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 | ID | Issue | Severity |
 |----|-------|----------|
 | TD-01 | Duplicate module directories: `AgentConnector.*` and `AgentConnectors.*` both exist | High |
-| TD-02 | No `.env.template` file documenting required environment variables | Medium |
+| ~~TD-02~~ | ~~No `.env.template` file documenting required environment variables~~ | ~~Resolved in v0.3.2~~ |
 | TD-03 | `dotnet user-secrets` not initialized for local dev | Low |
 | TD-04 | Missing `Class1.cs` stub files should be replaced with real implementations | Low |
 
