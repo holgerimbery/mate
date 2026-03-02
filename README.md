@@ -14,9 +14,16 @@ Current version: **v0.3.2**
 
 ---
 
-## Product Demo
+## Product Demo (movie)
 
-[![product demo](https://img.youtube.com/vi/iQjUIwJGqfs/0.jpg)](https://youtu.be/iQjUIwJGqfs)
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=iQjUIwJGqfs">
+    <img src="https://img.youtube.com/vi/iQjUIwJGqfs/hqdefault.jpg" 
+         alt="Watch the video" 
+         style="border-radius:10px;">
+  </a>
+</p>
+
 
 ---
 
