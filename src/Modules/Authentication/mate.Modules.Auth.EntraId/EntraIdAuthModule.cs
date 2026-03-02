@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using System.Security.Claims;
 using mate.Domain.Contracts.Modules;
 using Microsoft.AspNetCore.Authentication;
@@ -58,12 +61,10 @@ public sealed class EntraIdAuthModule : IAuthModule, IClaimsTransformation
         // NonceCookie/CorrelationCookie) breaks nonce validation because the
         // library's own PostConfigure sets RequireNonce=false for PKCE/code flows —
         // but if our PostConfigure runs after theirs it re-enables nonce cookie
-        // behaviour that then fails (IDX21323). MaaJforMCS works for the same
-        // reason: it also has zero PostConfigure overrides.
+        // behaviour that then fails (IDX21323).
         // AddMicrosoftIdentityWebApp owns ALL cookie, OIDC, and nonce configuration.
         // No PostConfigure overrides — any override runs after the library's own
         // PostConfigure and silently breaks nonce/correlation/session cookie handling.
-        // This matches MaaJforMCS exactly: zero PostConfigure, zero manual options.
         builder.AddMicrosoftIdentityWebApp(config.GetSection("AzureAd"));
 
         // ── API / Bearer token path ────────────────────────────────────────────
@@ -86,7 +87,7 @@ public sealed class EntraIdAuthModule : IAuthModule, IClaimsTransformation
 
     public void ConfigureAuthorization(AuthorizationOptions options, IConfiguration config)
     {
-        // No FallbackPolicy — matches MaaJforMCS. Each page declares [Authorize] individually.
+        // No FallbackPolicy — each page declares [Authorize] individually.
         options.AddPolicy("AnyAuthenticated", p => p.RequireAuthenticatedUser());
         options.AddPolicy("AdminOnly",        p => p.RequireRole("Admin", "PlatformAdmin"));
         options.AddPolicy("TesterOrAbove",    p => p.RequireRole("Admin", "PlatformAdmin", "Tester"));

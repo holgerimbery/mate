@@ -13,8 +13,8 @@
 | E1 | Foundation & Infrastructure | Critical |
 | E2 | Tenant Onboarding | High |
 | E3 | Agent Onboarding (Module-Agnostic) | High |
-| E4 | WebUI — Full Feature Parity with MaaJforMCS | High |
-| E5 | CLI — Full Feature Parity with MaaJforMCS | Medium |
+| E4 | WebUI — Full Feature Parity | High |
+| E5 | CLI — Full Feature Parity | Medium |
 | E6 | Testing Module — Rubrics, Test Sets, Dashboard | High |
 | E7 | Agent Connector Modules (AIFoundry, CopilotStudio, Parloa, Generic) | High |
 | E8 | Testing Engine Modules (HybridJudge, ModelAsJudge, RubricsJudge, Generic) | High |
@@ -35,7 +35,7 @@
 
 ---
 
-## E22 — Module Tier Labels (Free / Premium) *(Unreleased)* ✅
+## E22 — Module Tier Labels (Free / Premium) *(v0.4.0)* ✅
 
 - `[x]` `ModuleTier` enum (`Free`, `Premium`) added to `mate.Domain.Contracts.Modules`
 - `[x]` `ModuleTier Tier { get; }` property added to all module interfaces: `IAgentConnectorModule`, `ITestingModule`, `IQuestionGenerationProvider`, `IMonitoringModule`, `IRedTeamModule`
@@ -101,7 +101,7 @@ GetCapabilities() : List<string>             — declares what the module can do
 
 - [ ] **E1-08** Add Azure Key Vault provider for credential storage (production path)
 - [ ] **E1-09** PostgreSQL migration path — add `MATE_DB_PROVIDER` environment variable switch
-- [ ] **E1-12** Sample data seeder — auto-create a sample agent, test suite, and 5 test cases on first startup when the database is empty (matches MaaJforMCS `TestDataSeeder`)
+- [ ] **E1-12** Sample data seeder — auto-create a sample agent, test suite, and 5 test cases on first startup when the database is empty
 - [ ] **E1-13** Azure Container Apps IaC — Bicep + `azd` template for one-command production deployment; includes WebUI + Worker containers, managed identity, Azure SQL, Service Bus
 
 ---
@@ -128,7 +128,7 @@ GetCapabilities() : List<string>             — declares what the module can do
 
 - [ ] **E2-10** Tenant usage quotas (max agents, max runs/month)
 - [ ] **E2-11** Tenant subscription management UI
-- [ ] **E2-12** User management page — list tenant users, assign Admin/Tester/Viewer roles, activate/deactivate; mirrors MaaJforMCS `User` entity with Role/Email/IsActive/LastActiveAt
+- [ ] **E2-12** User management page — list tenant users, assign Admin/Tester/Viewer roles, activate/deactivate
 - [ ] **E2-13** Role-based suite ownership — assign a test suite to specific users/groups; restrict run execution and edit rights to owners
 
 ---
@@ -152,11 +152,11 @@ GetCapabilities() : List<string>             — declares what the module can do
 
 ---
 
-## E4 — WebUI Feature Parity with MaaJforMCS
+## E4 — WebUI Feature Parity
 
 ### v0.1.0 — Navigation Structure
 
-Implement the same collapsible icon sidebar as MaaJforMCS:
+Implement a collapsible icon sidebar:
 
 - [x] **E4-01** **MainLayout** — collapsible left sidebar with logo, Bootstrap Icons, branding from `BrandInfo`
 - [x] **E4-02** **Home / Welcome page** — action card grid, KPI stats, Quick Run modal, Recent Runs feed, Module Status panel, Getting Started steps
@@ -165,7 +165,7 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 - [x] **E4-05** **Documents page** — upload, list, delete; displays chunk count per document
 - [x] **E4-36** **Document Viewer page** — per-document view at `/documents/{id}`: metadata panel (type, size, pages, chunks, uploader), chunk browser with live text search, highlighted matches, 20-chunk pagination; View button added to documents list
 - [ ] **E4-06** **Agents page** — CRUD using dynamic config form, health badge, module type badge
-- [x] **E4-07** **Discover page** — environment & agent discovery via Entra ID + Power Platform API (mirrors MaaJforMCS `EnvironmentDiscoveryPage.razor`)
+- [x] **E4-07** **Discover page** — environment & agent discovery via Entra ID + Power Platform API
 - [ ] **E4-08** **Dashboard page** — KPI cards, pass rate trend chart, recent runs table, per-module breakdown
 - [x] **E4-09** **Judge Rubrics page** — RubricSet CRUD, criteria editor, assign to test suite
 - [ ] **E4-10** **Run Report page** — results table, transcript modal, human verdict override
@@ -176,11 +176,11 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 
 ### v0.1.0 — Visual Design
 
-- [ ] **E4-15** Match MaaJforMCS color palette: `#f5f6f8` background, `#ffffff` card/sidebar, `#1f1f23` text, Bootstrap Icons
+- [ ] **E4-15** Target color palette: `#f5f6f8` background, `#ffffff` card/sidebar, `#1f1f23` text, Bootstrap Icons
 - [ ] **E4-16** Responsive layout — mobile-friendly collapsed sidebar state
-- [ ] **E4-17** Page-level title + description header (matches MaaJforMCS header pattern)
+- [ ] **E4-17** Page-level title + description header
 
-### v0.1.0 — Run Report parity (MaaJforMCS `TestRunReportPage.razor`)
+### v0.1.0 — Run Report
 
 - [ ] **E4-18** Regression detection panel — amber warning panel when a test case result changes from pass → fail vs. the previous run; side-by-side rationale diff
 - [ ] **E4-19** Pass rate by category/tag breakdown table on Run Report
@@ -188,7 +188,7 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 - [ ] **E4-21** CSV export of run results from Run Report page
 - [ ] **E4-22** Refine Rubric button — sends all human-override disagreements (human ≠ AI verdict) to LLM and returns proposed rubric update; one-click on Run Report
 
-### v0.1.0 — Dashboard parity (MaaJforMCS `Home.razor` + `DashboardPage.razor`)
+### v0.1.0 — Dashboard
 
 - [ ] **E4-23** Pass rate sparkline trend (last 10 runs) on Dashboard/Home page
 - [ ] **E4-24** Latency P95 sparkline trend (last 10 runs) on Dashboard/Home page
@@ -196,21 +196,21 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 - [ ] **E4-26** System status badges on Dashboard — shows DB / AI judge / active connector health at a glance (DB/DirectLine/AI Judge)
 - [ ] **E4-27** Agent environment filter on run history table (dev/test/staging/production)
 
-### v0.1.0 — Test Suites page parity (MaaJforMCS `TestSuitesPage.razor`)
+### v0.1.0 — Test Suites page
 
 - [ ] **E4-28** Import / export test suite as JSON — download whole suite + test cases as JSON; import from JSON file
-- [ ] **E4-29** Test case bulk import via CSV/Excel file (matches MaaJforMCS `EvaluationTemplate.csv` format and Excel import)
+- [ ] **E4-29** Test case bulk import via CSV/Excel file (standard CSV format with question, expectedAnswer, tags columns)
 - [ ] **E4-30** Bulk test case operations — multi-select checkboxes → bulk delete / activate / deactivate
 - [ ] **E4-31** Clone test case — copy a test case within the same suite with a single click
 - [ ] **E4-32** Keyword search + active/inactive filter for test cases within a suite
 - [ ] **E4-33** Re-run failed — re-execute only the failed test cases from a previous run (passes selective `TestCaseIds[]` to the run API)
 
-### v0.1.0 — Documents page parity (MaaJforMCS `DocumentsPage.razor`)
+### v0.1.0 — Documents page
 
 - [ ] **E4-34** HTTP/HTTPS URL paste import — user pastes a public URL; server-side fetch with SSRF protection (block loopback/private CIDRs); 30-second timeout; content chunked same as file uploads
 - [ ] **E4-35** Generate test cases from document — per-document button in Documents page that triggers the `ModelQGen` module and optionally assigns generated cases to a selected suite
 
-### v0.1.0 — Settings page parity (MaaJforMCS `SettingsPage.razor`)
+### v0.1.0 — Settings page
 
 - [ ] **E4-36** Run history pruning — retention threshold in days + "Prune Now" button in Settings; deletes runs (and their results/transcripts) older than the threshold
 
@@ -236,8 +236,8 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 
 - [ ] **E5-08** `mate documents upload <path>` — ingest document via CLI
 - [ ] **E5-09** `mate generate-questions --suite <id>` — AI question generation
-- [ ] **E5-10** `mate report --run <id> [--format json|csv] [--output <dir>]` — export a completed run's results as JSON (default) or CSV; mirrors MaaJforMCS `report` command
-- [ ] **E5-11** `mate list [--config <path>]` — list all test suites with name and test case count (mirrors MaaJforMCS `list` command)
+- [ ] **E5-10** `mate report --run <id> [--format json|csv] [--output <dir>]` — export a completed run's results as JSON (default) or CSV
+- [ ] **E5-11** `mate list [--config <path>]` — list all test suites with name and test case count
 - [ ] **E5-12** `mate generate --document <path> [--suite <name|id>] [--count <n>]` — generate test cases from a local document file; saves to named suite when `--suite` is specified, prints to console otherwise
 
 ---
@@ -250,7 +250,7 @@ Implement the same collapsible icon sidebar as MaaJforMCS:
 - [ ] **E6-02** `RubricCriteria` entity: name, description, weight (0-1), passMark (0-1), evalPrompt
 - [ ] **E6-03** Rubrics management page — create/edit rubric sets, add/remove criteria, weight validation (must sum to 1.0)
 - [ ] **E6-04** Rubric assignment to TestSuite (many-to-many)
-- [ ] **E6-05** Test set import page — upload CSV (matches MaaJforMCS `EvaluationTemplate.csv` format)
+- [ ] **E6-05** Test set import page — upload CSV (standard format: question, expectedAnswer, tags columns)
 - [ ] **E6-06** Test set export page — download current test cases as CSV
 - [ ] **E6-07** Dashboard module breakdown widget — shows pass/fail/pending per agent connector module
 - [ ] **E6-08** Dashboard rubric scores widget — per-criteria average score chart
@@ -346,7 +346,7 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 ## E9 — API Generation & Management Page
 
-### v0.1.0 (mirrors MaaJforMCS ApiKeysPage + Scalar UI)
+### v0.1.0
 
 - [ ] **E9-01** API Keys management page — generate named keys with scopes (Read / Write / Admin)
 - [x] **E9-02** Scalar API reference UI at `/scalar/v1` — already implemented, verify working
@@ -418,7 +418,7 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 - [x] **E13-08** `Agents.razor`, `TestSuites.razor`, `Wizard.razor` updated to use `@inject ITenantContext TenantCtx`
 - [ ] **E13-09** `infra/local/.env.template` — document `Authentication__Scheme`, `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`
 - [ ] **E13-10** README section: "Switching to EntraId authentication" setup guide
-- [x] **E13-11** ~~BLOCKED~~ **RESOLVED** — EntraId login on HTTP localhost works via nginx reverse proxy at `https://maaj.imbery.de`; full OIDC flow confirmed working in production.
+- [x] **E13-11** ~~BLOCKED~~ **RESOLVED** — EntraId login on HTTP localhost works via nginx reverse proxy at a production deployment; full OIDC flow confirmed working.
 - [x] **E13-12** Fixed circular DI infinite loop: `TenantLookupService` now constructs `mateDbContext` directly with `null` tenant context — no DI involvement, loop impossible.
 - [x] **E13-13** Fixed Blazor sync-context deadlock: `Task.Run()` in `ITenantContext` factory escapes `RendererSynchronizationContext`.
 - [x] **E13-14** Fixed user name display: `ClaimsIdentity` constructed with `nameType:"name"` in `EntraIdAuthModule` — maps Entra `name` claim to `Identity.Name`.
@@ -430,7 +430,7 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 ### v0.2.0
 
-- [ ] **E15-01** `MultiAgentExecutionCoordinator` — run the same test suite against N agents simultaneously; creates one `Run` per agent; returns `List<Run>`; mirrors MaaJforMCS `MultiAgentExecutionCoordinator.ExecuteForMultipleAgentsAsync`
+- [ ] **E15-01** `MultiAgentExecutionCoordinator` — run the same test suite against N agents simultaneously; creates one `Run` per agent; returns `List<Run>`
 - [ ] **E15-02** `POST /api/runs` — accept optional `agentIds[]` array to start a multi-agent run in a single API call
 - [ ] **E15-03** Side-by-side agent comparison page — select two or more completed runs against the same suite; compare per-test-case verdicts and scores in a diff-style table; highlight regressions and improvements
 
@@ -440,7 +440,7 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 ### v0.2.0
 
-- [ ] **E16-01** Webhook notification — configurable outbound HTTP POST to a user-supplied URL on run completion or regression detection; payload: run ID, suite, agent, pass rate, verdict summary; mirrors MaaJforMCS backlog item
+- [ ] **E16-01** Webhook notification — configurable outbound HTTP POST to a user-supplied URL on run completion or regression detection; payload: run ID, suite, agent, pass rate, verdict summary
 - [ ] **E16-02** Microsoft Teams notification — post an Adaptive Card to a Teams incoming webhook URL on run completion / regression; configurable per suite or globally in Settings
 - [ ] **E16-03** Email notification — SMTP run summary email on completion; configurable To/From/SMTP host/port/credentials in Settings; basic HTML template with pass/fail counts and top failing tests
 - [ ] **E16-04** Scheduled runs — cron expression config per test suite for automatic execution (Quartz.NET or `IHostedService`-based timer); configurable in Settings; run history shows `scheduler` as executionUser
@@ -608,9 +608,9 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 | TD-06 | Azure AD `response_mode=form_post` requires `SameSite=Unspecified` on OIDC correlation and nonce cookies | Note |
 | TD-07 | ~~ASP.NET Core Data Protection keys must be persisted to a volume in Docker~~ — **RESOLVED**: in-memory keys are correct; persisted keys caused decrypt failures when container restarts with new keys | Resolved |
 | TD-08 | `IHttpContextAccessor.HttpContext` is null in Blazor Server SignalR circuits — always use `AuthenticationStateProvider` fallback for tenant/user resolution | Note |
-| TD-09 | ~~EntraId login requires HTTPS on localhost~~ — **RESOLVED**: production deployment at `https://maaj.imbery.de` via nginx fully resolves the Mixed Content issue; localhost HTTP remains unsupported | Resolved |
-| TD-10 | `Run` entity is missing CI/CD traceability fields present in MaaJforMCS: `GitSha`, `ModelVersion`, `PromptVersion` — add these nullable string columns to `Run` + EF migration | Medium |
-| TD-11 | `TestCase.SourceDocumentId` is a single optional FK; MaaJforMCS uses a `TestCaseDocument` many-to-many join entity — evaluate whether M2M is needed for test cases that reference multiple source chunks | Low |
+| TD-09 | ~~EntraId login requires HTTPS on localhost~~ — **RESOLVED**: production deployment via nginx fully resolves the Mixed Content issue; localhost HTTP remains unsupported | Resolved |
+| TD-10 | `Run` entity is missing CI/CD traceability fields: `GitSha`, `ModelVersion`, `PromptVersion` — add these nullable string columns to `Run` + EF migration | Medium |
+| TD-11 | `TestCase.SourceDocumentId` is a single optional FK; an alternative M2M design uses a `TestCaseDocument` join entity — evaluate whether M2M is needed for test cases that reference multiple source chunks | Low |
 | TD-12 | Missing `Execution:*` config surface: `MaxConcurrency`, `RateLimitPerMinute`, `Retries`, `BackoffSeconds` — add to `appsettings.json` and honour in `TestExecutionService` to avoid throttling when running large suites | Medium |
 
 ---

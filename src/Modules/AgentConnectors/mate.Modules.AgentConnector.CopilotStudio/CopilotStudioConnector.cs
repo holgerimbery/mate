@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
@@ -10,7 +13,7 @@ namespace mate.Modules.AgentConnector.CopilotStudio;
 /// <summary>
 /// Agent connector for Microsoft Copilot Studio bots via Direct Line v3.
 ///
-/// Algorithm ported from MaaJforMCS DirectLineClient with the following improvements:
+/// Implementation notes:
 /// - Exponential backoff retry for polling (MaxRetries = 2, BackoffSeconds = 4).
 /// - Conversation token is generated once per session; never reused across sessions.
 /// - SecretRef resolution is handled by <see cref="AgentConnectionConfig.ResolvedSecrets"/>

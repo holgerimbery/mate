@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
@@ -67,16 +70,16 @@ try
 
     // ── Forwarded Headers (nginx / reverse proxy) ────────────────────────────
     // ASPNETCORE_FORWARDEDHEADERS_ENABLED=true in the container environment
-    // activates the built-in ForwardedHeaders middleware automatically (same
-    // approach as MaaJforMCS). No manual Configure<ForwardedHeadersOptions>
+    // activates the built-in ForwardedHeaders middleware automatically. No manual
+    // Configure<ForwardedHeadersOptions>
     // needed — the built-in handler clears KnownNetworks/KnownProxies so it
     // trusts X-Forwarded-Proto from any upstream, which is correct inside Docker
     // where the proxy IP varies. The explicit custom config below is kept only
     // as a fallback for environments that do NOT set the env var.
 
-    // NOTE: No custom DataProtection config — matching MaaJforMCS which uses
-    // the default in-memory keys. PersistKeysToFileSystem + SetApplicationName
-    // were removed because stale keys in the volume caused cookie decrypt failures.
+    // NOTE: No custom DataProtection config — using the default in-memory keys.
+    // PersistKeysToFileSystem + SetApplicationName were removed because stale
+    // keys in the volume caused cookie decrypt failures.
 
     // ── Data (EF Core + migrations) ──────────────────────────────────────────
     builder.Services.AddmateSqlite(config);
@@ -169,8 +172,8 @@ try
     };
 
     // For EntraId: use OpenIdConnectDefaults.AuthenticationScheme as the outer
-    // scheme name — exactly as MaaJforMCS does. AddMicrosoftIdentityWebApp then
-    // internally wires DefaultScheme=Cookies, DefaultChallengeScheme=OpenIdConnect.
+    // scheme name. AddMicrosoftIdentityWebApp then internally wires
+    // DefaultScheme=Cookies, DefaultChallengeScheme=OpenIdConnect.
     // Overriding those options explicitly (as we did before) can conflict with
     // what the library configures in its own IConfigureOptions pass.
     AuthenticationBuilder authBuilder = authScheme is "EntraId"
@@ -183,7 +186,7 @@ try
     if (authScheme is "EntraId")
         mate.Modules.Auth.EntraId.EntraIdAuthModule.AddMicrosoftIdentityUI(builder.Services);
 
-    // No extra AddScheme — matches MaaJforMCS. API key is handled by inline middleware only.
+    // No extra AddScheme — API key is handled by inline middleware only.
 
     builder.Services.AddAuthorization(options =>
     {
@@ -312,7 +315,7 @@ try
     }
 
     app.UseStaticFiles();
-    // NOTE: No explicit app.UseRouting() here — matches MaaJforMCS exactly.
+    // NOTE: No explicit app.UseRouting() here.
     // In .NET 9, when UseRouting() is called explicitly BEFORE UseAuthentication(),
     // the endpoint is matched before auth runs. The cookie handler then sees the
     // pre-matched /_blazor SignalR endpoint context and issues a raw 401 redirect
@@ -322,7 +325,7 @@ try
     // through UseAuthentication() before any endpoint-specific behaviour fires.
     app.UseAuthentication();
 
-    // API key authentication middleware — mirrors MaaJforMCS inline approach.
+    // API key authentication middleware.
     if (authScheme is not "Generic" and not "None")
     {
         app.Use(async (ctx, next) =>
@@ -361,7 +364,7 @@ try
     app.UseAntiforgery();
 
     // EntraId: map /MicrosoftIdentity/Account/{SignIn,SignOut,AccessDenied} controller routes
-    // Registered AFTER UseAntiforgery — matches MaaJforMCS pipeline order.
+    // Registered AFTER UseAntiforgery.
     if (authScheme is "EntraId")
         app.MapControllers();
 

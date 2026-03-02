@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using mate.Domain.Contracts.Modules;
@@ -27,7 +30,7 @@ internal sealed class JudgeLlmResponse
 /// <summary>
 /// LLM-based judge that evaluates conversational AI responses across five dimensions.
 ///
-/// Algorithm ported from MaaJforMCS AzureAIFoundryJudgeService:
+/// Implementation:
 /// - Builds a structured system + user prompt pair
 /// - Calls Azure OpenAI (or any OpenAI-compatible endpoint)
 /// - Parses the JSON response using IndexOf/LastIndexOf to handle LLM preamble

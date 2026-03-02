@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using System.Text;
 using Microsoft.Extensions.Logging;
 
@@ -6,7 +9,7 @@ namespace mate.Core.DocumentProcessing;
 /// <summary>
 /// Splits extracted document text into overlapping chunks suitable for embedding and retrieval.
 ///
-/// Algorithm (ported from MaaJforMCS DocumentChunker):
+/// Algorithm:
 /// 1. Split text into paragraphs (one or more blank lines).
 /// 2. Accumulate paragraphs into a chunk until <see cref="MaxChunkTokens"/> is reached.
 /// 3. Apply overlap: the last <see cref="OverlapTokens"/> tokens are prepended to the next chunk.

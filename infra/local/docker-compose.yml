@@ -16,7 +16,7 @@ services:
       - "5000:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      # Trust X-Forwarded-Proto / X-Forwarded-For from the upstream proxy (matches MaaJforMCS)
+      # Trust X-Forwarded-Proto / X-Forwarded-For from the upstream proxy
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
       - ASPNETCORE_URLS=http://+:8080
       - Authentication__Scheme=${Authentication__Scheme:-Generic}

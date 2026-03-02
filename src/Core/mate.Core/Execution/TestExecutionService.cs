@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using mate.Data;
 using mate.Domain.Contracts.Infrastructure;
 using mate.Domain.Contracts.Modules;
@@ -373,7 +376,6 @@ public sealed class TestExecutionService
 
     /// <summary>
     /// Calculates a percentile from a sorted list of values.
-    /// Ported from MaaJforMCS TestExecutionService.CalculatePercentile.
     /// </summary>
     private static double CalculatePercentile(List<long> sortedValues, int percentile)
     {

@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using mate.Domain.Contracts.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

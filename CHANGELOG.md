@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.4.0] — 2026-03-02
 
 ### Added
 - **Module Tier Labels** — every module now carries a `ModuleTier` (`Free` / `Premium`) property surfaced as a badge on Settings → Modules cards.
@@ -14,6 +14,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Settings → Modules cards show the tier badge (neutral grey for Free, amber for Premium) alongside the green Active badge.
   - `badge-free` and `badge-premium` CSS classes added to `app.css` with dark-mode variants.
   - `README.md` module tables updated with a `Tier` column; `docs/wiki/Developer-Module-Development.md` gains a **Module Tiers** section documenting the enum values, current assignments, and the required `Tier` member for new modules.
+- **Copyright headers** — 3-line copyright/licence notice added to all 81 hand-written `.cs` files in `src/` (excluding `obj/`, `bin/`, and `Migrations/` generated files).
+
+### Changed
+- **Going public** — repository visibility changed to public; `docs/concepts/` design documents excluded from git tracking; GHCR images configured as public packages.
+- **GHCR public access** — removed Docker login / Personal Access Token instructions from `README.md`, `docs/wiki/User-Getting-Started.md`, and `quickstart/README.txt`; images are publicly accessible on GHCR.
+- **Documentation consistency pass** — wiki version numbers, epic table (added E19, E20), Settings page Modules tab description (added Red Teaming + Question Generation + tier badges), Architecture module table (fixed merged row), tech-debt TD-02 marked resolved.
 
 ---
 

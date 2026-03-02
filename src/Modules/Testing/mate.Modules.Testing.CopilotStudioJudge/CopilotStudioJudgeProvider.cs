@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -63,7 +66,7 @@ internal sealed class CsJudgeLlmResponse
 /// <summary>
 /// Combined rubrics + LLM judge specifically tuned for Microsoft Copilot Studio agents.
 ///
-/// Evaluation strategy (ported from MaaJforMCS <c>AzureAIFoundryJudgeService</c>):
+/// Evaluation strategy:
 ///
 /// 1. Run deterministic rubrics first (fast, free, zero LLM cost).
 ///    - Mandatory failure → immediate "fail", no LLM call.
@@ -355,8 +358,7 @@ public sealed class CopilotStudioJudgeProvider : IJudgeProvider
     // ── Prompt building ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Builds a Copilot Studio-optimized system prompt.
-    /// Ported from MaaJforMCS <c>AzureAIFoundryJudgeService.BuildSystemPrompt</c> with:
+    /// Builds a Copilot Studio-optimized system prompt tailored with:
     /// - Citation block awareness (positive grounding indicator)
     /// - Semantic equivalence examples using real Copilot Studio response patterns
     /// - CopilotStudio-specific pass/fail criteria

@@ -1,3 +1,6 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 namespace mate.Domain;
 
 /// <summary>
@@ -8,7 +11,7 @@ namespace mate.Domain;
 /// </para>
 /// <para>
 /// Note: the <c>mate</c> code identifier (namespaces, project names, DbContext, DI extension methods)
-/// is independent and intentionally NOT derived from this class — see SaaS-Architecture-v2.md §0.
+/// is independent and intentionally NOT derived from this class.
 /// </para>
 /// </summary>
 public static class BrandInfo
