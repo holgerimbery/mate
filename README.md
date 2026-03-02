@@ -27,16 +27,28 @@ Current version: **v0.3.2**
 
 ---
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+
+## Backlog
+
+See [BACKLOG.md](BACKLOG.md) for planned epics and work items.
+
+---
+
 ## Features
 
 - **Multi-agent** — connect and evaluate any number of AI agents in a single test suite
 - **Pluggable judge modules** — ModelAsJudge (LLM scoring), RubricsJudge (deterministic), HybridJudge, CopilotStudioJudge, or write your own
-- **Red teaming** — adversarial probe generation and vulnerability assessment across 8 attack categories (prompt injection, jailbreak, system-prompt leak, data exfiltration, hallucination induction, toxic content, privacy leak, role confusion); pluggable `IRedTeamModule` / `IAttackProvider` architecture
+- **Red teaming*** — adversarial probe generation and vulnerability assessment across 8 attack categories (prompt injection, jailbreak, system-prompt leak, data exfiltration, hallucination induction, toxic content, privacy leak, role confusion); pluggable `IRedTeamModule` / `IAttackProvider` architecture 
 - **Blazor Server UI** — full-featured web interface for managing agents, test suites, documents, rubrics, and results
 - **REST API** — full Minimal API with OpenAPI spec, Scalar explorer, and API key authentication
 - **Multi-tenant** — EF Core global query filters isolate all data per tenant
 - **Auth-flexible** — runs anonymous in local dev (`None`); Microsoft Entra ID (Azure AD) OIDC in production
 - **Docker-first** — single `docker compose up` for the full local stack
+
+*not yet in the code, see premium modules
 
 ---
 
@@ -211,16 +223,6 @@ See `infra/local/.env.template` for the full list.
 
 ---
 
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for the full release history.
-
-## Backlog
-
-See [BACKLOG.md](BACKLOG.md) for planned epics and work items.
-
----
-
 ## License
 
 © Holger Imbery. All rights reserved.
@@ -230,5 +232,5 @@ of this software and associated documentation files (the “Software”), to use
 the Software for personal, educational, or research purposes only, subject to
 the following conditions:
 
-Commercial use of the Software, in whole or in part, is strictly prohibited
-without prior written permission from the copyright holder
+**Commercial use of the Software, in whole or in part, is strictly prohibited
+without prior written permission from the copyright holder**
