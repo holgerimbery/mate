@@ -9,6 +9,8 @@ mate connects to multiple AI agents, runs automated evaluation suites against th
 
 Current version: **v0.3.2**  
 
+
+> Mate is still in an active development phase, so please keep in mind that some parts may not be fully documented yet, or the documentation may still be catching up. You might encounter a few rough edges along the way, so expect a slightly bumpy ride here and there.
 ---
 
 ## Features
