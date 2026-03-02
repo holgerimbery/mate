@@ -6,36 +6,19 @@ You received this file as part of the quickstart zip attached to a
 GitHub Release. To always get the latest version, visit:
   https://github.com/holgerimbery/mate/releases/latest
 
-Images are published to the GitHub Container Registry (GHCR) as private packages:
+Images are published to the GitHub Container Registry (GHCR):
   ghcr.io/holgerimbery/mate-webui
   ghcr.io/holgerimbery/mate-worker
-
-You need a GitHub account and a Personal Access Token (PAT) with the
-'read:packages' scope to pull them.
-Create a PAT at: https://github.com/settings/tokens
 
 Prerequisites
 -------------
 - Docker Desktop  https://www.docker.com/products/docker-desktop/
-- A GitHub account with access to the holgerimbery/mate repository
-- A GitHub PAT with 'read:packages' scope
 - For Entra ID authentication: an Azure App Registration
   See: https://github.com/holgerimbery/mate/wiki/User-API-Keys
 
 Steps
 -----
-1. Log in to GHCR with your GitHub username and PAT:
-
-   Windows (PowerShell):
-     $env:GITHUB_PAT = "ghp_your_token_here"
-     $env:GITHUB_PAT | docker login ghcr.io --username YOUR_GITHUB_USERNAME --password-stdin
-
-   Mac/Linux:
-     echo "ghp_your_token_here" | docker login ghcr.io --username YOUR_GITHUB_USERNAME --password-stdin
-
-   You only need to do this once — Docker stores the credential securely.
-
-2. Copy .env.template to .env
+1. Copy .env.template to .env
      Windows:   copy .env.template .env
      Mac/Linux: cp .env.template .env
 

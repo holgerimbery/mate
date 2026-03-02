@@ -32,19 +32,7 @@ Current version: **v0.3.2**
 
 Download the latest `mate-quickstart-<version>.zip` from the [GitHub Releases page](https://github.com/holgerimbery/mate/releases/latest) and unzip it.
 
-The GHCR images are private. You need a [GitHub PAT](https://github.com/settings/tokens) with the `read:packages` scope. Log in once:
-
-**Windows (PowerShell)**
-```powershell
-$env:GITHUB_PAT = "ghp_your_token_here"
-$env:GITHUB_PAT | docker login ghcr.io --username YOUR_GITHUB_USERNAME --password-stdin
-```
-**macOS / Linux**
-```bash
-echo "ghp_your_token_here" | docker login ghcr.io --username YOUR_GITHUB_USERNAME --password-stdin
-```
-
-Then start the stack:
+Start the stack:
 
 **Windows (PowerShell)**
 ```powershell
