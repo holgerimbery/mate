@@ -68,6 +68,7 @@ public sealed class GenericTestingModule : ITestingModule
 {
     public string ProviderType => "Generic";
     public string DisplayName  => "Generic Judge (text-contains check)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

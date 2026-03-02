@@ -150,6 +150,7 @@ public interface IRedTeamModule
     string ModuleId { get; }
 
     string DisplayName { get; }
+    ModuleTier Tier { get; }
 
     /// <summary>Used for registry lookup — must match <see cref="IAttackProvider.ProviderType"/>.</summary>
     string ProviderType { get; }

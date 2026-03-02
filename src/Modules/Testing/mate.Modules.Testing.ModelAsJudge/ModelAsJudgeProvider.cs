@@ -298,6 +298,7 @@ public sealed class ModelAsJudgeModule : ITestingModule
 {
     public string ProviderType => "ModelAsJudge";
     public string DisplayName  => "Model-as-Judge (LLM evaluation)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

@@ -35,6 +35,7 @@ public sealed class ModelQGenProvider : IQuestionGenerationProvider
     private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
 
     public string ProviderType => "ModelQGen";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public ModelQGenProvider(
         IHttpClientFactory httpClientFactory,
@@ -269,6 +270,7 @@ public sealed class ModelQGenModule : ITestingModule
 {
     public string ProviderType => "ModelQGen";
     public string DisplayName  => "Model Question Generator (LLM-based)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

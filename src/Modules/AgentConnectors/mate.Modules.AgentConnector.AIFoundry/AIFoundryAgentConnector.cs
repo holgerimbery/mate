@@ -44,6 +44,7 @@ public sealed class AIFoundryConnectorModule : IAgentConnectorModule
 {
     public string ConnectorType => "AIFoundry";
     public string DisplayName   => "Azure AI Foundry (coming soon)";
+    public ModuleTier Tier      => ModuleTier.Free;
 
     public IAgentConnector CreateConnector(AgentConnectionConfig config)
         => new AIFoundryAgentConnector();

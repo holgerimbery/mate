@@ -154,6 +154,7 @@ public sealed class RubricsJudgeModule : ITestingModule
 {
     public string ProviderType => "Rubrics";
     public string DisplayName  => "Rubrics Judge (deterministic evaluation)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

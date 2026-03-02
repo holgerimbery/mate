@@ -1,3 +1,4 @@
+using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -93,6 +94,7 @@ public sealed class OpenTelemetryMonitoringModule : IMonitoringModule
 {
     public string ProviderType => "OpenTelemetry";
     public string DisplayName  => "OpenTelemetry (OTLP / Prometheus)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

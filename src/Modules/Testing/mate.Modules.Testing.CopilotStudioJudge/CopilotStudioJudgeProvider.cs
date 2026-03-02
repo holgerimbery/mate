@@ -544,6 +544,7 @@ public sealed class CopilotStudioJudgeModule : ITestingModule
 {
     public string ProviderType => "CopilotStudioJudge";
     public string DisplayName  => "Copilot Studio Judge (Rubrics + Citation-Aware LLM)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

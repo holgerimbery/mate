@@ -128,6 +128,7 @@ public sealed class HybridJudgeModule : ITestingModule
 {
     public string ProviderType => "Hybrid";
     public string DisplayName  => "Hybrid Judge (Rubrics + LLM)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

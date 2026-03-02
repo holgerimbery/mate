@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Module Tier Labels** — every module now carries a `ModuleTier` (`Free` / `Premium`) property surfaced as a badge on Settings → Modules cards.
+  - `ModuleTier` enum (`Free`, `Premium`) added to `mate.Domain.Contracts.Modules`.
+  - `ModuleTier Tier { get; }` property added to all five module interfaces: `IAgentConnectorModule`, `ITestingModule`, `IQuestionGenerationProvider`, `IMonitoringModule`, `IRedTeamModule`.
+  - All current modules implement `ModuleTier.Free` except `GenericRedTeamModule`, which is `ModuleTier.Premium`.
+  - Settings → Modules cards show the tier badge (neutral grey for Free, amber for Premium) alongside the green Active badge.
+  - `badge-free` and `badge-premium` CSS classes added to `app.css` with dark-mode variants.
+  - `README.md` module tables updated with a `Tier` column; `docs/wiki/Developer-Module-Development.md` gains a **Module Tiers** section documenting the enum values, current assignments, and the required `Tier` member for new modules.
+
+---
+
 ## [v0.3.2] — 2026-03-02
 
 ### Added

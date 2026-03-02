@@ -128,31 +128,43 @@ mate.sln
     └── concepts/           — architecture blueprints
 ```
 
+## Module Tiers
+
+Each module carries a **tier** label shown on the Settings → Modules card:
+
+| Tier | Meaning |
+|------|---------|
+| **Free** | Included in every installation — no additional licence required |
+| **Premium** | Requires a premium subscription; fully functional without these modules, but use requires a valid licence |
+
+> Currently the **Generic Red Teaming** module is the only **Premium** module (in development). All agent connector, judge, question-generation, and monitoring modules are **Free**.
+
 ---
 
 ## Agent Connector Modules
 
-| Module | Protocol |
-|--------|---------|
-| `mate.Modules.AgentConnector.CopilotStudio` | Direct Line v3 / Web Channel Security |
-| `mate.Modules.AgentConnector.AIFoundry` | Azure AI Agents SDK |
-| `mate.Modules.AgentConnector.Generic` | Generic HTTP POST |
-| `mate.Modules.AgentConnector.Parloa` | Parloa Conversation API |
+| Module | Protocol | Tier |
+|--------|----------|------|
+| `mate.Modules.AgentConnector.CopilotStudio` | Direct Line v3 / Web Channel Security | Free |
+| `mate.Modules.AgentConnector.AIFoundry` | Azure AI Agents SDK | Free |
+| `mate.Modules.AgentConnector.Generic` | Generic HTTP POST | Free |
+| `mate.Modules.AgentConnector.Parloa` | Parloa Conversation API | Free |
 
 ## Judge (Testing) Modules
 
-| Module | Approach |
-|--------|---------|
-| `mate.Modules.Testing.ModelAsJudge` | LLM 5-dimension scoring |
-| `mate.Modules.Testing.RubricsJudge` | Deterministic Contains / NotContains / Regex |
-| `mate.Modules.Testing.HybridJudge` | Rubrics gate + LLM blend |
-| `mate.Modules.Testing.CopilotStudioJudge` | Citation-aware LLM, Copilot Studio defaults |
-| `mate.Modules.Testing.Generic` | Keyword/regex, zero cost |
+| Module | Approach | Tier |
+|--------|----------|------|
+| `mate.Modules.Testing.ModelAsJudge` | LLM 5-dimension scoring | Free |
+| `mate.Modules.Testing.RubricsJudge` | Deterministic Contains / NotContains / Regex | Free |
+| `mate.Modules.Testing.HybridJudge` | Rubrics gate + LLM blend | Free |
+| `mate.Modules.Testing.CopilotStudioJudge` | Citation-aware LLM, Copilot Studio defaults | Free |
+| `mate.Modules.Testing.Generic` | Keyword/regex, zero cost | Free |
+
 ## Red Teaming Modules
 
-| Module | Approach |
-|--------|----------|
-| `mate.Modules.RedTeaming.Generic` | Built-in static probe library (10 probes, 8 attack categories), heuristic response evaluation, works offline |
+| Module | Approach | Tier |
+|--------|----------|------|
+| `mate.Modules.RedTeaming.Generic` | Built-in static probe library (10 probes, 8 attack categories), heuristic response evaluation, works offline | **Premium** |
 ---
 
 ## Documentation

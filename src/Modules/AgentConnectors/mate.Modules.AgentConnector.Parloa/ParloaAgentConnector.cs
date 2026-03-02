@@ -43,6 +43,7 @@ public sealed class ParloaConnectorModule : IAgentConnectorModule
 {
     public string ConnectorType => "Parloa";
     public string DisplayName   => "Parloa AI (coming soon)";
+    public ModuleTier Tier      => ModuleTier.Free;
 
     public IAgentConnector CreateConnector(AgentConnectionConfig config)
         => new ParloaAgentConnector();

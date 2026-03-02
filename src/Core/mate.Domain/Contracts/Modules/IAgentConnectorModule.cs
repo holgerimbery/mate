@@ -87,6 +87,7 @@ public interface IAgentConnectorModule
 {
     string ConnectorType { get; }
     string DisplayName { get; }
+    ModuleTier Tier { get; }
     void RegisterServices(IServiceCollection services, IConfiguration config);
     IEnumerable<ConfigFieldDefinition> GetConfigDefinition();
     ValidationResult ValidateConfig(string configJson);

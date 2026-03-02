@@ -120,6 +120,7 @@ public interface IJudgeProvider
 public interface IQuestionGenerationProvider
 {
     string ProviderType { get; }
+    ModuleTier Tier { get; }
     Task<IReadOnlyList<GeneratedQuestion>> GenerateAsync(QuestionGenerationRequest request, CancellationToken ct = default);
 }
 
@@ -131,6 +132,7 @@ public interface ITestingModule
 {
     string ProviderType { get; }
     string DisplayName { get; }
+    ModuleTier Tier { get; }
     void RegisterServices(IServiceCollection services, IConfiguration config);
     IEnumerable<ConfigFieldDefinition> GetJudgeConfigDefinition();
 }

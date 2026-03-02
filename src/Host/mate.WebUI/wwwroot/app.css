@@ -112,6 +112,7 @@ h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
 [data-theme="dark"] .badge-pending,
 [data-theme="dark"] .badge-skip         { color: var(--accent); }
 [data-theme="dark"] .badge-purple       { color: var(--secondary); }
+[data-theme="dark"] .badge-premium      { color: var(--accent); }
 /* Alert text + border in dark mode */
 [data-theme="dark"] .alert-success { color: var(--success); border-color: rgba(52,211,153,0.25); }
 [data-theme="dark"] .alert-danger  { color: var(--danger);  border-color: rgba(248,113,113,0.25); }
@@ -572,6 +573,8 @@ html, body {
 .badge-info                                          { background: rgba(0,102,204,0.12);  color: var(--primary); }
 .badge-neutral                                       { background: rgba(107,114,128,0.1); color: var(--text-secondary); }
 .badge-purple                                        { background: rgba(139,92,246,0.12); color: var(--secondary); }
+.badge-free                                          { background: rgba(107,114,128,0.1); color: var(--text-secondary); }
+.badge-premium                                       { background: rgba(245,158,11,0.15); color: #92400e; }
 /* ── Environment badges ─────────────────────────────────────── */
 .badge-development                            { background: rgba(107,114,128,0.12); color: #4b5563; }
 .badge-test                                   { background: rgba(245,158,11,0.12);  color: #b45309; }

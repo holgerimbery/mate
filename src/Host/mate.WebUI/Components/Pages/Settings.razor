@@ -59,7 +59,8 @@
                                 <div style="font-weight:600">@m.DisplayName</div>
                                 <span class="connector-badge">@m.ConnectorType</span>
                             </div>
-                            <span class="badge badge-pass ms-auto">Active</span>
+                            <span class="badge @(m.Tier == ModuleTier.Premium ? "badge-premium" : "badge-free") ms-auto">@m.Tier</span>
+                            <span class="badge badge-pass">Active</span>
                         </div>
                         @{
                             var fields = m.GetConfigDefinition().ToList();
@@ -105,7 +106,8 @@
                                 <div style="font-weight:600">@m.DisplayName</div>
                                 <span class="connector-badge">@m.ProviderType</span>
                             </div>
-                            <span class="badge badge-pass ms-auto">Active</span>
+                            <span class="badge @(m.Tier == ModuleTier.Premium ? "badge-premium" : "badge-free") ms-auto">@m.Tier</span>
+                            <span class="badge badge-pass">Active</span>
                         </div>
                         @{
                             var jFields = m.GetJudgeConfigDefinition().ToList();
@@ -147,7 +149,8 @@
                                 <div style="font-weight:600">@m.DisplayName</div>
                                 <span class="connector-badge">@m.ProviderType</span>
                             </div>
-                            <span class="badge badge-pass ms-auto">Active</span>
+                            <span class="badge @(m.Tier == ModuleTier.Premium ? "badge-premium" : "badge-free") ms-auto">@m.Tier</span>
+                            <span class="badge badge-pass">Active</span>
                         </div>
                     </div>
                 </div>
@@ -174,7 +177,8 @@
                                 <div style="font-weight:600">@QGenDisplayName(m.ProviderType)</div>
                                 <span class="connector-badge">@m.ProviderType</span>
                             </div>
-                            <span class="badge badge-pass ms-auto">Active</span>
+                            <span class="badge @(m.Tier == ModuleTier.Premium ? "badge-premium" : "badge-free") ms-auto">@m.Tier</span>
+                            <span class="badge badge-pass">Active</span>
                         </div>
                         <div class="mt-3">
                             <button class="btn btn-secondary btn-sm" @onclick='() => { _tab = "qgen"; }'><i class="bi bi-gear me-1"></i>Configure</button>
@@ -204,7 +208,8 @@
                                 <div style="font-weight:600">@m.DisplayName</div>
                                 <span class="connector-badge">@m.ProviderType</span>
                             </div>
-                            <span class="badge badge-pass ms-auto">Active</span>
+                            <span class="badge @(m.Tier == ModuleTier.Premium ? "badge-premium" : "badge-free") ms-auto">@m.Tier</span>
+                            <span class="badge badge-pass">Active</span>
                         </div>
                         @{
                             var caps = m.GetCapabilities();

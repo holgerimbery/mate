@@ -1,3 +1,4 @@
+using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,6 +62,7 @@ public sealed class GenericMonitoringModule : IMonitoringModule
 {
     public string ProviderType => "Generic";
     public string DisplayName  => "Generic (structured log)";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

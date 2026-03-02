@@ -46,6 +46,7 @@ public sealed class GenericAgentConnectorModule : IAgentConnectorModule
 {
     public string ConnectorType => "Generic";
     public string DisplayName   => "Generic Connector (placeholder)";
+    public ModuleTier Tier      => ModuleTier.Free;
 
     public IAgentConnector CreateConnector(AgentConnectionConfig config)
         => new GenericAgentConnector();

@@ -199,6 +199,7 @@ public sealed class GenericRedTeamModule : IRedTeamModule
     public string ModuleId     => "generic_red_team";
     public string DisplayName  => "Generic Red Team (built-in probes)";
     public string ProviderType => "Generic";
+    public ModuleTier Tier     => ModuleTier.Premium;
 
     public List<ConfigFieldDefinition> ConfigSchema => [];
 

@@ -31,6 +31,18 @@
 | E19 | Red Teaming Module Category | High |
 | E20 | Document Viewer & Chunk Browser | Done |
 | E21 | CI/CD — GitHub Actions & Quickstart | Done |
+| E22 | Module Tier Labels (Free / Premium) | Done |
+
+---
+
+## E22 — Module Tier Labels (Free / Premium) *(Unreleased)* ✅
+
+- `[x]` `ModuleTier` enum (`Free`, `Premium`) added to `mate.Domain.Contracts.Modules`
+- `[x]` `ModuleTier Tier { get; }` property added to all module interfaces: `IAgentConnectorModule`, `ITestingModule`, `IQuestionGenerationProvider`, `IMonitoringModule`, `IRedTeamModule`
+- `[x]` All existing modules implement `ModuleTier.Free`; `GenericRedTeamModule` implements `ModuleTier.Premium`
+- `[x]` Settings → Modules cards show tier badge (`Free` / `Premium`) alongside the `Active` badge
+- `[x]` CSS classes `badge-free` and `badge-premium` added to `app.css` (light + dark-mode variants)
+- `[x]` `README.md` and `docs/wiki/Developer-Module-Development.md` updated with tier documentation
 
 ---
 

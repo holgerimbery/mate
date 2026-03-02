@@ -43,6 +43,7 @@ public sealed class CopilotStudioConnectorModule : IAgentConnectorModule
 
     public string ConnectorType => "CopilotStudio";
     public string DisplayName   => "Microsoft Copilot Studio";
+    public ModuleTier Tier      => ModuleTier.Free;
 
     public CopilotStudioConnectorModule(IHttpClientFactory httpClientFactory, ILoggerFactory loggerFactory)
     {

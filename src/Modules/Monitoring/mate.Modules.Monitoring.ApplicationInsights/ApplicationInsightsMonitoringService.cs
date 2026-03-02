@@ -1,3 +1,4 @@
+using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.DataContracts;
@@ -109,6 +110,7 @@ public sealed class ApplicationInsightsMonitoringModule : IMonitoringModule
 {
     public string ProviderType => "ApplicationInsights";
     public string DisplayName  => "Azure Application Insights";
+    public ModuleTier Tier     => ModuleTier.Free;
 
     public void RegisterServices(IServiceCollection services, IConfiguration config)
     {

@@ -1,3 +1,4 @@
+using mate.Domain.Contracts.Modules;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -75,5 +76,6 @@ public interface IMonitoringModule
 {
     string ProviderType { get; }
     string DisplayName { get; }
+    ModuleTier Tier { get; }
     void RegisterServices(IServiceCollection services, IConfiguration config);
 }
