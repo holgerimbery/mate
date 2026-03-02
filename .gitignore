@@ -43,3 +43,7 @@ Thumbs.db
 # IDE
 .idea/
 *.swp
+
+#concept store
+docs/concepts/
+
