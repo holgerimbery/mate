@@ -164,9 +164,9 @@ Each module carries a **tier** label shown on the Settings → Modules card:
 | Module | Protocol | Tier |
 |--------|----------|------|
 | `mate.Modules.AgentConnector.CopilotStudio` | Direct Line v3 / Web Channel Security | Free |
-| `mate.Modules.AgentConnector.AIFoundry` | Azure AI Agents SDK | Free |
-| `mate.Modules.AgentConnector.Generic` | Generic HTTP POST | Free |
-| `mate.Modules.AgentConnector.Parloa` | Parloa Conversation API | Free |
+| `mate.Modules.AgentConnector.AIFoundry`* | Azure AI Agents SDK | Free |
+| `mate.Modules.AgentConnector.Generic`* | Generic HTTP POST | Free |
+| `mate.Modules.AgentConnector.Parloa`* | Parloa Conversation API | Free |
 
 ## Judge (Testing) Modules
 
@@ -176,14 +176,15 @@ Each module carries a **tier** label shown on the Settings → Modules card:
 | `mate.Modules.Testing.RubricsJudge` | Deterministic Contains / NotContains / Regex | Free |
 | `mate.Modules.Testing.HybridJudge` | Rubrics gate + LLM blend | Free |
 | `mate.Modules.Testing.CopilotStudioJudge` | Citation-aware LLM, Copilot Studio defaults | Free |
-| `mate.Modules.Testing.Generic` | Keyword/regex, zero cost | Free |
+| `mate.Modules.Testing.Generic`* | Keyword/regex, zero cost | Free |
 
 ## Red Teaming Modules
 
 | Module | Approach | Tier |
 |--------|----------|------|
 | `mate.Modules.RedTeaming.Generic` | Built-in static probe library (10 probes, 8 attack categories), heuristic response evaluation, works offline | **Premium** |
----
+
+> \* backlog item — not yet implemented
 
 ## Documentation
 

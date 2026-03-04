@@ -22,7 +22,7 @@
 | E10 | Self-Check & App Health Mechanisms | Medium |
 | E11 | Logging System | Medium |
 | E12 | Versioning, CHANGELOG, BACKLOG | Done |
-| E13 | Authentication — EntraId full flow | Blocked |
+| E13 | Authentication — EntraId full flow | Done |
 | E14 | HTTPS on localhost — dev cert for Docker | High |
 | E15 | Multi-Agent Execution & Comparison | High |
 | E16 | Notifications & Scheduled Runs | Medium |
@@ -32,6 +32,7 @@
 | E20 | Document Viewer & Chunk Browser | Done |
 | E21 | CI/CD — GitHub Actions & Quickstart | Done |
 | E22 | Module Tier Labels (Free / Premium) | Done |
+| E23 | Run Report Enhancements (Tags, Refine Rubric, Draft Rubric Sets) | Done |
 
 ---
 
@@ -47,7 +48,7 @@
 
 ---
 
-## E4 — WebUI Run Report Enhancements *(v0.5.0)* ✅
+## E23 — Run Report Enhancements *(v0.5.0)* ✅
 
 - `[x]` Pass rate by tag breakdown table on Run Report (E4-19)
 - `[x]` `Tags string[]` property on `TestCase` entity; EF migration `AddTestCaseTags`
@@ -111,7 +112,7 @@ GetCapabilities() : List<string>             — declares what the module can do
 - [x] **E1-01** Resolve duplicate AgentConnector module directories (singular vs plural: `AgentConnector.*` vs `AgentConnectors.*`) — keep one set, remove the other
 - [ ] **E1-02** Add `mate.Data` EF migration for multi-tenant entities (Tenants, TenantSubscriptions, TenantUsers)
 - [ ] **E1-03** Add `mate.Data` EF migration for Rubrics entities (RubricSet, RubricCriteria)
-- [ ] **E1-04** Create `data/` directory gitkeep in mate root so local SQLite file path works
+- [x] **~~E1-04~~** *(obsolete — SQLite removed in v0.6.0)* ~~Create `data/` directory gitkeep in mate root so local SQLite file path works~~
 - [x] **E1-05** Add `.env.template` file documenting all required environment variables
 - [ ] **E1-06** Add `dotnet user-secrets` setup instructions to README
 - [x] **E1-07** Verify `mate.sln` includes ALL projects (check for missing module projects)
@@ -562,6 +563,14 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 | ~~TD-02~~ | ~~No `.env.template` file documenting required environment variables~~ | ~~Resolved in v0.3.2~~ |
 | TD-03 | `dotnet user-secrets` not initialized for local dev | Low |
 | TD-04 | Missing `Class1.cs` stub files should be replaced with real implementations | Low |
+| TD-05 | `AddMicrosoftIdentityWebApp(AuthenticationBuilder)` overload does not set DefaultScheme/DefaultChallengeScheme — must be set explicitly before calling it | Note |
+| TD-06 | Azure AD `response_mode=form_post` requires `SameSite=Unspecified` on OIDC correlation and nonce cookies | Note |
+| ~~TD-07~~ | ~~ASP.NET Core Data Protection keys must be persisted to a volume in Docker~~ — **RESOLVED**: in-memory keys are correct; persisted keys caused decrypt failures when container restarts with new keys | Resolved |
+| TD-08 | `IHttpContextAccessor.HttpContext` is null in Blazor Server SignalR circuits — always use `AuthenticationStateProvider` fallback for tenant/user resolution | Note |
+| ~~TD-09~~ | ~~EntraId login requires HTTPS on localhost~~ — **RESOLVED**: production deployment via nginx fully resolves the Mixed Content issue; localhost HTTP remains unsupported | Resolved |
+| TD-10 | `Run` entity is missing CI/CD traceability fields: `GitSha`, `ModelVersion`, `PromptVersion` — add these nullable string columns to `Run` + EF migration | Medium |
+| TD-11 | `TestCase.SourceDocumentId` is a single optional FK; an alternative M2M design uses a `TestCaseDocument` join entity — evaluate whether M2M is needed for test cases that reference multiple source chunks | Low |
+| TD-12 | Missing `Execution:*` config surface: `MaxConcurrency`, `RateLimitPerMinute`, `Retries`, `BackoffSeconds` — add to `appsettings.json` and honour in `TestExecutionService` to avoid throttling when running large suites | Medium |
 
 ---
 
@@ -634,15 +643,7 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 - [ ] **E19-33** Trend analysis — compare finding counts and highest risk across multiple red-team runs for the same agent; trend chart on Red Team page
 - [ ] **E19-34** PDF report export — formatted red-team report with executive summary, finding table, and remediation guidance; suitable for compliance reviews
 - [ ] **E19-35** EU AI Act Art. 9 compliance annotation — tag findings with relevant AI Act obligation; PDF report section maps findings to Art. 9 sub-requirements
-| TD-05 | `AddMicrosoftIdentityWebApp(AuthenticationBuilder)` overload does not set DefaultScheme/DefaultChallengeScheme — must be set explicitly before calling it | Note |
-| TD-06 | Azure AD `response_mode=form_post` requires `SameSite=Unspecified` on OIDC correlation and nonce cookies | Note |
-| TD-07 | ~~ASP.NET Core Data Protection keys must be persisted to a volume in Docker~~ — **RESOLVED**: in-memory keys are correct; persisted keys caused decrypt failures when container restarts with new keys | Resolved |
-| TD-08 | `IHttpContextAccessor.HttpContext` is null in Blazor Server SignalR circuits — always use `AuthenticationStateProvider` fallback for tenant/user resolution | Note |
-| TD-09 | ~~EntraId login requires HTTPS on localhost~~ — **RESOLVED**: production deployment via nginx fully resolves the Mixed Content issue; localhost HTTP remains unsupported | Resolved |
-| TD-10 | `Run` entity is missing CI/CD traceability fields: `GitSha`, `ModelVersion`, `PromptVersion` — add these nullable string columns to `Run` + EF migration | Medium |
-| TD-11 | `TestCase.SourceDocumentId` is a single optional FK; an alternative M2M design uses a `TestCaseDocument` join entity — evaluate whether M2M is needed for test cases that reference multiple source chunks | Low |
-| TD-12 | Missing `Execution:*` config surface: `MaxConcurrency`, `RateLimitPerMinute`, `Retries`, `BackoffSeconds` — add to `appsettings.json` and honour in `TestExecutionService` to avoid throttling when running large suites | Medium |
 
 ---
 
-*Last updated: 2026-03-01, Session 14 (parity audit) — v0.2.0 released*
+*Last updated: 2026-03-04, v0.6.0 released*
