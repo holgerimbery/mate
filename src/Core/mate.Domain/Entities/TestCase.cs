@@ -29,6 +29,12 @@ public class TestCase
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// Free-form tags for grouping and filtering test cases (e.g. "billing", "auth", "happy-path").
+    /// Used in the Run Report pass-rate-by-tag breakdown.
+    /// </summary>
+    public string[] Tags { get; set; } = [];
+
     /// <summary>Optional link to the source document this test was generated from.</summary>
     public Guid? SourceDocumentId { get; set; }
 

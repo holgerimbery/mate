@@ -100,7 +100,18 @@
                                                 {
                                                     <tr>
                                                         <td>@tc.SortOrder</td>
-                                                        <td>@tc.Name<br /><small>@tc.Description</small></td>
+                                                        <td>
+                                                            @tc.Name<br /><small>@tc.Description</small>
+                                                            @if (tc.Tags.Length > 0)
+                                                            {
+                                                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                                                    @foreach (var t in tc.Tags)
+                                                                    {
+                                                                        <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px">@t</span>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </td>
                                                         <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
                                                         <td>@(tc.IsActive ? "✓" : "✗")</td>
                                                         <td>
@@ -384,6 +395,10 @@ else if (_showSuiteForm)
                 <textarea class="form-control" rows="3" @bind="_caseForm.ReferenceAnswer" placeholder="Optional golden answer"></textarea>
             </div>
             <div class="form-group">
+                <label class="form-label">Tags <small class="text-muted">(comma-separated)</small></label>
+                <input class="form-control" @bind="_caseForm.TagsRaw" placeholder="billing, happy-path, auth" />
+            </div>
+            <div class="form-group">
                 <label class="form-label">Sort Order</label>
                 <input class="form-control" type="number" @bind="_caseForm.SortOrder" style="width:100px" />
             </div>
@@ -588,6 +603,7 @@ else if (_showSuiteForm)
         public string? ExpectedIntent { get; set; }
         public string ExpectedEntitiesRaw { get; set; } = string.Empty;
         public string? ReferenceAnswer { get; set; }
+        public string TagsRaw { get; set; } = string.Empty;
         public int SortOrder { get; set; }
         public bool IsActive { get; set; } = true;
     }
@@ -905,6 +921,7 @@ else if (_showSuiteForm)
             ExpectedIntent = tc.ExpectedIntent,
             ExpectedEntitiesRaw = string.Join(", ", tc.ExpectedEntities),
             ReferenceAnswer = tc.ReferenceAnswer,
+            TagsRaw = string.Join(", ", tc.Tags),
             SortOrder = tc.SortOrder,
             IsActive = tc.IsActive
         };
@@ -921,6 +938,8 @@ else if (_showSuiteForm)
 
         var entities = _caseForm.ExpectedEntitiesRaw
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var caseTags = _caseForm.TagsRaw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         if (_editCase is null)
         {
@@ -936,6 +955,7 @@ else if (_showSuiteForm)
                 ExpectedIntent = _caseForm.ExpectedIntent,
                 ExpectedEntities = entities,
                 ReferenceAnswer = _caseForm.ReferenceAnswer,
+                Tags = caseTags,
                 SortOrder = _caseForm.SortOrder,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -952,6 +972,7 @@ else if (_showSuiteForm)
             _editCase.ExpectedIntent = _caseForm.ExpectedIntent;
             _editCase.ExpectedEntities = entities;
             _editCase.ReferenceAnswer = _caseForm.ReferenceAnswer;
+            _editCase.Tags = caseTags;
             _editCase.SortOrder = _caseForm.SortOrder;
             _editCase.IsActive = _caseForm.IsActive;
             _editCase.UpdatedAt = DateTime.UtcNow;

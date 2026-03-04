@@ -161,14 +161,14 @@ Implement a collapsible icon sidebar:
 - [x] **E4-01** **MainLayout** — collapsible left sidebar with logo, Bootstrap Icons, branding from `BrandInfo`
 - [x] **E4-02** **Home / Welcome page** — action card grid, KPI stats, Quick Run modal, Recent Runs feed, Module Status panel, Getting Started steps
 - [ ] **E4-03** **Setup Wizard** — combined tenant + agent onboarding wizard (E2-06 + E3-01 merged)
-- [ ] **E4-04** **Test Suites page** — CRUD, test case management, run execution button
+- [x] **E4-04** **Test Suites page** — CRUD, test case management, run execution button
 - [x] **E4-05** **Documents page** — upload, list, delete; displays chunk count per document
 - [x] **E4-36** **Document Viewer page** — per-document view at `/documents/{id}`: metadata panel (type, size, pages, chunks, uploader), chunk browser with live text search, highlighted matches, 20-chunk pagination; View button added to documents list
 - [ ] **E4-06** **Agents page** — CRUD using dynamic config form, health badge, module type badge
 - [x] **E4-07** **Discover page** — environment & agent discovery via Entra ID + Power Platform API
-- [ ] **E4-08** **Dashboard page** — KPI cards, pass rate trend chart, recent runs table, per-module breakdown
+- [x] **E4-08** **Dashboard page** — KPI cards, pass rate trend chart, recent runs table, per-module breakdown
 - [x] **E4-09** **Judge Rubrics page** — RubricSet CRUD, criteria editor, assign to test suite
-- [ ] **E4-10** **Run Report page** — results table, transcript modal, human verdict override
+- [x] **E4-10** **Run Report page** — results table, transcript modal, human verdict override
 - [x] **E4-11** **Help page** — documentation links, REST API reference table, OpenAPI download, Interactive API Explorer link
 - [x] **E4-12** **Audit Log page** (admin) — paginated event log with filters
 - [x] **E4-13** **API Keys page** (admin) — generate, list, revoke keys; show scopes
@@ -182,11 +182,11 @@ Implement a collapsible icon sidebar:
 
 ### v0.1.0 — Run Report
 
-- [ ] **E4-18** Regression detection panel — amber warning panel when a test case result changes from pass → fail vs. the previous run; side-by-side rationale diff
-- [ ] **E4-19** Pass rate by category/tag breakdown table on Run Report
-- [ ] **E4-20** Per-result confidence score trend — sparkline of last 6 runs + delta indicator per test case row
-- [ ] **E4-21** CSV export of run results from Run Report page
-- [ ] **E4-22** Refine Rubric button — sends all human-override disagreements (human ≠ AI verdict) to LLM and returns proposed rubric update; one-click on Run Report
+- [x] **E4-18** Regression detection panel — amber warning panel when a test case result changes from pass → fail vs. the previous run; side-by-side rationale diff
+- [x] **E4-19** Pass rate by category/tag breakdown table on Run Report
+- [x] **E4-20** Per-result confidence score trend — sparkline of last 6 runs + delta indicator per test case row
+- [x] **E4-21** CSV export of run results from Run Report page
+- [x] **E4-22** Refine Rubric button — sends all human-override disagreements (human ≠ AI verdict) to LLM and returns proposed rubric update; one-click on Run Report
 
 ### v0.1.0 — Dashboard
 

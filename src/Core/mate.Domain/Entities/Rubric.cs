@@ -22,6 +22,17 @@ public class RubricSet
     /// </summary>
     public bool RequireAllMandatory { get; set; } = true;
 
+    /// <summary>
+    /// True while this set is an AI-generated draft awaiting human review.
+    /// Set to false ("Promote") to make it active and assign it to a judge.
+    /// </summary>
+    public bool IsDraft { get; set; } = false;
+
+    /// <summary>
+    /// The Run that triggered the AI rubric suggestion. Null for manually created sets.
+    /// </summary>
+    public Guid? SourceRunId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

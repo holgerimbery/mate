@@ -38,6 +38,7 @@
                     <thead>
                         <tr>
                             <th>Name</th>
+                            <th>Linked Judge</th>
                             <th>Description</th>
                             <th>Criteria</th>
                             <th>Mandatory Override</th>
@@ -49,8 +50,22 @@
                         @foreach (var rs in _rubricSets)
                         {
                             <tr>
-                                <td><strong>@rs.Name</strong></td>
-                                <td style="font-size:13px;color:var(--text-secondary)">@(rs.Description ?? "—")</td>
+                                <td>
+                                    <strong>@rs.Name</strong>
+                                    @if (rs.IsDraft) { <span class="badge badge-premium ms-2" style="font-size:10px;vertical-align:middle">DRAFT</span> }
+                                </td>
+                                <td style="font-size:13px">
+                                    @{ var linkedJudge = _judgeSettings.FirstOrDefault(j => j.Id == rs.JudgeSettingId); }
+                                    @if (linkedJudge is not null)
+                                    {
+                                        <span class="connector-badge">@linkedJudge.Name</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:var(--text-secondary)">&#x2014;</span>
+                                    }
+                                </td>
+                                <td style="font-size:13px;color:var(--text-secondary)">@(rs.Description?.Length > 80 ? rs.Description[..78] + "…" : rs.Description ?? "—")</td>
                                 <td>
                                     <span class="connector-badge">@rs.Criteria.Count criterion@(rs.Criteria.Count == 1 ? "" : "a")</span>
                                 </td>
@@ -59,6 +74,10 @@
                                 <td>
                                     <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(rs)"><i class="bi bi-pencil me-1"></i>Edit</button>
                                     <button class="btn btn-sm btn-secondary" @onclick="() => OpenCriteria(rs)"><i class="bi bi-list-nested me-1"></i>Criteria</button>
+                                    @if (rs.IsDraft)
+                                    {
+                                        <button class="btn btn-sm btn-primary" @onclick="() => PromoteRubricSet(rs)" title="Remove draft flag — make this rubric set active"><i class="bi bi-check2-circle me-1"></i>Promote</button>
+                                    }
                                     <button class="btn btn-sm btn-secondary" @onclick="() => CloneRubricSet(rs)" title="Clone"><i class="bi bi-copy"></i></button>
                                     <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(rs)"><i class="bi bi-trash"></i></button>
                                 </td>
@@ -83,6 +102,17 @@ else if (_formMode == "set")
     </div>
     <div class="mate-page">
         <div class="section-card">
+            <div class="form-group">
+                <label class="form-label">Judge Setting *</label>
+                <select class="form-control" @bind="_setForm.JudgeSettingId">
+                    <option value="">&#x2014; Select a judge setting &#x2014;</option>
+                    @foreach (var js in _judgeSettings)
+                    {
+                        <option value="@js.Id">@js.Name (@js.ProviderType)@(js.IsDefault ? " [default]" : "")</option>
+                    }
+                </select>
+                <small class="text-muted">The judge that will use this rubric set. Must be type Rubrics, Hybrid, or CopilotStudioJudge.</small>
+            </div>
             <div class="form-group">
                 <label class="form-label">Name *</label>
                 <input class="form-control" @bind="_setForm.Name" placeholder="e.g. Safety Criteria" />
@@ -255,6 +285,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
     private bool _loading;
     private string _error = string.Empty;
     private List<RubricSet> _rubricSets = [];
+    private List<JudgeSetting> _judgeSettings = [];
 
     private Guid? _editSetId;
     private RubricSet? _selectedRubricSet;
@@ -265,6 +296,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
         public string  Name                { get; set; } = string.Empty;
         public string? Description         { get; set; }
         public bool    RequireAllMandatory { get; set; }
+        public string  JudgeSettingId      { get; set; } = string.Empty;
     }
 
     private class CriterionForm
@@ -294,6 +326,9 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
                 .Include(r => r.Criteria)
                 .OrderBy(r => r.Name)
                 .ToListAsync();
+            _judgeSettings = await Db.JudgeSettings
+                .OrderBy(j => j.Name)
+                .ToListAsync();
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; }
@@ -313,7 +348,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
     private void OpenEdit(RubricSet rs)
     {
         _editSetId = rs.Id;
-        _setForm   = new() { Name = rs.Name, Description = rs.Description, RequireAllMandatory = rs.RequireAllMandatory };
+        _setForm   = new() { Name = rs.Name, Description = rs.Description, RequireAllMandatory = rs.RequireAllMandatory, JudgeSettingId = rs.JudgeSettingId == Guid.Empty ? string.Empty : rs.JudgeSettingId.ToString() };
         _formError = string.Empty;
         _formMode  = "set";
         _showForm  = true;
@@ -340,6 +375,8 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
     {
         if (string.IsNullOrWhiteSpace(_setForm.Name)) { _formError = "Name is required."; return; }
 
+        var judgeId = Guid.TryParse(_setForm.JudgeSettingId, out var jg) ? jg : Guid.Empty;
+
         try
         {
             if (_editSetId.HasValue)
@@ -348,6 +385,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
                 rs.Name                = _setForm.Name;
                 rs.Description         = _setForm.Description;
                 rs.RequireAllMandatory = _setForm.RequireAllMandatory;
+                rs.JudgeSettingId      = judgeId;
             }
             else
             {
@@ -355,6 +393,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
                 {
                     Id                  = Guid.NewGuid(),
                     TenantId            = TenantCtx.TenantId,
+                    JudgeSettingId      = judgeId,
                     Name                = _setForm.Name,
                     Description         = _setForm.Description,
                     RequireAllMandatory = _setForm.RequireAllMandatory,
@@ -405,6 +444,17 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
     }
 
     private void ConfirmDelete(RubricSet rs) => _deleteTarget = rs;
+
+    private async Task PromoteRubricSet(RubricSet rs)
+    {
+        try
+        {
+            rs.IsDraft = false;
+            await Db.SaveChangesAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
 
     private async Task DeleteRubricSet()
     {

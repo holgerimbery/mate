@@ -70,6 +70,7 @@ public sealed class TestExecutionService
         var judgeSetting = await ResolveJudgeSettingAsync(suite, agent, run.TenantId, ct);
         var judgeProvider = _registry.GetJudgeProvider(judgeSetting.ProviderType);
         var judgeSnapshot = MapToSnapshot(judgeSetting, await ResolveSecretsAsync(judgeSetting, ct));
+        var rubricCriteria = await LoadRubricCriteriaAsync(judgeSetting.Id, ct);
 
         // Load connector for this agent
         var connectorConfig = agent.ConnectorConfigs
@@ -88,7 +89,7 @@ public sealed class TestExecutionService
         {
             if (ct.IsCancellationRequested) break;
 
-            var result = await ExecuteTestCaseAsync(run, testCase, connector, agentConfig, judgeProvider, judgeSnapshot, ct);
+            var result = await ExecuteTestCaseAsync(run, testCase, connector, agentConfig, judgeProvider, judgeSnapshot, rubricCriteria, ct);
 
             _db.Results.Add(result);
             _db.TranscriptMessages.AddRange(result.Transcript);
@@ -151,6 +152,7 @@ public sealed class TestExecutionService
         AgentConnectionConfig agentConfig,
         IJudgeProvider judge,
         JudgeSettingSnapshot judgeSnapshot,
+        IReadOnlyList<EvaluationCriterion> rubricCriteria,
         CancellationToken ct)
     {
         var result = new Result
@@ -214,6 +216,7 @@ public sealed class TestExecutionService
                 ReferenceAnswer = testCase.ReferenceAnswer,
                 Transcript = transcript,
                 JudgeSetting = judgeSnapshot,
+                RubricCriteria = rubricCriteria,
             };
 
             var verdict = await judge.EvaluateAsync(request, ct);
@@ -299,6 +302,22 @@ public sealed class TestExecutionService
             ?? throw new InvalidOperationException("No JudgeSetting configured. Seed the database or create one.");
 
         return platformDefault;
+    }
+
+    private async Task<IReadOnlyList<EvaluationCriterion>> LoadRubricCriteriaAsync(
+        Guid judgeSettingId, CancellationToken ct)
+    {
+        var criteria = await _db.RubricCriterias
+            .IgnoreQueryFilters()
+            .Where(c => _db.RubricSets
+                .IgnoreQueryFilters()
+                .Where(rs => rs.JudgeSettingId == judgeSettingId && !rs.IsDraft)
+                .Select(rs => rs.Id)
+                .Contains(c.RubricSetId))
+            .OrderBy(c => c.SortOrder)
+            .Select(c => new EvaluationCriterion(c.Name, c.EvaluationType, c.Pattern, c.Weight, c.IsMandatory))
+            .ToListAsync(ct);
+        return criteria;
     }
 
     private async Task<(string? endpoint, string? apiKey)> ResolveSecretsAsync(

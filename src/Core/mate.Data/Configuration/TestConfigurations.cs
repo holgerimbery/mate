@@ -57,5 +57,12 @@ internal sealed class TestCaseConfiguration : IEntityTypeConfiguration<TestCase>
                 v => JsonSerializer.Serialize(v, _json),
                 v => JsonSerializer.Deserialize<string[]>(v, _json) ?? Array.Empty<string>())
             .HasColumnName("ExpectedEntitiesJson");
+
+        b.Property(e => e.Tags)
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, _json),
+                v => JsonSerializer.Deserialize<string[]>(v, _json) ?? Array.Empty<string>())
+            .HasColumnName("TagsJson")
+            .HasDefaultValue(Array.Empty<string>());
     }
 }

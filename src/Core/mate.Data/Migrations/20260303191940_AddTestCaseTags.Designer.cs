@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using mate.Data;
 
@@ -10,9 +11,11 @@ using mate.Data;
 namespace mate.Data.Migrations
 {
     [DbContext(typeof(mateDbContext))]
-    partial class mateDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260303191940_AddTestCaseTags")]
+    partial class AddTestCaseTags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.2");
@@ -602,9 +605,6 @@ namespace mate.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsDraft")
-                        .HasColumnType("INTEGER");
-
                     b.Property<Guid>("JudgeSettingId")
                         .HasColumnType("TEXT");
 
@@ -615,9 +615,6 @@ namespace mate.Data.Migrations
 
                     b.Property<bool>("RequireAllMandatory")
                         .HasColumnType("INTEGER");
-
-                    b.Property<Guid?>("SourceRunId")
-                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("TEXT");
