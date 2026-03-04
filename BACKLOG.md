@@ -35,6 +35,17 @@
 
 ---
 
+## E4 — WebUI Run Report Enhancements *(v0.5.0)* ✅
+
+- `[x]` Pass rate by tag breakdown table on Run Report (E4-19)
+- `[x]` `Tags string[]` property on `TestCase` entity; EF migration `AddTestCaseTags`
+- `[x]` Tags field in Test Suites Add/Edit Case modal; badge chips in case sub-table
+- `[x]` Refine Rubric feature on Run Report — submits disagreements to AI judge for rubric suggestions (E4-22)
+- `[x]` Draft rubric sets — save AI suggestions as `IsDraft = true` `RubricSet`; Promote to active on Rubrics page
+- `[x]` EF migration `AddRubricSetDraft` (`IsDraft`, `SourceRunId` on `RubricSets`)
+
+---
+
 ## E22 — Module Tier Labels (Free / Premium) *(v0.4.0)* ✅
 
 - `[x]` `ModuleTier` enum (`Free`, `Premium`) added to `mate.Domain.Contracts.Modules`

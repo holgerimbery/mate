@@ -6,9 +6,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [v0.5.0] — 2026-03-04
+
 ### Added
 - **Pass rate by tag** (E4-19) — Run Report now shows a _Pass Rate by Tag_ breakdown table grouping test cases by their tags (or `(untagged)`). Each row shows total cases, pass count, fail count, a visual pass-rate bar, and average score.
-- **Tags on test cases** — `TestCase` entity now has a `Tags string[]` property (stored as JSON column `TagsJson`); EF migration included.
+- **Tags on test cases** — `TestCase` entity now has a `Tags string[]` property (stored as JSON column `TagsJson`); EF migration `AddTestCaseTags` included.
 - **Tags on test cases in UI** — Test Suites page Add/Edit Case modal now includes a Tags field (comma-separated); tags are displayed as badge chips in the test case sub-table.
 - **Refine Rubric** (E4-22) — new _Refine Rubric_ button appears on the Run Report when at least one human verdict disagrees with the AI verdict. Clicking opens an in-page view listing all disagreements and allows the user to request AI-generated rubric suggestions from the configured default AI judge.
 - **Draft rubric sets** — after generating AI rubric suggestions, a _Save as Draft Rubric Set_ button persists the result as a new `RubricSet` (with `IsDraft = true` and a back-reference to the originating run) including one placeholder `RubricCriteria` per suggested bullet point. Draft sets appear on the Rubrics page with a **DRAFT** badge and a **Promote** button that clears the flag.
