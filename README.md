@@ -114,19 +114,6 @@ Open **<http://localhost:5000>**. No login required in the default `Generic` aut
 
 > **PostgreSQL + Azurite** are always started alongside webui and worker — no extra flags required. The default `.env.template` values work out of the box for local development.
 
-### Option C — Run without Docker
-
-**Windows (PowerShell)**
-```powershell
-cd src\Host\mate.WebUI
-dotnet run
-```
-
-**macOS / Linux**
-```bash
-cd src/Host/mate.WebUI
-dotnet run
-```
 
 ---
 
@@ -182,7 +169,7 @@ Each module carries a **tier** label shown on the Settings → Modules card:
 
 | Module | Approach | Tier |
 |--------|----------|------|
-| `mate.Modules.RedTeaming.Generic` | Built-in static probe library (10 probes, 8 attack categories), heuristic response evaluation, works offline | **Premium** |
+| `mate.Modules.RedTeaming.Generic`* | Built-in static probe library (10 probes, 8 attack categories), heuristic response evaluation, works offline | **Premium** |
 
 > \* backlog item — not yet implemented
 
