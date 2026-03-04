@@ -8,6 +8,42 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [v0.6.0] — 2026-03-04
+
+### Added
+- **`Run.ErrorMessage`** — nullable `string?` property on the `Run` entity; populated by `TestRunWorker` when an unhandled exception causes a run to fail; surfaced as a red error banner on the Run Report page.
+- **EF migration `AddRunErrorMessage`** — adds nullable `ErrorMessage` column to the `Runs` table.
+- **`AgentRateLimitException`** — new public exception type in `mate.Modules.AgentConnector.CopilotStudio`; thrown when the connected Copilot Studio agent returns an `enAIToolPlannerRateLimitReached` activity, so rate-limited cases are recorded as `skipped` rather than `failed`.
+- **`SkippedCount` tracking** — `TestExecutionService` now counts `"skipped"` verdicts in a dedicated `skip` counter; `Run.SkippedCount`, `Run.TotalTestCases`, and the run completion log include skipped cases correctly.
+
+### Changed
+- **PostgreSQL-only baseline** — `Local` (SQLite) infrastructure tier removed; `Container` (PostgreSQL + Azurite) is now the default and only local development baseline.
+  - `AddmateSqlite` and `SqliteBackupService` deleted; `NoOpBackupService` moved to `mate.Infrastructure.Local`.
+  - `LocalInfrastructureOptions.SqliteDatabasePath` and `BackupPath` properties removed.
+  - `Microsoft.EntityFrameworkCore.Sqlite` and `Microsoft.Data.Sqlite` package references removed.
+  - All host `Program.cs` files (`WebUI`, `Worker`, `CLI`) always register `AddmatePostgres` + `AddmateAzureInfrastructure`; no `Infrastructure__Provider` branching for database.
+  - `mate.CLI.csproj` project reference updated from `mate.Infrastructure.Local` to `mate.Infrastructure.Azure`.
+  - `infra/local/docker-compose.yml` fully rewritten: postgres and azurite are always-on (no `profiles:`), connection strings baked in.
+  - `debug-container.ps1` simplified: `-Container` flag removed, `-DB` always uses `psql`.
+- **Quickstart package updated** — `quickstart/docker-compose.yml` now includes PostgreSQL 17 and Azurite alongside webui and worker (previously SQLite-only, Azurite was absent). Named volumes changed to `mate-pgdata`, `mate-azurite`, `mate-logs` (old `mate-data` volume dropped). `quickstart/.env.template` gains an `IMAGE_TAG` pinning entry. `quickstart/README.txt` updated to describe the four-container stack, new volume layout, and correct data persistence guidance.
+- **`appsettings.json` cleaned up** — `ConnectionStrings.DefaultConnection` renamed to `ConnectionStrings.Default` (matches EF key); SQLite path and `LocalInfrastructure` section removed.
+- **Settings → Data Management UI** — backup/restore descriptions updated to reflect no-op behaviour in PostgreSQL mode; `.db` file type restriction removed from restore input.
+- **OpenAPI Admin tag** — description updated from "SQLite backup/restore" to reflect no-op in PostgreSQL deployments.
+- **`TestRunWorker.cs` XML doc** — "shared SQLite volume" comment updated to "PostgreSQL instance".
+- **`AzureBlobStorageService` constructor** — now parses the connection string and uses explicit `StorageSharedKeyCredential` + `Uri(blobEndpoint)` when a `BlobEndpoint` key is present. Fixes HMAC signature mismatch (HTTP 403) when Azurite runs on a non-localhost Docker hostname with Azure.Storage.Blobs v12.21+.
+- **Azurite blob connection string** — changed to `UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite` in `docker-compose.yml`. This is the canonical way to target a non-localhost Azurite endpoint; the SDK uses the hardcoded development account credentials and emulator canonical-resource HMAC format regardless of hostname.
+- **`ResolveJudgeSettingAsync` fallback** — platform-level default judge is now looked up by `TenantId == PlatformTenantId` (`00000000-0000-0000-0000-000000000001`) instead of the incorrect `Guid.Empty`; aligns with how `mateDbSeeder` stores the seeded default.
+- **`TestRunWorker` failure handler** — saves `run.ErrorMessage = ex.Message` before marking status `failed`.
+- **`RunReport.razor`** — shows a `alert-danger` banner with the error message when `Run.Status == "failed"` and `ErrorMessage` is non-null.
+- **PG-native EF migrations** — all SQLite migrations deleted; new `InitialCreate` migration generated with PostgreSQL-native types: `uuid`, `text`, `timestamp with time zone`, `double precision`, `boolean`.
+- **`mateDbContextFactory`** — calls `AddEnvironmentVariables()` (no prefix) before the `MATE_`-prefixed variant, so `ConnectionStrings__Default` is readable during `dotnet ef migrations` tooling.
+
+### Fixed
+- **`AzureBlobStorageService.ValidateName`** — method previously rejected `/` in blob names but `DocumentIngestor` creates names of the form `{tenantId}/{guid}.ext`; `/` is now allowed (only `\` and `..` are blocked).
+- **`Run.SkippedCount` never updated** — `"skipped"` verdicts previously fell through to the `default: error++` branch; now counted separately.
+
+---
+
 ## [v0.5.0] — 2026-03-04
 
 ### Added

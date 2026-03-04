@@ -176,6 +176,16 @@ internal sealed class CopilotStudioConnector : IAgentConnector
 
                 if (botActivities.Count > 0)
                 {
+                    // Detect Copilot Studio rate-limit error activities before returning
+                    var rateLimitActivity = botActivities.FirstOrDefault(
+                        a => a.Text != null && a.Text.Contains("RateLimitReached", StringComparison.OrdinalIgnoreCase));
+                    if (rateLimitActivity is not null)
+                    {
+                        _logger.LogWarning("Rate limit reached for conversation {ConversationId}: {Text}",
+                            conversationId, rateLimitActivity.Text);
+                        throw new AgentRateLimitException(rateLimitActivity.Text!);
+                    }
+
                     _logger.LogDebug("Received {Count} bot activities.", botActivities.Count);
                     return botActivities.Last(); // Return the most recent response
                 }
@@ -233,3 +243,10 @@ internal sealed class CopilotStudioConnector : IAgentConnector
         return req;
     }
 }
+
+/// <summary>
+/// Thrown when the target Copilot Studio agent returns a rate-limit error activity
+/// (e.g. <c>enAIToolPlannerRateLimitReached</c>).
+/// The test case should be recorded as <c>skipped</c> rather than <c>failed</c>.
+/// </summary>
+public sealed class AgentRateLimitException(string message) : Exception(message);

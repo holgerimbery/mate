@@ -8,17 +8,17 @@ using Microsoft.Extensions.DependencyInjection;
 namespace mate.Infrastructure.Local;
 
 /// <summary>
-/// DI registration for Phase 1 local infrastructure services.
+/// DI registration for local infrastructure services (blob storage on local filesystem).
 /// Call <c>services.AddmateLocalInfrastructure(config)</c> from the host's Program.cs.
 /// </summary>
 public static class LocalInfrastructureServiceExtensions
 {
     /// <summary>
-    /// Registers Phase 1 local-filesystem infrastructure:
+    /// Registers local-filesystem infrastructure:
     /// - <see cref="IBlobStorageService"/> → <see cref="LocalBlobStorageService"/>
     /// - <see cref="ISecretService"/>      → <see cref="EnvironmentVariableSecretService"/>
     /// - <see cref="IMessageQueue"/>       → <see cref="InProcessMessageQueue"/> (singleton)
-    /// - <see cref="IBackupService"/>      → <see cref="SqliteBackupService"/>
+    /// - <see cref="IBackupService"/>      → <see cref="NoOpBackupService"/>
     /// </summary>
     public static IServiceCollection AddmateLocalInfrastructure(
         this IServiceCollection services,
@@ -30,7 +30,7 @@ public static class LocalInfrastructureServiceExtensions
         services.AddScoped<IBlobStorageService, LocalBlobStorageService>();
         services.AddScoped<ISecretService, DatabaseSecretService>();
         services.AddSingleton<IMessageQueue, InProcessMessageQueue>();
-        services.AddScoped<IBackupService, SqliteBackupService>();
+        services.AddScoped<IBackupService, NoOpBackupService>();
 
         return services;
     }

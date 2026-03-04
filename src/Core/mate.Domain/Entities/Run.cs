@@ -31,6 +31,9 @@ public class Run
 
     public string RequestedBy { get; set; } = string.Empty;
 
+    /// <summary>Populated when Status = "failed" to surface the error in the UI.</summary>
+    public string? ErrorMessage { get; set; }
+
     // Navigation
     public TestSuite? Suite { get; set; }
     public Agent? Agent { get; set; }

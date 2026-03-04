@@ -10,34 +10,12 @@ namespace mate.Data;
 
 /// <summary>
 /// Extension methods for registering the mate.Data layer in the DI container.
-/// Call one of these from the host's Program.cs or the AddmateCore extension.
 /// </summary>
 public static class DataServiceExtensions
 {
     /// <summary>
-    /// Registers <see cref="mateDbContext"/> using SQLite.
-    /// Suitable for Phase 1 (local) deployments.
-    /// </summary>
-    public static IServiceCollection AddmateSqlite(
-        this IServiceCollection services,
-        IConfiguration config)
-    {
-        var connectionString = config.GetConnectionString("Default")
-            ?? config["MATE_DB"]
-            ?? "Data Source=mate-local.db";
-
-        services.AddDbContext<mateDbContext>((sp, options) =>
-        {
-            options.UseSqlite(connectionString, sqlite =>
-                sqlite.MigrationsAssembly(typeof(mateDbContext).Assembly.FullName));
-        });
-
-        return services;
-    }
-
-    /// <summary>
     /// Registers <see cref="mateDbContext"/> using PostgreSQL.
-    /// Suitable for Phase 1 (self-hosted Postgres) or Phase 2 (Azure Database for Postgres).
+    /// Used in both Container mode (local Docker PostgreSQL) and Azure mode (Azure Database for PostgreSQL).
     /// </summary>
     public static IServiceCollection AddmatePostgres(
         this IServiceCollection services,

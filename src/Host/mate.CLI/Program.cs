@@ -5,7 +5,7 @@ using System.CommandLine;
 using mate.Core;
 using mate.Data;
 using mate.Domain;
-using mate.Infrastructure.Local;
+using mate.Infrastructure.Azure;
 using mate.Modules.AgentConnector.CopilotStudio;
 using mate.Modules.AgentConnector.Generic;
 using mate.Modules.Testing.ModelAsJudge;
@@ -88,10 +88,10 @@ static IHost BuildHost(Guid tenantId)
             services.AddSingleton<ITenantContext>(new StaticTenantContext(tenantId));
 
             // Data
-            services.AddmateSqlite(config);
+            services.AddmatePostgres(config);
 
             // Infrastructure
-            services.AddmateLocalInfrastructure(config);
+            services.AddmateAzureInfrastructure(config);
 
             // Core services
             services.AddmateCore();

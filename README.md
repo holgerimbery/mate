@@ -8,7 +8,7 @@
 mate connects to multiple AI agents, runs automated evaluation suites against them, tracks quality over time, and red-teams them for adversarial vulnerabilities. It supports Microsoft Copilot Studio, Azure AI Foundry*, generic HTTP agents*, and Parloa* out of the box — and is extensible with custom connector, judge, and red-team modules.   
 > *backlog item   
 
-Current version: **v0.5.0**  
+Current version: **v0.6.0**  
 
 
 
@@ -112,6 +112,8 @@ docker compose up --build
 
 Open **<http://localhost:5000>**. No login required in the default `Generic` auth mode.
 
+> **PostgreSQL + Azurite** are always started alongside webui and worker — no extra flags required. The default `.env.template` values work out of the box for local development.
+
 ### Option C — Run without Docker
 
 **Windows (PowerShell)**
@@ -135,7 +137,7 @@ mate.sln
 ├── src/
 │   ├── Core/               — module registry, execution engine, domain entities
 │   ├── Host/               — WebUI (Blazor + API), Worker, CLI
-│   ├── Infrastructure/     — SQLite/Azure storage implementations
+│   ├── Infrastructure/     — Azure Blob Storage and local filesystem implementations
 │   └── Modules/            — agent connectors, judge modules, auth, monitoring, red teaming
 ├── tests/                  — Unit, Integration, EndToEnd
 ├── infra/local/            — docker-compose.yml, Dockerfiles, .env.template
@@ -207,7 +209,9 @@ All settings are controlled via environment variables (or `appsettings.json`):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `Authentication__Scheme` | `None` | `None` (dev) or `EntraId` (prod) |
-| `MATE_DB_PROVIDER` | `sqlite` | `sqlite` or `postgres` |
+| `Infrastructure__Provider` | `Container` | `Container` (PostgreSQL + Azurite, default) · `Azure` (Azure Database for PostgreSQL + Azure Blob Storage) |
+| `ConnectionStrings__Default` | *(PostgreSQL)*  | PostgreSQL connection string — set automatically by docker-compose; override for custom deployments |
+| `AzureInfrastructure__BlobConnectionString` | — | Required when `Infrastructure__Provider` is `Container` or `Azure` |
 | `AzureAd__TenantId` | — | Required for EntraId auth |
 | `AzureAd__ClientId` | — | Required for EntraId auth |
 | `AzureAd__ClientSecret` | — | Required for EntraId auth |

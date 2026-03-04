@@ -3,9 +3,47 @@ version: "3.9"
 # mate — local development stack
 # Usage: docker compose up -d
 # The WebUI will be available at http://localhost:5000
-# Worker and CLI are optional — omit them if running directly via `dotnet run`
+#
+# Infrastructure__Provider controls the blob storage target:
+#   Container — PostgreSQL + Azurite (default, Docker Desktop / CI)
+#   Azure     — Azure Database for PostgreSQL + Azure Blob Storage (production)
+#
+# PostgreSQL and Azurite always start; no profile flag required.
 
 services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: mate-postgres
+    environment:
+      POSTGRES_DB: mate
+      POSTGRES_USER: mate
+      POSTGRES_PASSWORD: mate_local_pw
+    ports:
+      - "5432:5432"
+    volumes:
+      - mate-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Azurite — Azure Blob Storage emulator ──────────────────────────────────
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: mate-azurite
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
+    ports:
+      - "10000:10000"   # Blob
+      - "10001:10001"   # Queue
+      - "10002:10002"   # Table
+    volumes:
+      - mate-azurite:/data
+    restart: unless-stopped
+
   # ── WebUI ──────────────────────────────────────────────────────────────────
   webui:
     build:
@@ -16,7 +54,6 @@ services:
       - "5000:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      # Trust X-Forwarded-Proto / X-Forwarded-For from the upstream proxy
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
       - ASPNETCORE_URLS=http://+:8080
       - Authentication__Scheme=${Authentication__Scheme:-Generic}
@@ -27,19 +64,23 @@ services:
       - AzureAd__CallbackPath=${AzureAd__CallbackPath:-/signin-oidc}
       - AzureAd__SignedOutCallbackPath=${AzureAd__SignedOutCallbackPath:-/signout-callback-oidc}
       - AzureAd__ResponseType=code
-      # Public URL that nginx exposes – used by OIDC to build the correct redirect_uri.
-      # Example: https://mate.example.com
       - AzureAd__RedirectUri=${AzureAd__RedirectUri:-}
-      # IP address of the nginx proxy (or leave empty to trust the Docker bridge 172.16/12)
       - ReverseProxy__TrustedProxyAddress=${ReverseProxy__TrustedProxyAddress:-}
       - Monitoring__Provider=Generic
-      - ConnectionStrings__Default=Data Source=/app/data/mate-local.db
-      - LocalInfrastructure__BlobStoragePath=/app/data/blobs
-      - LocalInfrastructure__SqliteDatabasePath=/app/data/mate-local.db
-      - LocalInfrastructure__BackupPath=/app/data/backups
+      # ── Storage tier ──────────────────────────────────────────────────────
+      # "Container" = PostgreSQL + Azurite  (default)
+      # "Azure"     = Azure Database for PostgreSQL + Azure Blob Storage
+      - Infrastructure__Provider=${Infrastructure__Provider:-Container}
+      - ConnectionStrings__Default=Host=postgres;Database=mate;Username=mate;Password=mate_local_pw
+      - AzureInfrastructure__BlobConnectionString=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite
+      - AzureInfrastructure__BlobContainerName=mate-blobs
     volumes:
-      - mate-data:/app/data
       - mate-logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -56,20 +97,25 @@ services:
     container_name: mate-worker
     environment:
       - DOTNET_ENVIRONMENT=Development
-      - ConnectionStrings__Default=Data Source=/app/data/mate-local.db
-      - LocalInfrastructure__BlobStoragePath=/app/data/blobs
-      - LocalInfrastructure__SqliteDatabasePath=/app/data/mate-local.db
-      - LocalInfrastructure__BackupPath=/app/data/backups
+      - Infrastructure__Provider=${Infrastructure__Provider:-Container}
+      - ConnectionStrings__Default=Host=postgres;Database=mate;Username=mate;Password=mate_local_pw
+      - AzureInfrastructure__BlobConnectionString=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite
+      - AzureInfrastructure__BlobContainerName=mate-blobs
     volumes:
-      - mate-data:/app/data
       - mate-logs:/app/logs
     depends_on:
       webui:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
-  mate-data:
-    name: mate-data
   mate-logs:
     name: mate-logs
+  mate-pgdata:
+    name: mate-pgdata
+  mate-azurite:
+    name: mate-azurite

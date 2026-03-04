@@ -82,7 +82,7 @@ public sealed class TestExecutionService
         var connector = connectorModule.CreateConnector(agentConfig);
 
         var testCases = await LoadTestCasesAsync(suite.Id, ct);
-        int pass = 0, fail = 0, error = 0;
+        int pass = 0, fail = 0, skip = 0, error = 0;
         var latencies = new List<long>(testCases.Count);
 
         foreach (var testCase in testCases)
@@ -99,9 +99,10 @@ public sealed class TestExecutionService
 
             switch (result.Verdict)
             {
-                case "pass":  pass++;  break;
-                case "fail":  fail++;  break;
-                default:      error++; break;
+                case "pass":    pass++;  break;
+                case "fail":    fail++;  break;
+                case "skipped": skip++;  break;
+                default:        error++; break;
             }
 
             _monitoring?.TrackTestCaseResult(new TestCaseResultEvent(
@@ -118,9 +119,10 @@ public sealed class TestExecutionService
 
         // Compute run statistics
         latencies.Sort();
-        run.PassedCount  = pass;
-        run.FailedCount  = fail;
-        run.TotalTestCases = pass + fail + error;
+        run.PassedCount    = pass;
+        run.FailedCount    = fail;
+        run.SkippedCount   = skip;
+        run.TotalTestCases = pass + fail + skip + error;
         run.AverageLatencyMs  = latencies.Count > 0 ? latencies.Average() : 0;
         run.MedianLatencyMs   = CalculatePercentile(latencies, 50);
         run.P95LatencyMs      = CalculatePercentile(latencies, 95);
@@ -139,8 +141,8 @@ public sealed class TestExecutionService
             DateTime.UtcNow - run.StartedAt));
 
         _logger.LogInformation(
-            "Run {RunId} completed — {Pass} pass / {Fail} fail / {Error} error. Status: {Status}.",
-            run.Id, pass, fail, error, run.Status);
+            "Run {RunId} completed — {Pass} pass / {Fail} fail / {Skip} skipped / {Error} error. Status: {Status}.",
+            run.Id, pass, fail, skip, error, run.Status);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -243,14 +245,25 @@ public sealed class TestExecutionService
         {
             sw.Stop();
             result.LatencyMs = sw.ElapsedMilliseconds;
-            result.Verdict   = "error";
-            result.Rationale = ex.Message;
-            _logger.LogError(ex, "Test case {TestCaseId} failed with exception.", testCase.Id);
-            _monitoring?.TrackException(ex, new Dictionary<string, string>
+            // Detect rate-limit errors by exception type name — avoids a hard assembly reference
+            // to the connector module from the Core layer.
+            if (ex.GetType().Name == "AgentRateLimitException")
             {
-                ["RunId"]      = run.Id.ToString(),
-                ["TestCaseId"] = testCase.Id.ToString(),
-            });
+                result.Verdict   = "skipped";
+                result.Rationale = $"Rate limit reached — retry later. ({ex.Message})";
+                _logger.LogWarning("Test case {TestCaseId} skipped due to rate limit: {Message}", testCase.Id, ex.Message);
+            }
+            else
+            {
+                result.Verdict   = "error";
+                result.Rationale = ex.Message;
+                _logger.LogError(ex, "Test case {TestCaseId} failed with exception.", testCase.Id);
+                _monitoring?.TrackException(ex, new Dictionary<string, string>
+                {
+                    ["RunId"]      = run.Id.ToString(),
+                    ["TestCaseId"] = testCase.Id.ToString(),
+                });
+            }
         }
         finally
         {
@@ -292,13 +305,15 @@ public sealed class TestExecutionService
             if (setting is not null) return setting;
         }
 
-        // Fallback to platform default (TenantId == Guid.Empty)
+        // Fallback: tenant-specific default → platform-level default (seeded under PlatformTenantId)
+        // Note: mateDbSeeder seeds the global default with TenantId = 00000000-0000-0000-0000-000000000001
+        var platformTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
         var platformDefault = await _db.JudgeSettings
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(j => j.TenantId == tenantId && j.IsDefault, ct)
             ?? await _db.JudgeSettings
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(j => j.TenantId == Guid.Empty, ct)
+                .FirstOrDefaultAsync(j => j.TenantId == platformTenantId, ct)
             ?? throw new InvalidOperationException("No JudgeSetting configured. Seed the database or create one.");
 
         return platformDefault;

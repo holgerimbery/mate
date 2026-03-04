@@ -5,25 +5,24 @@
 namespace mate.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddTestSuiteTags : Migration
+    public partial class AddRunErrorMessage : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
-                name: "Tags",
-                table: "TestSuites",
-                type: "TEXT",
-                nullable: false,
-                defaultValue: "[]");
+                name: "ErrorMessage",
+                table: "Runs",
+                type: "text",
+                nullable: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "Tags",
-                table: "TestSuites");
+                name: "ErrorMessage",
+                table: "Runs");
         }
     }
 }
