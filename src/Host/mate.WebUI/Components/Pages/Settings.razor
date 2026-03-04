@@ -262,6 +262,7 @@
                             <th>Provider</th>
                             <th>Model</th>
                             <th>Pass Threshold</th>
+                            <th>Rubric Sets</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -279,6 +280,20 @@
                                 <td>@js.ProviderType</td>
                                 <td>@(js.Model ?? "global")</td>
                                 <td>@js.PassThreshold.ToString("P0")</td>
+                                <td style="font-size:12px">
+                                    @{ var linked = _rubricSets.Where(r => r.JudgeSettingId == js.Id).ToList(); }
+                                    @if (linked.Any())
+                                    {
+                                        @foreach (var rs in linked)
+                                        {
+                                            <span class="connector-badge me-1">@rs.Name</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span style="color:var(--text-secondary)">&#x2014;</span>
+                                    }
+                                </td>
                                 <td>
                                     <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditJudge(js)">Edit</button>
                                     <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteJudge(js)">Delete</button>
@@ -455,6 +470,44 @@
             @if (!string.IsNullOrWhiteSpace(_judgeFormError))
             {
                 <div class="alert alert-danger mt-2"><i class="bi bi-exclamation-circle me-1"></i>@_judgeFormError</div>
+            }
+
+            @if (_editJudge is not null)
+            {
+                var linkedSets = _rubricSets.Where(r => r.JudgeSettingId == _editJudge.Id).ToList();
+                <div class="form-group mt-3" style="background:var(--light-bg);border-radius:8px;padding:14px;border-left:4px solid var(--primary)">
+                    <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">
+                        <i class="bi bi-list-check me-1"></i>Linked Rubric Sets
+                    </div>
+                    @if (linkedSets.Any())
+                    {
+                        <ul style="margin:0;padding-left:18px;font-size:13px">
+                            @foreach (var rs in linkedSets)
+                            {
+                                <li>@rs.Name <span style="color:var(--text-secondary);font-size:11px">(@rs.Criteria.Count criteria)</span></li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span style="font-size:13px;color:var(--text-secondary)">No rubric sets linked to this judge yet.</span>
+                    }
+                    @if (_editJudge.ProviderType == "CopilotStudioJudge")
+                    {
+                        <div style="margin-top:10px;padding:10px 12px;background:rgba(var(--primary-rgb),0.06);border-radius:6px;border:1px solid rgba(var(--primary-rgb),0.15);font-size:12px">
+                            <strong><i class="bi bi-info-circle me-1"></i>Built-in default rubrics (always applied)</strong>
+                            <ul style="margin:6px 0 0;padding-left:18px">
+                                <li><strong>Non-empty response</strong> — <span class="connector-badge">Custom:NonEmpty</span> <span class="badge badge-fail ms-1" style="font-size:10px">Mandatory</span> — empty bot response is an immediate fail regardless of score</li>
+                                <li><strong>No blank rejection</strong> — <span class="connector-badge">NotContains</span> &ldquo;I'm not able to help with that&rdquo; (weight 0.5)</li>
+                                <li><strong>No unhandled error</strong> — <span class="connector-badge">NotContains</span> &ldquo;Something went wrong&rdquo; (weight 0.5)</li>
+                            </ul>
+                            <div style="margin-top:6px;color:var(--text-secondary)">Custom rubric sets linked above are <strong>appended</strong> to these defaults — they are never replaced.</div>
+                        </div>
+                    }
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:8px">
+                        Manage rubric sets and link them to this judge on the <a href="/rubrics">Rubrics page</a>.
+                    </div>
+                </div>
             }
         </div>
         <div class="d-flex gap-2 mb-4">
@@ -1059,6 +1112,7 @@ OAuth__Audience=your-api-audience</pre>
 
     // Judge settings
     private List<JudgeSetting> _judgeSettings = [];
+    private List<RubricSet>    _rubricSets    = [];
     private bool _showJudgeForm;
     private JudgeSetting? _editJudge;
     private JudgeSetting? _deleteJudge;
@@ -1161,6 +1215,7 @@ OAuth__Audience=your-api-audience</pre>
     private async Task LoadAllAsync()
     {
         _judgeSettings = await Db.JudgeSettings.OrderBy(j => j.Name).ToListAsync();
+        _rubricSets    = await Db.RubricSets.Include(r => r.Criteria).Where(r => !r.IsDraft).OrderBy(r => r.Name).ToListAsync();
         _apiKeys = await Db.ApiKeys.OrderByDescending(k => k.CreatedAt).ToListAsync();
         _auditLogs = await Db.AuditLogs.OrderByDescending(l => l.OccurredAt).Take(200).AsNoTracking().ToListAsync();
         _qgenSettings = await Db.GlobalQuestionGenerationSettings.OrderBy(q => q.Name).ToListAsync();

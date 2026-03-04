@@ -121,10 +121,10 @@ public sealed class CopilotStudioJudgeProvider : IJudgeProvider
         ArgumentNullException.ThrowIfNull(request);
         ct.ThrowIfCancellationRequested();
 
-        // Apply custom rubrics if configured, otherwise use built-in CopilotStudio defaults
-        var criteria = request.RubricCriteria.Count > 0
-            ? request.RubricCriteria
-            : CopilotStudioDefaultRubrics.DefaultCriteria;
+        // Always include built-in CopilotStudio safety defaults; append any custom criteria on top
+        var criteria = CopilotStudioDefaultRubrics.DefaultCriteria
+            .Concat(request.RubricCriteria)
+            .ToList();
 
         // ── Step 1: Deterministic rubrics pass ───────────────────────────────
         var (rubricsScore, mandatoryFailed, rubRationale) = EvaluateRubrics(criteria, request.BotResponse);

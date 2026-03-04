@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @page "/runs/{RunId:guid}"
 @using mate.Data
+@using mate.Domain.Contracts.Infrastructure
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using System.Text
@@ -9,6 +10,9 @@
 @inject mateDbContext Db
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject IHttpClientFactory HttpFactory
+@inject ISecretService Secrets
+@inject ITenantContext TenantCtx
 
 <PageTitle>Run Report — @BrandInfo.BrandName</PageTitle>
 
@@ -37,12 +41,18 @@ else
             <button class="btn btn-secondary" @onclick="ExportCsv">
                 <i class="bi bi-download me-1"></i>Export CSV
             </button>
+            @if (_disagreements.Count > 0)
+            {
+                <button class="btn btn-secondary" @onclick="OpenRefineRubric">
+                    <i class="bi bi-magic me-1"></i>Refine Rubric (@_disagreements.Count)
+                </button>
+            }
             <a href="/dashboard" class="btn btn-secondary">
                 <i class="bi bi-chevron-left me-1"></i>Dashboard
             </a>
         </div>
     </div>
-    @if (_transcriptResult is null && _verdictResult is null)
+    @if (_transcriptResult is null && _verdictResult is null && !_refineRubricMode)
     {
     <div class="mate-page">
 
@@ -173,6 +183,47 @@ else
                     </div>
                 }
             </div>
+        </div>
+    }
+
+    @* ── Pass rate by tag ──────────────────────────────────────────────────── *@
+    @if (_tagStats.Count > 0)
+    {
+        <div class="section-card" style="margin-bottom:20px">
+            <h2 class="section-title mb-3"><i class="bi bi-tags me-2"></i>Pass Rate by Tag</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th style="text-align:center">Cases</th>
+                        <th style="text-align:center">Pass</th>
+                        <th style="text-align:center">Fail</th>
+                        <th style="text-align:center">Pass Rate</th>
+                        <th style="text-align:center">Avg Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ts in _tagStats.OrderByDescending(s => s.PassRate))
+                    {
+                        var barColor = ts.PassRate >= 0.8 ? "var(--success)" : ts.PassRate >= 0.5 ? "var(--warning)" : "var(--danger)";
+                        <tr>
+                            <td><span class="badge" style="background:var(--light-bg);color:var(--text-primary);font-weight:500">@ts.Tag</span></td>
+                            <td style="text-align:center">@ts.Total</td>
+                            <td style="text-align:center;color:var(--success);font-weight:600">@ts.Pass</td>
+                            <td style="text-align:center;color:var(--danger);font-weight:600">@ts.Fail</td>
+                            <td style="text-align:center">
+                                <div style="display:flex;align-items:center;gap:8px;justify-content:center">
+                                    <div style="width:80px;background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+                                        <div style="height:100%;border-radius:4px;background:@barColor;width:@((ts.PassRate*100).ToString("F1"))%"></div>
+                                    </div>
+                                    <strong style="color:@barColor">@ts.PassRate.ToString("P0")</strong>
+                                </div>
+                            </td>
+                            <td style="text-align:center;font-weight:600">@ts.AvgScore.ToString("P0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
 
@@ -428,6 +479,86 @@ else
         </div>
     </div>
     }
+@* ── Refine Rubric in-page view ─────────────────────────────────────────────── *@
+    else if (_refineRubricMode)
+    {
+    <div class="mate-page">
+        <div class="section-card">
+            <div class="section-header" style="margin-bottom:16px">
+                <h2 class="section-title"><i class="bi bi-magic me-2"></i>Refine Rubric — AI Suggestions</h2>
+                <button class="btn btn-secondary btn-sm" @onclick="() => { _refineRubricMode = false; _refineRubricResult = null; _savedDraftRubricId = null; }">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Report
+                </button>
+            </div>
+
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+                The following @_disagreements.Count test case(s) had human verdicts that disagreed with the AI verdict.
+                Use the button below to ask the AI judge to suggest rubric improvements based on these disagreements.
+            </p>
+
+            <table class="data-table" style="margin-bottom:20px">
+                <thead>
+                    <tr>
+                        <th>Test Case</th>
+                        <th style="text-align:center">AI Verdict</th>
+                        <th style="text-align:center">Human Verdict</th>
+                        <th>AI Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in _disagreements)
+                    {
+                        <tr>
+                            <td>@d.TestCase?.Name</td>
+                            <td style="text-align:center"><span class="badge badge-@d.Verdict">@d.Verdict</span></td>
+                            <td style="text-align:center"><span class="badge badge-@d.HumanVerdict">@d.HumanVerdict</span></td>
+                            <td style="font-size:12px;color:var(--text-secondary)">@(d.Rationale?.Length > 200 ? d.Rationale[..198] + "\u2026" : d.Rationale ?? "\u2014")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (_refineRubricResult is null && !_refineRubricLoading)
+            {
+                @if (!string.IsNullOrWhiteSpace(_refineRubricError))
+                {
+                    <div class="alert alert-danger">@_refineRubricError</div>
+                }
+                <button class="btn btn-primary" @onclick="RunRefineRubric">
+                    <i class="bi bi-magic me-1"></i>Generate rubric suggestions
+                </button>
+            }
+            else if (_refineRubricLoading)
+            {
+                <div class="d-flex align-items-center gap-2 py-3"><span class="spinner"></span><span>Asking AI judge for suggestions&#x2026;</span></div>
+            }
+            else if (_refineRubricResult is not null)
+            {
+                <div style="background:var(--light-bg);border-radius:8px;padding:16px;border-left:4px solid var(--primary);margin-top:4px">
+                    <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">AI Rubric Suggestions</div>
+                    <div class="markdown-body" style="font-size:13px">@RenderMarkdown(_refineRubricResult)</div>
+                </div>
+                <div class="d-flex gap-2 mt-3 align-items-center">
+                    @if (_savedDraftRubricId is null)
+                    {
+                        <button class="btn btn-primary btn-sm" disabled="@_savingDraftRubric" @onclick="SaveDraftRubricAsync">
+                            @if (_savingDraftRubric) { <span class="spinner" style="width:14px;height:14px"></span> }
+                            else { <i class="bi bi-save me-1"></i> }
+                            Save as Draft Rubric Set
+                        </button>
+                    }
+                    else
+                    {
+                        <span style="color:var(--success);font-size:13px"><i class="bi bi-check-circle-fill me-1"></i>Saved as draft rubric set — review and promote it on the <a href="/rubrics">Rubrics</a> page.</span>
+                    }
+                    <button class="btn btn-secondary btn-sm" @onclick="() => { _refineRubricResult = null; _refineRubricError = null; _savedDraftRubricId = null; }">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Regenerate
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+    }
 @* ── Human review in-page view ────────────────────────────────────────────── *@
     else if (_verdictResult is not null)
     {
@@ -530,6 +661,22 @@ else
     // Score history per test case (last 6 completed runs)
     private Dictionary<Guid, List<double>> _scoreHistory = [];
 
+    // Tag breakdown
+    private record TagStat(string Tag, int Total, int Pass, int Fail, double PassRate, double AvgScore);
+    private List<TagStat> _tagStats = [];
+
+    // Regression — human-AI disagreements (for Refine Rubric)
+    private List<Result> _disagreements = [];
+
+    // Refine Rubric
+    private bool    _refineRubricMode;
+    private bool    _refineRubricLoading;
+    private string? _refineRubricResult;
+    private string? _refineRubricError;
+    private Guid?   _refineRubricJudgeSettingId;  // judge used for the last call
+    private bool    _savingDraftRubric;
+    private Guid?   _savedDraftRubricId;           // set after a successful save
+
     // Auto-poll
     private bool _disposed;
 
@@ -610,6 +757,8 @@ else
 
             await LoadRegressionDataAsync();
             await LoadScoreHistoryAsync();
+            BuildTagStats();
+            BuildDisagreements();
         }
         _loading = false;
     }
@@ -658,6 +807,8 @@ else
                 {
                     await LoadRegressionDataAsync();
                     await LoadScoreHistoryAsync();
+                    BuildTagStats();
+                    BuildDisagreements();
                     StateHasChanged();
                 });
             }
@@ -711,6 +862,225 @@ else
             .ToDictionary(
                 g => g.Key,
                 g => g.OrderBy(r => r.EvaluatedAt).Select(r => r.Score).TakeLast(6).ToList());
+    }
+
+    private void BuildTagStats()
+    {
+        var tagMap = new Dictionary<string, (int total, int pass, int fail, double scoreSum)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in _results)
+        {
+            var tags = r.TestCase?.Tags ?? [];
+            if (tags.Length == 0) tags = ["(untagged)"];
+            var effectiveVerdict = r.HumanVerdict ?? r.Verdict;
+            foreach (var tag in tags)
+            {
+                if (!tagMap.TryGetValue(tag, out var s)) s = (0, 0, 0, 0);
+                tagMap[tag] = (
+                    s.total + 1,
+                    s.pass + (effectiveVerdict == "pass" ? 1 : 0),
+                    s.fail + (effectiveVerdict == "fail" ? 1 : 0),
+                    s.scoreSum + r.OverallScore);
+            }
+        }
+        _tagStats = tagMap
+            .Select(kv => new TagStat(
+                kv.Key, kv.Value.total, kv.Value.pass, kv.Value.fail,
+                kv.Value.total > 0 ? (double)kv.Value.pass / kv.Value.total : 0,
+                kv.Value.total > 0 ? kv.Value.scoreSum / kv.Value.total : 0))
+            .ToList();
+    }
+
+    private void BuildDisagreements()
+    {
+        _disagreements = _results
+            .Where(r => r.HumanVerdict is not null && r.HumanVerdict != r.Verdict)
+            .ToList();
+    }
+
+    private void OpenRefineRubric()
+    {
+        _refineRubricMode = true;
+        _refineRubricResult = null;
+        _refineRubricError = null;
+    }
+
+    private async Task RunRefineRubric()
+    {
+        _refineRubricLoading = true;
+        _refineRubricError = null;
+        _refineRubricResult = null;
+        StateHasChanged();
+
+        try
+        {
+            // Load the default JudgeSetting — global query filter already scopes to current tenant
+            // (also allows platform-level judge settings visible to all tenants).
+            var judgeSetting = await Db.JudgeSettings
+                .Where(j => j.IsDefault)
+                .OrderByDescending(j => j.UpdatedAt)
+                .FirstOrDefaultAsync();
+
+            if (judgeSetting is null)
+            {
+                _refineRubricError = "No default judge setting found. Configure one in Settings → AI Judge.";
+                return;
+            }
+
+            var endpoint = string.IsNullOrWhiteSpace(judgeSetting.EndpointRef)
+                ? null
+                : await TryResolveSecretAsync(judgeSetting.EndpointRef);
+            var apiKey = string.IsNullOrWhiteSpace(judgeSetting.ApiKeyRef)
+                ? null
+                : await TryResolveSecretAsync(judgeSetting.ApiKeyRef);
+            var model = judgeSetting.Model ?? "gpt-4o";
+
+            if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey))
+            {
+                _refineRubricError = "LLM endpoint or API key is not configured in the default judge setting.";
+                return;
+            }
+
+            // Build the prompt
+            var sb = new StringBuilder();
+            sb.AppendLine("You are a test-quality expert. You are given a list of test cases where a human reviewer disagreed with the AI judge verdict.");
+            sb.AppendLine("Based on these disagreements, suggest concrete rubric improvements or new acceptance criteria that would bring the AI judge closer to the human reviewer's expectations.");
+            sb.AppendLine("Format your suggestions as a Markdown list with one item per test case.");
+            sb.AppendLine();
+            sb.AppendLine("## Disagreements");
+            sb.AppendLine();
+            foreach (var d in _disagreements)
+            {
+                sb.AppendLine($"### {d.TestCase?.Name ?? d.TestCaseId.ToString()}");
+                sb.AppendLine($"- User input: {string.Join(" / ", d.TestCase?.UserInput ?? [])}");
+                sb.AppendLine($"- Expected: {d.TestCase?.ReferenceAnswer ?? d.TestCase?.AcceptanceCriteria ?? "(not set)"}");
+                sb.AppendLine($"- AI verdict: **{d.Verdict}** (score {d.OverallScore:P0})");
+                sb.AppendLine($"- Human verdict: **{d.HumanVerdict}**");
+                if (!string.IsNullOrWhiteSpace(d.Rationale))
+                    sb.AppendLine($"- AI rationale: {d.Rationale}");
+                if (!string.IsNullOrWhiteSpace(d.HumanVerdictNote))
+                    sb.AppendLine($"- Human note: {d.HumanVerdictNote}");
+                sb.AppendLine();
+            }
+
+            _refineRubricJudgeSettingId = judgeSetting.Id;
+            _refineRubricResult = await CallLlmAsync(endpoint, apiKey, model, sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            _refineRubricError = $"LLM call failed: {ex.Message}";
+        }
+        finally
+        {
+            _refineRubricLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveDraftRubricAsync()
+    {
+        if (_refineRubricResult is null) return;
+        _savingDraftRubric = true;
+        StateHasChanged();
+        try
+        {
+            var runName = _run!.Suite?.Name ?? _run.SuiteId.ToString("N")[..8];
+            var draftSet = new mate.Domain.Entities.RubricSet
+            {
+                Id                  = Guid.NewGuid(),
+                TenantId            = TenantCtx.TenantId,
+                JudgeSettingId      = _refineRubricJudgeSettingId ?? Guid.Empty,
+                Name                = $"[Draft] {runName} — AI suggestions ({DateTime.UtcNow:yyyy-MM-dd})",
+                Description         = _refineRubricResult,
+                RequireAllMandatory = false,
+                IsDraft             = true,
+                SourceRunId         = _run.Id,
+                CreatedAt           = DateTime.UtcNow,
+            };
+
+            // Parse bullet points from the markdown as placeholder criteria
+            int sortOrder = 0;
+            foreach (var line in _refineRubricResult.Split('\n'))
+            {
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("- ") || trimmed.StartsWith("* "))
+                {
+                    var text = trimmed[2..].Trim();
+                    if (text.Length > 4)
+                    {
+                        draftSet.Criteria.Add(new mate.Domain.Entities.RubricCriteria
+                        {
+                            Id             = Guid.NewGuid(),
+                            RubricSetId    = draftSet.Id,
+                            TenantId       = TenantCtx.TenantId,
+                            Name           = text.Length > 120 ? text[..118] + "\u2026" : text,
+                            EvaluationType = "Custom",
+                            Pattern        = "[AI suggestion — review and update pattern]",
+                            Weight         = 1.0,
+                            IsMandatory    = false,
+                            SortOrder      = sortOrder++,
+                        });
+                    }
+                }
+            }
+
+            Db.RubricSets.Add(draftSet);
+            await Db.SaveChangesAsync();
+            _savedDraftRubricId = draftSet.Id;
+        }
+        catch (Exception ex)
+        {
+            _refineRubricError = $"Could not save draft: {ex.Message}";
+        }
+        finally
+        {
+            _savingDraftRubric = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string> CallLlmAsync(string endpoint, string apiKey, string model, string userPrompt)
+    {
+        var requestBody = new
+        {
+            model,
+            messages = new[]
+            {
+                new { role = "system", content = "You are a helpful AI assistant specialising in test automation and quality rubric design. Respond in clear, concise Markdown." },
+                new { role = "user", content = userPrompt }
+            },
+            temperature = 0.3,
+            max_tokens = 1200,
+        };
+
+        var json    = System.Text.Json.JsonSerializer.Serialize(requestBody);
+        var content = new System.Net.Http.StringContent(json, Encoding.UTF8, "application/json");
+
+        var url = endpoint.TrimEnd('/');
+        if (!url.Contains("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            url = $"{url}/openai/deployments/{model}/chat/completions?api-version=2024-02-01";
+
+        var http    = HttpFactory.CreateClient("RefineRubric");
+        var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url) { Content = content };
+        request.Headers.Add("api-key", apiKey);
+
+        var response = await http.SendAsync(request);
+        var body     = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"HTTP {(int)response.StatusCode}: {body}");
+
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        return doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString() ?? string.Empty;
+    }
+
+    private async Task<string?> TryResolveSecretAsync(string secretRef)
+    {
+        try { return await Secrets.GetSecretAsync(secretRef, default); }
+        catch { return secretRef; }
     }
 
     private void ToggleExpand(Result r)
