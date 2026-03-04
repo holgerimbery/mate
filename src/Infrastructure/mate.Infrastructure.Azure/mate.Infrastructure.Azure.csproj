@@ -21,5 +21,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\mate.Domain\mate.Domain.csproj" />
     <ProjectReference Include="..\..\Core\mate.Data\mate.Data.csproj" />
+    <ProjectReference Include="..\mate.Infrastructure.Local\mate.Infrastructure.Local.csproj" />
   </ItemGroup>
 </Project>

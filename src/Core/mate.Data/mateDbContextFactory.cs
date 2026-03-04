@@ -19,24 +19,18 @@ public sealed class mateDbContextFactory : IDesignTimeDbContextFactory<mateDbCon
         var config = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json", optional: true)
+            .AddEnvironmentVariables()          // reads ConnectionStrings__Default etc.
             .AddEnvironmentVariables(prefix: "MATE_")
             .Build();
 
         var connectionString = config.GetConnectionString("Default")
             ?? config["DB"]
-            ?? "Data Source=mate-local.db";
+            ?? throw new InvalidOperationException(
+                "No database connection string configured. "
+                + "Set ConnectionStrings__Default or ConnectionStrings__DB environment variable.");
 
         var optionsBuilder = new DbContextOptionsBuilder<mateDbContext>();
-
-        if (connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase)
-            || connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
-        {
-            optionsBuilder.UseSqlite(connectionString);
-        }
-        else
-        {
-            optionsBuilder.UseNpgsql(connectionString);
-        }
+        optionsBuilder.UseNpgsql(connectionString);
 
         // No tenant context for migrations
         return new mateDbContext(optionsBuilder.Options, tenantContext: null);

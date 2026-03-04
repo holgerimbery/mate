@@ -18,7 +18,7 @@ using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
 using mate.Domain.Contracts.RedTeaming;
 using mate.Domain.Entities;
-using mate.Infrastructure.Local;
+using mate.Infrastructure.Azure;
 using mate.Modules.AgentConnector.CopilotStudio;
 using mate.Modules.AgentConnector.Generic;
 using mate.Modules.Auth.EntraId;
@@ -82,7 +82,9 @@ try
     // keys in the volume caused cookie decrypt failures.
 
     // ── Data (EF Core + migrations) ──────────────────────────────────────────
-    builder.Services.AddmateSqlite(config);
+    // PostgreSQL is always used — Container mode targets local Docker PostgreSQL,
+    // Azure mode targets Azure Database for PostgreSQL.
+    builder.Services.AddmatePostgres(config);
     builder.Services.AddMemoryCache();
 
     // ── Tenant resolution ───────────────────────────────────────────────────
@@ -140,7 +142,8 @@ try
     });
 
     // ── Infrastructure ───────────────────────────────────────────────────────
-    builder.Services.AddmateLocalInfrastructure(config);
+    // AzureBlobStorageService targets Azurite in Container mode and Azure Blob Storage in Azure mode.
+    builder.Services.AddmateAzureInfrastructure(config);
 
     // ── Core services ────────────────────────────────────────────────────────
     builder.Services.AddmateCore();
@@ -240,7 +243,7 @@ try
                 new OpenApiTag { Name = "Documents",   Description = "Upload reference documents that are chunked and used in RAG / knowledge-base grounding evaluation." },
                 new OpenApiTag { Name = "Settings",    Description = "LLM judge configurations: model reference, scoring dimension weights, pass threshold and custom prompt templates." },
                 new OpenApiTag { Name = "Metrics",     Description = "Platform-wide aggregate statistics: run counts, pass rate and average response latency." },
-                new OpenApiTag { Name = "Admin",       Description = "API key lifecycle, paginated audit log, and full SQLite database backup / restore." },
+                new OpenApiTag { Name = "Admin",       Description = "API key lifecycle, paginated audit log, and database backup / restore (no-op in PostgreSQL mode — use infrastructure-level tooling instead)." },
                 new OpenApiTag { Name = "System",      Description = "Connectivity diagnostics and platform health utilities." },
             ];
             return Task.CompletedTask;
@@ -1015,7 +1018,7 @@ try
         return Results.Stream(stream, "application/octet-stream", $"mate-backup-{stamp}.db");
     }).WithName("DownloadBackup").WithTags("Admin")
         .WithSummary("Download database backup")
-        .WithDescription("Streams a full SQLite database snapshot as `application/octet-stream` with a timestamped filename. Use this to take a point-in-time backup before destructive operations.")
+        .WithDescription("In PostgreSQL / Azure deployments this endpoint is a no-op — it returns an empty stream. Backups are managed at the infrastructure level (Azure Database automated backups or pg_dump). Kept for API compatibility.")
         .AllowAnonymous();
 
     // Admin: Restore

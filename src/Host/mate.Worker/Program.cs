@@ -7,6 +7,7 @@ using mate.Data;
 using mate.Domain.Contracts.Infrastructure;
 using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
+using mate.Infrastructure.Azure;
 using mate.Infrastructure.Local;
 using mate.Modules.AgentConnector.CopilotStudio;
 using mate.Modules.AgentConnector.Generic;
@@ -49,10 +50,13 @@ try
             // ── Data ──────────────────────────────────────────────────────────
             services.AddSingleton<mate.Data.ITenantContext>(
                 new mate.Data.StaticTenantContext(Guid.Empty));
-            services.AddmateSqlite(config);
+            // PostgreSQL is always used — Container mode targets local Docker PostgreSQL,
+            // Azure mode targets Azure Database for PostgreSQL.
+            services.AddmatePostgres(config);
 
             // ── Infrastructure ────────────────────────────────────────────────
-            services.AddmateLocalInfrastructure(config);
+            // AzureBlobStorageService targets Azurite in Container mode and Azure Blob Storage in Azure mode.
+            services.AddmateAzureInfrastructure(config);
 
             // ── Core ──────────────────────────────────────────────────────────
             services.AddmateCore();

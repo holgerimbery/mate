@@ -12,11 +12,11 @@ using Microsoft.Extensions.Logging;
 namespace mate.Worker;
 
 /// <summary>
-/// Background service that polls the shared SQLite database for <see cref="Run"/> records
+/// Background service that polls the PostgreSQL database for <see cref="Run"/> records
 /// in "pending" status and executes them via <see cref="TestExecutionService"/>.
 ///
 /// Polling the database (rather than an in-process queue) is required because the WebUI
-/// and Worker run as separate Docker containers that share a single SQLite volume — the
+/// and Worker run as separate Docker containers sharing the same PostgreSQL instance — the
 /// in-process <c>IMessageQueue</c> cannot cross process boundaries.
 /// </summary>
 public sealed class TestRunWorker : BackgroundService
@@ -129,8 +129,9 @@ public sealed class TestRunWorker : BackgroundService
                     .FirstOrDefaultAsync(r => r.Id == runId, ct);
                 if (run is not null && run.Status is "pending" or "running")
                 {
-                    run.Status      = "failed";
-                    run.CompletedAt = DateTime.UtcNow;
+                    run.Status       = "failed";
+                    run.CompletedAt  = DateTime.UtcNow;
+                    run.ErrorMessage = ex.Message;
                     await failDb.SaveChangesAsync(ct);
                 }
             }

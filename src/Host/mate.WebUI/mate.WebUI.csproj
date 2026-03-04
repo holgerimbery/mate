@@ -19,8 +19,9 @@
     <ProjectReference Include="..\..\Core\mate.Domain\mate.Domain.csproj" />
     <ProjectReference Include="..\..\Core\mate.Data\mate.Data.csproj" />
     <ProjectReference Include="..\..\Core\mate.Core\mate.Core.csproj" />
-    <!-- Infrastructure: include at least one phase -->
+    <!-- Infrastructure: Local (Phase 1) and Azure/Container (Phase 2) -->
     <ProjectReference Include="..\..\Infrastructure\mate.Infrastructure.Local\mate.Infrastructure.Local.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\mate.Infrastructure.Azure\mate.Infrastructure.Azure.csproj" />
     <!-- Modules: include all connector types -->
     <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.Generic\mate.Modules.AgentConnector.Generic.csproj" />
     <ProjectReference Include="..\..\Modules\AgentConnectors\mate.Modules.AgentConnector.CopilotStudio\mate.Modules.AgentConnector.CopilotStudio.csproj" />

@@ -1,0 +1,45 @@
+// Copyright (c) Holger Imbery. All rights reserved.
+// Licensed under the mate Custom License. See LICENSE in the project root.
+// Commercial use of this file, in whole or in part, is prohibited without prior written permission.
+using mate.Domain.Contracts.Infrastructure;
+using mate.Infrastructure.Local;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace mate.Infrastructure.Azure;
+
+/// <summary>
+/// DI registration for Phase 2 Azure / Container infrastructure services.
+/// Call <c>services.AddmateAzureInfrastructure(config)</c> from the host's Program.cs
+/// when <c>Infrastructure__Provider</c> is set to "Azure" or "Container".
+///
+/// Registered services:
+/// - <see cref="IBlobStorageService"/> → <see cref="AzureBlobStorageService"/> (Azure Blob / Azurite)
+/// - <see cref="ISecretService"/>      → <see cref="DatabaseSecretService"/> (same as Local; Key Vault is E1-08)
+/// - <see cref="IMessageQueue"/>       → <see cref="InProcessMessageQueue"/> (same as Local; Service Bus is E1-13)
+/// - <see cref="IBackupService"/>      → <see cref="NoOpBackupService"/> (no SQLite in this tier)
+/// </summary>
+public static class AzureInfrastructureServiceExtensions
+{
+    public static IServiceCollection AddmateAzureInfrastructure(
+        this IServiceCollection services,
+        IConfiguration config)
+    {
+        services.Configure<AzureInfrastructureOptions>(
+            config.GetSection(AzureInfrastructureOptions.Section));
+
+        // Blob: Azure Blob Storage or Azurite (same code, different connection string)
+        services.AddScoped<IBlobStorageService, AzureBlobStorageService>();
+
+        // Secrets: still DB-backed (Key Vault provider is backlog E1-08)
+        services.AddScoped<ISecretService, DatabaseSecretService>();
+
+        // Message queue: still in-process (Service Bus is backlog E1-13)
+        services.AddSingleton<IMessageQueue, InProcessMessageQueue>();
+
+        // Backup: no-op — PostgreSQL backup is handled at infrastructure level
+        services.AddScoped<IBackupService, NoOpBackupService>();
+
+        return services;
+    }
+}

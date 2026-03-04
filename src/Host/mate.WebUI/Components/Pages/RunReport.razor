@@ -56,6 +56,15 @@ else
     {
     <div class="mate-page">
 
+    @* ── Failure banner ─────────────────────────────────────────────── *@
+    @if (_run.Status == "failed" && !string.IsNullOrWhiteSpace(_run.ErrorMessage))
+    {
+        <div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            <span><strong>Run failed:</strong> @_run.ErrorMessage</span>
+        </div>
+    }
+
     @* ── Live progress (pending / running) ───────────────────────── *@
     @if (_run.Status is "pending" or "running")
     {

@@ -35,6 +35,18 @@
 
 ---
 
+## E1 — Foundation: PostgreSQL-only baseline *(v0.6.0)* ✅
+
+- `[x]` PostgreSQL-only baseline — `Local` (SQLite) tier removed; `Container` (PostgreSQL + Azurite) is now the default (E1-09b)
+- `[x]` `AzureBlobStorageService` Azurite HMAC fix — explicit `StorageSharedKeyCredential` + endpoint `Uri` for non-localhost Docker hostnames (E1-09c)
+- `[x]` Run failure surfacing — `Run.ErrorMessage` EF migration + error banner on Run Report page (E1-09d)
+- `[x]` Copilot Studio rate-limit handling — `AgentRateLimitException` + `SkippedCount` tracking on `Run` (E1-09e)
+- `[x]` `ResolveJudgeSettingAsync` fallback fix — default judge looked up via `PlatformTenantId` (`000...001`) (E1-09f)
+- `[x]` Quickstart updated to four-container stack (postgres, azurite, webui, worker); named volumes and `IMAGE_TAG` added (E1-09g)
+- `[x]` PG-native EF migrations — SQLite migrations deleted; `InitialCreate` regenerated with PostgreSQL-native types
+
+---
+
 ## E4 — WebUI Run Report Enhancements *(v0.5.0)* ✅
 
 - `[x]` Pass rate by tag breakdown table on Run Report (E4-19)
@@ -111,7 +123,14 @@ GetCapabilities() : List<string>             — declares what the module can do
 ### v0.2.0
 
 - [ ] **E1-08** Add Azure Key Vault provider for credential storage (production path)
-- [ ] **E1-09** PostgreSQL migration path — add `MATE_DB_PROVIDER` environment variable switch
+- [x] **E1-09** Three-tier infrastructure provider switch — `Infrastructure__Provider` env var selects `Local` (SQLite + filesystem), `Container` (PostgreSQL + Azurite via Docker Compose profile), or `Azure` (Azure Database for PostgreSQL + Azure Blob Storage). `AzureBlobStorageService`, `AzureInfrastructureServiceExtensions`, `NoOpBackupService` implemented in `mate.Infrastructure.Azure`; `docker compose --profile container up -d` activates the Container tier.
+- [x] **E1-09b** PostgreSQL-only baseline — `Local` (SQLite) tier removed; `Container` is now the default. Azurite blob connection string corrected to `UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite`. All SQLite packages and migrations removed; PG-native `InitialCreate` migration generated.
+- [x] **E1-09c** `AzureBlobStorageService` Azurite HMAC fix — constructor now uses explicit `StorageSharedKeyCredential` + `Uri(blobEndpoint)` when a custom `BlobEndpoint` is present, fixing HTTP 403 with Azure.Storage.Blobs v12.21+ on non-localhost hostnames.
+- [x] **E1-09d** Run failure surfacing — `Run.ErrorMessage` field added (EF migration `AddRunErrorMessage`); `TestRunWorker` persists exception message on failure; `RunReport` displays it as an error banner.
+- [x] **E1-09e** Copilot Studio rate-limit handling — `AgentRateLimitException` added; `enAIToolPlannerRateLimitReached` bot activities detected in connector and translated to `skipped` verdict instead of `error`/`failed`; `SkippedCount` tracked correctly on `Run`.
+- [x] **E1-09f** `ResolveJudgeSettingAsync` fallback fix — platform default judge looked up by `PlatformTenantId` (`000...001`) matching `mateDbSeeder`; was previously using `Guid.Empty` which never matched.
+- [x] **E1-09g** Quickstart package updated to PostgreSQL + Azurite stack — `quickstart/docker-compose.yml` now starts postgres, azurite, webui, worker; `quickstart/.env.template` gains `IMAGE_TAG` pinning; `quickstart/README.txt` rewritten; `appsettings.json` and stale SQLite references in `Program.cs`, `Settings.razor`, `TestRunWorker.cs` cleaned up.
+- [x] **~~E1-04~~** *(obsolete — SQLite removed)* ~~Create `data/` directory gitkeep in mate root so local SQLite file path works~~
 - [ ] **E1-12** Sample data seeder — auto-create a sample agent, test suite, and 5 test cases on first startup when the database is empty
 - [ ] **E1-13** Azure Container Apps IaC — Bicep + `azd` template for one-command production deployment; includes WebUI + Worker containers, managed identity, Azure SQL, Service Bus
 

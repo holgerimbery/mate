@@ -47,7 +47,7 @@
     .\debug-container.ps1 -Source ghcr -GhcrUser myuser -GhcrToken ghp_xxx  # non-interactive login
     .\debug-container.ps1 -Rebuild                    # rebuild images from source, then start
     .\debug-container.ps1 -Watch                      # show live execution events
-    .\debug-container.ps1 -DB                         # query SQLite for recent run results
+    .\debug-container.ps1 -DB                         # query PostgreSQL for recent run results
     .\debug-container.ps1 -Stop                       # stop everything
 #>
 param(
@@ -104,7 +104,7 @@ if ($noArgsGiven) {
     Write-Host "  MONITORING (require a running container):" -ForegroundColor Yellow
     Write-Host "    -Watch           Tail filtered execution events (test cases, verdicts, errors)" -ForegroundColor Gray
     Write-Host "    -Logs            Tail raw Docker Compose log output" -ForegroundColor Gray
-    Write-Host "    -DB              Query SQLite — show recent Runs and last 10 Results" -ForegroundColor Gray
+    Write-Host "    -DB              Query PostgreSQL — recent Runs and last 10 Results" -ForegroundColor Gray
     Write-Host ""
     Write-Host "  QUICK EXAMPLES:" -ForegroundColor Yellow
     Write-Host "    .\debug-container.ps1 -Source build           # build from source & start" -ForegroundColor DarkGray
@@ -112,7 +112,7 @@ if ($noArgsGiven) {
     Write-Host "    .\debug-container.ps1 -Source ghcr -Tag v0.3.2 # pull a specific release" -ForegroundColor DarkGray
     Write-Host "    .\debug-container.ps1 -Rebuild                # rebuild images, then start" -ForegroundColor DarkGray
     Write-Host "    .\debug-container.ps1 -Watch                  # live execution events" -ForegroundColor DarkGray
-    Write-Host "    .\debug-container.ps1 -DB                     # inspect run results in SQLite" -ForegroundColor DarkGray
+    Write-Host "    .\debug-container.ps1 -DB                     # inspect run results in PostgreSQL" -ForegroundColor DarkGray
     Write-Host "    .\debug-container.ps1 -Stop                   # stop all containers" -ForegroundColor DarkGray
     Write-Host ""
 
@@ -142,7 +142,6 @@ if ($noArgsGiven) {
 # ─── Stop ──────────────────────────────────────────────────────────────────────
 if ($Stop) {
     Write-Host "Stopping containers..." -ForegroundColor Yellow
-    # stop whichever compose file is currently running
     docker compose -f $composeFile down 2>$null
     docker compose -f $quickstartCompose down 2>$null
     exit 0
@@ -245,10 +244,12 @@ if ($running -notcontains $serviceWebUI) {
 
 # ─── Sub-commands ─────────────────────────────────────────────────────────────
 if ($DB) {
-    Write-Host "`n=== Recent Runs ===" -ForegroundColor Cyan
-    docker compose -f $activeCompose exec $serviceWebUI sh -c "sqlite3 /app/data/mate-local.db 'SELECT substr(Id,1,8), Status, StartedAt, TotalTestCases, PassedCount, FailedCount, SkippedCount FROM Runs ORDER BY StartedAt DESC LIMIT 5;'"
-    Write-Host "`n=== Last 10 Results ===" -ForegroundColor Cyan
-    docker compose -f $activeCompose exec $serviceWebUI sh -c "sqlite3 /app/data/mate-local.db 'SELECT substr(RunId,1,8), Verdict, ErrorMessage FROM Results ORDER BY ExecutedAt DESC LIMIT 10;'"
+    Write-Host "`n=== Recent Runs (PostgreSQL) ===" -ForegroundColor Cyan
+    docker compose -f $activeCompose exec postgres psql -U mate -d mate -c `
+        'SELECT LEFT("Id"::text,8), "Status", "StartedAt", "TotalTestCases", "PassedCount", "FailedCount", "SkippedCount" FROM "Runs" ORDER BY "StartedAt" DESC LIMIT 5;'
+    Write-Host "`n=== Last 10 Results (PostgreSQL) ===" -ForegroundColor Cyan
+    docker compose -f $activeCompose exec postgres psql -U mate -d mate -c `
+        'SELECT LEFT("RunId"::text,8), "Verdict", LEFT(COALESCE("ErrorMessage",\'\'),80) FROM "Results" ORDER BY "ExecutedAt" DESC LIMIT 10;'
     exit 0
 }
 

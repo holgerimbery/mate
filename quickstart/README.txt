@@ -16,6 +16,17 @@ Prerequisites
 - For Entra ID authentication: an Azure App Registration
   See: https://github.com/holgerimbery/mate/wiki/User-API-Keys
 
+What the stack starts
+---------------------
+  docker compose up -d starts four containers automatically:
+
+  mate-postgres   PostgreSQL 17        — application database
+  mate-azurite    Azurite 3.x          — Azure Blob Storage emulator (document storage)
+  mate-webui      mate Web UI + API    — http://localhost:5000
+  mate-worker     mate test-run worker — background job processor
+
+  No extra flags or profiles are needed.
+
 Steps
 -----
 1. Copy .env.template to .env
@@ -34,11 +45,11 @@ Steps
      AzureAd__ClientSecret, and AzureAd__RedirectUri values.
    See: https://github.com/holgerimbery/mate/wiki/User-API-Keys
 
-3. (Optional) Pin both images to the exact release version to avoid
+3. (Optional) Pin all images to the exact release version to avoid
    unintended upgrades. Edit docker-compose.yml and replace :latest with
    the version tag, e.g.:
-     image: ghcr.io/holgerimbery/mate-webui:0.3.2
-     image: ghcr.io/holgerimbery/mate-worker:0.3.2
+     image: ghcr.io/holgerimbery/mate-webui:0.6.0
+     image: ghcr.io/holgerimbery/mate-worker:0.6.0
 
 4. Pull the images and start the stack:
      docker compose pull
@@ -61,13 +72,22 @@ Stopping
 --------
   docker compose down
 
-Data & Backups
---------------
-All data is stored in the Docker named volume (mate-data). It persists
-across restarts and survives 'docker compose down' (but NOT
-'docker compose down -v').
-Use the built-in Backup & Restore in Settings → Data Management to
-export a portable copy of your database.
+  ⚠ To also delete all stored data (database, blobs, logs):
+      docker compose down -v
+
+Data persistence
+----------------
+Data is stored in three named Docker volumes that survive restarts and
+'docker compose down' (but NOT 'docker compose down -v'):
+
+  mate-pgdata     PostgreSQL database files
+  mate-azurite    Blob storage (uploaded documents, run artefacts)
+  mate-logs       Application log files
+
+Database backups are the responsibility of the infrastructure layer.
+Use pg_dump or Azure Database Console to create portable snapshots.
+The Settings → Data Management page keeps the backup button for API
+compatibility, but it returns an empty file in PostgreSQL mode.
 
 Documentation
 -------------
