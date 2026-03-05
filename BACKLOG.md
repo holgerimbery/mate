@@ -134,6 +134,17 @@ GetCapabilities() : List<string>             — declares what the module can do
 - [x] **~~E1-04~~** *(obsolete — SQLite removed)* ~~Create `data/` directory gitkeep in mate root so local SQLite file path works~~
 - [ ] **E1-12** Sample data seeder — auto-create a sample agent, test suite, and 5 test cases on first startup when the database is empty
 - [ ] **E1-13** Azure Container Apps IaC — Bicep + `azd` template for one-command production deployment; includes WebUI + Worker containers, managed identity, Azure SQL, Service Bus
+- [ ] **E1-13a** Full planning document (non-wiki): `docs/concepts/azure-container-landscape-plan.md` — target landscape, profile sizing, scale-to-zero strategy, implementation phases, cost model
+- [ ] **E1-13b** Create `infra/azure/` IaC baseline — `main.bicep`, module split (container apps, postgres, storage, service bus, key vault, diagnostics), `azd` environment templates (`dev`, `staging`, `prod`)
+- [ ] **E1-13c** Flexible sizing profiles (`XS`,`S`,`M`,`L`) — parameterized min/max replicas, CPU/memory, queue thresholds, and cooldown values (no hard-coded production sizing)
+- [ ] **E1-13d** Implement Azure Service Bus `IMessageQueue` provider in `mate.Infrastructure.Azure` for durable cross-instance run execution
+- [ ] **E1-13e** Refactor Worker execution path from DB polling to queue consumption (`test-runs`) so KEDA/ACA can scale worker replicas from zero based on queue depth
+- [ ] **E1-13f** Add dedicated migration job in deployment flow; remove startup migration race between WebUI and Worker in cloud mode
+- [ ] **E1-13g** Configure worker scale-to-zero (`minReplicas=0`) with queue-based scale rules; configure web profile (`prod min>=1`, non-prod optionally `min=0`)
+- [ ] **E1-13h** Add non-prod cost mode automation — off-hours schedule to scale web/worker down, with morning warm-up schedule and override controls
+- [ ] **E1-13i** Add DLQ and replay operations — dead-letter policy, replay command/runbook, and alerting for poison messages
+- [ ] **E1-13j** Add production observability and cost governance — OpenTelemetry export, dashboards, budget alerts, and cost-anomaly alerts
+- [ ] **E1-13k** Add production readiness runbooks — deployment/rollback, queue incident handling, backup/restore checks, key rotation, and scale policy tuning; seed with `docs/concepts/container-stack-update-runbook.md`
 
 ---
 
@@ -646,4 +657,4 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 ---
 
-*Last updated: 2026-03-04, v0.6.0 released*
+*Last updated: 2026-03-05, v0.6.0 released*

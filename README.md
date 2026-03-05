@@ -114,6 +114,12 @@ Open **<http://localhost:5000>**. No login required in the default `Generic` aut
 
 > **PostgreSQL + Azurite** are always started alongside webui and worker — no extra flags required. The default `.env.template` values work out of the box for local development.
 
+### Option C — Deploy to Azure (planned)
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](BACKLOG.md#e1--foundation--infrastructure)
+
+> Azure one-click deployment (Bicep + `azd`) is tracked in backlog item **E1-13** and is not yet shipped.
+
 
 ---
 
