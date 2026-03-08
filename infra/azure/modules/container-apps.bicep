@@ -73,7 +73,7 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'azuread-client-secret'
           identity: webIdentity.id
-            keyVaultUrl: 'https://${keyVaultName}.${environment().suffixes.keyvaultDns}/secrets/azuread-client-secret'
+          keyVaultUrl: 'https://${keyVaultName}${environment().suffixes.keyvaultDns}/secrets/azuread-client-secret'
         }
       ]
     }

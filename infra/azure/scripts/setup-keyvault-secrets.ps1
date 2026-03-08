@@ -1,3 +1,7 @@
+# Copyright (c) Holger Imbery. All rights reserved.
+# Licensed under the mate Custom License. See LICENSE in the project root.
+# Commercial use of this file, in whole or in part, is prohibited without prior written permission.
+
 <#
 .SYNOPSIS
 Post-deployment setup: Store client secret in Key Vault and configure RBAC.
@@ -52,6 +56,47 @@ if (-not $credsFile -or -not (Test-Path $credsFile)) {
 $creds = Get-Content $credsFile | ConvertFrom-Json
 $aadClientSecret = $creds.AAD_CLIENT_SECRET
 
+function Ensure-CallerCanManageKeyVaultSecrets {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$KeyVaultId
+    )
+
+    $caller = az account show --query "{name:user.name,type:user.type}" -o json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or -not $caller -or -not $caller.name) {
+        Write-Error "Unable to determine current Azure caller from az account show"
+    }
+
+    $existingAssignmentCount = az role assignment list `
+        --assignee $caller.name `
+        --scope $KeyVaultId `
+        --query "[?roleDefinitionName=='Key Vault Secrets Officer'] | length(@)" -o tsv
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Could not verify existing Key Vault Secrets Officer role assignment; attempting assignment"
+        $existingAssignmentCount = '0'
+    }
+
+    if ($existingAssignmentCount -eq '0') {
+        Write-Host "  Granting caller '$($caller.name)' role 'Key Vault Secrets Officer' on Key Vault..." -ForegroundColor Gray
+        $assignOutput = az role assignment create `
+            --assignee $caller.name `
+            --role "Key Vault Secrets Officer" `
+            --scope $KeyVaultId `
+            -o json 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            $assignText = ($assignOutput | Out-String).Trim()
+            Write-Error "Failed to grant Key Vault Secrets Officer to caller '$($caller.name)'. Error: $assignText"
+        }
+
+        Write-Host "  Caller role assignment created" -ForegroundColor Gray
+    }
+    else {
+        Write-Host "  Caller already has Key Vault Secrets Officer role" -ForegroundColor Gray
+    }
+}
+
 Write-Host "Configuration Summary:" -ForegroundColor Yellow
 Write-Host "  Tenant ID:           $tenantId"
 Write-Host "  Subscription ID:     $subscriptionId"
@@ -64,7 +109,7 @@ Write-Host ""
 # Step 1: Verify subscription context
 Write-Host "Step 1: Verifying Azure subscription context..." -ForegroundColor Cyan
 try {
-    $currentSubId = az account show --query id -o tsv 2>&1
+    $currentSubId = az account show --query id -o tsv
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Not logged in. Run: az login --tenant $tenantId"
     }
@@ -87,12 +132,14 @@ Write-Host ""
 # Step 2: Verify Key Vault exists
 Write-Host "Step 2: Verifying Key Vault..." -ForegroundColor Cyan
 $keyVaultName = "$environmentName-kv"
+$kvId = $null
 try {
-    $kvExists = az keyvault show --name $keyVaultName --resource-group $resourceGroup -o tsv 2>&1 | Measure-Object | Select-Object -ExpandProperty Count
-    
-    if ($kvExists -eq 0) {
+    $keyVault = az keyvault show --name $keyVaultName --resource-group $resourceGroup -o json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or -not $keyVault) {
         Write-Error "Key Vault '$keyVaultName' not found in resource group '$resourceGroup'. Verify deployment completed successfully."
     }
+
+    $kvId = $keyVault.id
     
     Write-Host "✓ Key Vault found: $keyVaultName" -ForegroundColor Green
 }
@@ -105,16 +152,19 @@ Write-Host ""
 # Step 3: Store client secret in Key Vault
 Write-Host "Step 3: Storing client secret in Key Vault..." -ForegroundColor Cyan
 try {
+    Ensure-CallerCanManageKeyVaultSecrets -KeyVaultId $kvId
+
     Write-Host "  Storing secret 'azuread-client-secret' in $keyVaultName..." -ForegroundColor Gray
     
-    az keyvault secret set `
+    $setSecretOutput = az keyvault secret set `
         --vault-name $keyVaultName `
         --name "azuread-client-secret" `
         --value $aadClientSecret `
-        2>&1 | Out-Null
+        --query id -o tsv 2>&1
     
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to store secret in Key Vault"
+        $setSecretText = ($setSecretOutput | Out-String).Trim()
+        Write-Error "Failed to store secret in Key Vault. Error: $setSecretText"
     }
     
     Write-Host "✓ Client secret stored successfully" -ForegroundColor Green
@@ -134,7 +184,7 @@ try {
     $webMiPrincipalId = az identity show `
         --resource-group $resourceGroup `
         --name $webMiName `
-        --query principalId -o tsv 2>&1
+        --query principalId -o tsv
     
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to get managed identity '$webMiName'"
@@ -142,26 +192,35 @@ try {
     
     Write-Host "  Principal ID: $webMiPrincipalId" -ForegroundColor Gray
     
-    # Get Key Vault resource ID
-    $kvId = az keyvault show `
-        --name $keyVaultName `
-        --resource-group $resourceGroup `
-        --query id -o tsv 2>&1
-    
     Write-Host "  Granting 'Key Vault Secrets User' role..." -ForegroundColor Gray
-    
-    az role assignment create `
-        --assignee $webMiPrincipalId `
-        --role "Key Vault Secrets User" `
+
+    $existingMiAssignmentCount = az role assignment list `
+        --assignee-object-id $webMiPrincipalId `
         --scope $kvId `
-        2>&1 | Out-Null
-    
+        --query "[?roleDefinitionName=='Key Vault Secrets User'] | length(@)" -o tsv
+
     if ($LASTEXITCODE -ne 0) {
-        # Role assignment already exists, that's OK
-        Write-Host "  (Role may already be assigned)" -ForegroundColor Gray
+        Write-Warning "Could not verify existing managed identity assignment; attempting assignment"
+        $existingMiAssignmentCount = '0'
+    }
+
+    if ($existingMiAssignmentCount -eq '0') {
+        $miAssignOutput = az role assignment create `
+            --assignee-object-id $webMiPrincipalId `
+            --assignee-principal-type ServicePrincipal `
+            --role "Key Vault Secrets User" `
+            --scope $kvId `
+            -o json 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            $miAssignText = ($miAssignOutput | Out-String).Trim()
+            Write-Error "Failed to assign Key Vault Secrets User to managed identity. Error: $miAssignText"
+        }
+
+        Write-Host "  Role assignment created" -ForegroundColor Gray
     }
     else {
-        Write-Host "  Role assignment created" -ForegroundColor Gray
+        Write-Host "  Managed identity already has Key Vault Secrets User role" -ForegroundColor Gray
     }
     
     Write-Host "✓ Managed identity configured" -ForegroundColor Green
@@ -178,7 +237,7 @@ try {
     $secret = az keyvault secret show `
         --vault-name $keyVaultName `
         --name "azuread-client-secret" `
-        --query value -o tsv 2>&1
+        --query value -o tsv
     
     if ($secret -and $secret -eq $aadClientSecret) {
         Write-Host "✓ Secret verified successfully" -ForegroundColor Green
@@ -200,11 +259,16 @@ if (Test-Path $pgPassFile) {
         $pgPassword = Get-Content $pgPassFile -Raw
         
         Write-Host "  Storing 'postgres-admin-password'..." -ForegroundColor Gray
-        az keyvault secret set `
+        $setPgOutput = az keyvault secret set `
             --vault-name $keyVaultName `
             --name "postgres-admin-password" `
             --value $pgPassword `
-            2>&1 | Out-Null
+            --query id -o tsv 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            $setPgText = ($setPgOutput | Out-String).Trim()
+            Write-Error "Failed to store PostgreSQL password in Key Vault. Error: $setPgText"
+        }
         
         Write-Host "✓ PostgreSQL password stored" -ForegroundColor Green
         

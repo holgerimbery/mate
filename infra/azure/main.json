@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "9925893720925210661"
+      "templateHash": "17009714941461450900"
     }
   },
   "parameters": {
@@ -679,7 +679,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "96034003002418543"
+              "templateHash": "9142176545377805943"
             }
           },
           "parameters": {
@@ -815,7 +815,7 @@
                     {
                       "name": "azuread-client-secret",
                       "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128))]",
-                      "keyVaultUrl": "[format('https://{0}.{1}/secrets/azuread-client-secret', parameters('keyVaultName'), environment().suffixes.keyvaultDns)]"
+                      "keyVaultUrl": "[format('https://{0}{1}/secrets/azuread-client-secret', parameters('keyVaultName'), environment().suffixes.keyvaultDns)]"
                     }
                   ]
                 },

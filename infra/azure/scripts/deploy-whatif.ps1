@@ -1,3 +1,7 @@
+# Copyright (c) Holger Imbery. All rights reserved.
+# Licensed under the mate Custom License. See LICENSE in the project root.
+# Commercial use of this file, in whole or in part, is prohibited without prior written permission.
+
 <#
 .SYNOPSIS
 Dry-run deployment to show what Azure resources would be created without actually creating them.
@@ -54,7 +58,15 @@ param(
     [string]$ResourceGroupName,
 
     [Parameter(Mandatory = $false)]
-    [string]$AadClientId
+    [string]$AadClientId,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 120)]
+    [int]$PostgresWaitTimeoutMinutes = 20,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(5, 300)]
+    [int]$PostgresWaitPollSeconds = 20
 )
 
 $ErrorActionPreference = 'Stop'
@@ -130,6 +142,71 @@ Write-Host "Template:         $(Split-Path -Leaf $mainTemplate)" -ForegroundColo
 Write-Host "Parameters:       $(Split-Path -Leaf $parameterFile)" -ForegroundColor Green
 Write-Host ""
 
+function Wait-ForProvisioningPostgres {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ResourceGroup,
+
+        [Parameter(Mandatory = $true)]
+        [int]$TimeoutMinutes,
+
+        [Parameter(Mandatory = $true)]
+        [int]$PollSeconds
+    )
+
+    $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+
+    while ($true) {
+        $serverQueryOutput = az postgres flexible-server list --resource-group $ResourceGroup --query "[].{name:name,state:state}" --output json --only-show-errors
+        if ($LASTEXITCODE -ne 0) {
+            $queryError = ($serverQueryOutput | Out-String).Trim()
+            $remaining = [math]::Max(0, [int](($deadline - (Get-Date)).TotalSeconds))
+            if ((Get-Date) -ge $deadline) {
+                Write-Error "Failed to query PostgreSQL servers in resource group '$ResourceGroup' within $TimeoutMinutes minutes. Last error: $queryError"
+            }
+
+            Write-Host "PostgreSQL state query failed (will retry)... ($remaining s remaining)" -ForegroundColor Yellow
+            if ($queryError) {
+                Write-Host "  Last provider error: $queryError" -ForegroundColor DarkYellow
+            }
+            Start-Sleep -Seconds $PollSeconds
+            continue
+        }
+
+        try {
+            $servers = @($serverQueryOutput | ConvertFrom-Json)
+        }
+        catch {
+            $remaining = [math]::Max(0, [int](($deadline - (Get-Date)).TotalSeconds))
+            if ((Get-Date) -ge $deadline) {
+                Write-Error "Received unexpected PostgreSQL query response format within timeout window: $($serverQueryOutput | Out-String)"
+            }
+
+            Write-Host "Received non-JSON PostgreSQL state response (will retry)... ($remaining s remaining)" -ForegroundColor Yellow
+            Start-Sleep -Seconds $PollSeconds
+            continue
+        }
+
+        if ($servers.Count -eq 0) {
+            return
+        }
+
+        $blockingServers = @($servers | Where-Object { $_.state -and $_.state -match 'Provisioning|Updating|Starting|Stopping' })
+        if ($blockingServers.Count -eq 0) {
+            return
+        }
+
+        $stateSummary = ($blockingServers | ForEach-Object { "$($_.name):$($_.state)" }) -join ', '
+        $remaining = [math]::Max(0, [int](($deadline - (Get-Date)).TotalSeconds))
+        if ((Get-Date) -ge $deadline) {
+            Write-Error "PostgreSQL server operations did not complete within $TimeoutMinutes minutes. Current state(s): $stateSummary"
+        }
+
+        Write-Host "Waiting for PostgreSQL server operations to finish before what-if... ($stateSummary, $remaining s remaining)" -ForegroundColor Yellow
+        Start-Sleep -Seconds $PollSeconds
+    }
+}
+
 # Prompt for values needed when deployPostgres=true
 $pgPasswordFile = Join-Path $scriptDir '.pg-password'
 $postgresPasswordPlain = $null
@@ -174,7 +251,10 @@ if ($rgExists -ne 'true') {
     }
 }
 
-Write-Host "3. Running what-if..." -ForegroundColor Magenta
+Write-Host "3. Checking PostgreSQL server readiness..." -ForegroundColor Magenta
+Wait-ForProvisioningPostgres -ResourceGroup $ResourceGroupName -TimeoutMinutes $PostgresWaitTimeoutMinutes -PollSeconds $PostgresWaitPollSeconds
+
+Write-Host "4. Running what-if..." -ForegroundColor Magenta
 $whatIfArgs = @(
     'deployment', 'group', 'what-if',
     '--resource-group', $ResourceGroupName,
@@ -188,7 +268,12 @@ foreach ($key in $deploymentParams.Keys) {
 
 az @whatIfArgs --result-format FullResourcePayloads
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "What-if failed. Review the errors above."
+    Write-Host "What-if failed on first attempt. Re-checking PostgreSQL state and retrying once..." -ForegroundColor Yellow
+    Wait-ForProvisioningPostgres -ResourceGroup $ResourceGroupName -TimeoutMinutes $PostgresWaitTimeoutMinutes -PollSeconds $PostgresWaitPollSeconds
+    az @whatIfArgs --result-format FullResourcePayloads
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "What-if failed after retry. Review the errors above."
+    }
 }
 
 Write-Host ""

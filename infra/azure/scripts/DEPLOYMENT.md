@@ -38,7 +38,7 @@ Store your Azure tenant, subscription, and resource group information locally (n
 ```
 
 This interactive wizard creates a `.env` file with your settings:
-- **Save location:** `infra/azure/.env` (automatically git-ignored)
+- **Save location:** `infra/azure/scripts/.env` (automatically git-ignored)
 - **What gets stored:** Tenant ID, Subscription ID, Resource Group, Location, etc.
 - **Security:** `.env` is never committed to git
 
@@ -87,7 +87,9 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 - Prompt for PostgreSQL admin password (never stored, never logged)
 - Create resource group (if needed)
 - Deploy all Azure resources
-- Display post-deployment tasks
+- Automatically recover known first-run Key Vault secret bootstrap failures (when `.credentials` is available)
+- Ensure PostgreSQL connectivity prerequisites for Azure-hosted apps when public network mode is used
+- Configure WebUI/Worker runtime DB secret references (`ConnectionStrings__Default` -> `secretref:postgres-conn`)
 
 **To override .env values**, pass parameters:
 
@@ -101,7 +103,7 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 
 | Profile | Web Min | Web Max | Worker Max | CPU | Memory | Use Case |
 |---------|---------|---------|------------|-----|--------|----------|
-| `xs`    | 0       | 1       | 2          | 0.25 | 0.5 GB | Testing, lowest cost |
+| `xs`    | 1       | 1       | 2          | 0.25 | 0.5 GB | Testing, lowest cost |
 | `s`     | 1       | 3       | 5          | 0.5 | 1 GB   | **Default for dev** |
 | `m`     | 2       | 6       | 10         | 1.0 | 2 GB   | Growth production |
 | `l`     | 3       | 12      | 20         | 2.0 | 4 GB   | High throughput |
@@ -119,45 +121,42 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 
 ## Post-Deployment Tasks
 
-After `deploy.ps1` completes, you must:
+After `deploy.ps1` completes successfully, infrastructure and secret wiring are expected to be ready.
 
-1. **Create managed identity role assignments**
-   ```powershell
-   # Assign WebUI managed identity to Key Vault (read secrets)
-   az role assignment create \
-     --assignee <webui-principal-id> \
-     --role "Key Vault Secrets User" \
-     --scope /subscriptions/<subscription-id>/resourceGroups/<rg-name>/providers/Microsoft.KeyVault/vaults/<vault-name>
-   
-   # Assign Worker managed identity to Service Bus and Blob Storage
-   ```
+### Manual steps required for correct Entra ID login flow
 
-2. **Store secrets in Key Vault**
-   ```powershell
-   az keyvault secret set \
-     --vault-name <vault-name> \
-     --name 'postgres-connection-string' \
-     --value 'Server=<postgres-server>.postgres.database.azure.com;Database=mate;Port=5432;User Id=admin;Password=<password>'
-   ```
+1. **Get the WebUI URL from deployment output**
+   - You need the exact FQDN for redirect URI registration.
 
-3. **Update container environment variables**
-   - Edit Container Apps to bind Key Vault secret references
-   - Example: `@Microsoft.KeyVault(VaultName=<vault-name>;SecretName=postgres-connection-string)`
+2. **Register redirect URI in Entra app registration**
+   - Required redirect URI format:
+     https://<webui-fqdn>/signin-oidc
+   - Also set front-channel logout URL:
+     https://<webui-fqdn>/signout-callback-oidc
 
-4. **Run database migration**
-   ```powershell
-   # Create a job container to run entity framework migrations
-   az container create \
-     --resource-group <rg-name> \
-     --name mate-migration \
-     --image ghcr.io/holgerimbery/mate-webui:latest \
-     --command-line "dotnet ef database update" \
-     --environment-variables ASPNETCORE_ENVIRONMENT=Production Infrastructure=Azure
-   ```
+3. **Enable ID token issuance on the app registration**
+   - In Authentication for the app registration, enable ID tokens for web sign-in.
 
-5. **Validate health endpoints**
-   - WebUI: `curl https://<webapp-fqdn>/health/live`
-   - Worker: Check Container Insights dashboard for queue consumption
+4. **Validate login in private/incognito browser**
+   - Open the WebUI URL.
+   - Confirm redirect to Microsoft sign-in and return to app after authentication.
+
+### Optional verification commands (recommended)
+
+Verify redirect URIs:
+az ad app show --id <aad-client-id> --query "web.redirectUris"
+
+Verify web container auth-related env:
+az containerapp show --resource-group <rg-name> --name <env>-webui --query "properties.template.containers[0].env[?name=='AzureAd__ClientId' || name=='AzureAd__TenantId' || name=='AzureAd__CallbackPath']"
+
+Verify Key Vault secret exists:
+az keyvault secret list --vault-name <env>-kv --query "[?name=='azuread-client-secret'].name" -o tsv
+
+Verify DB secret reference in WebUI:
+az containerapp show --resource-group <rg-name> --name <env>-webui --query "properties.template.containers[0].env[?name=='ConnectionStrings__Default']"
+
+Verify PostgreSQL firewall allows Azure services (public mode):
+az postgres flexible-server firewall-rule list --resource-group <rg-name> --name <env>-pg -o table
 
 ## Troubleshooting
 
@@ -178,6 +177,15 @@ After `deploy.ps1` completes, you must:
 - Verify PostgreSQL admin password meets complexity requirements (12+ chars, mixed case, numbers)
 - Review Azure Portal → Resource Groups → Deployments for error details
 
+### WebUI URL does not respond (startup failures)
+- Check active revision health:
+   az containerapp revision list --resource-group <rg-name> --name <env>-webui -o table
+- Check application logs:
+   az containerapp logs show --resource-group <rg-name> --name <env>-webui --type console --tail 120
+- Most common cause: database connectivity during startup migration.
+   - Verify `ConnectionStrings__Default` uses `secretRef` (`postgres-conn`).
+   - Verify PostgreSQL firewall/network access if using public mode.
+
 ## Environment Variables & Configuration
 
 **WebUI Container Environment:**
@@ -195,13 +203,13 @@ After `deploy.ps1` completes, you must:
 
 ## Cleanup
 
-To remove all resources and stop incurring costs:
+To clean everything inside a resource group without deleting the resource group itself:
 
 ```powershell
-az group delete --name mate-dev-rg --yes --no-wait
+.\cleanup-rg.ps1 -ResourceGroupName <rg-name>
 ```
 
-This will delete all Azure resources in the resource group (cannot be undone).
+This script deletes live resources, removes deployment records, purges RG-scoped soft-deleted Key Vault entries, and verifies the RG is empty at the end.
 
 ## References
 

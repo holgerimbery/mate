@@ -1,3 +1,7 @@
+# Copyright (c) Holger Imbery. All rights reserved.
+# Licensed under the mate Custom License. See LICENSE in the project root.
+# Commercial use of this file, in whole or in part, is prohibited without prior written permission.
+
 <#
 .SYNOPSIS
 Interactive setup wizard for Azure deployment environment variables.
@@ -158,7 +162,7 @@ else {
             $appName = "mate-webui-$envName"
             Write-Host "  Creating app registration '$appName'..." -ForegroundColor Gray
             
-            $result = az ad app create --display-name $appName --sign-in-audience AzureADMyOrg 2>&1
+            $result = az ad app create --display-name $appName --sign-in-audience AzureADMyOrg
             if ($LASTEXITCODE -ne 0) {
                 Write-Host ""
                 Write-Error "Failed to create app registration. Error: $result`n`nPlease create manually and re-run setup."
@@ -232,7 +236,7 @@ elseif ($secretOption -eq '2') {
         Write-Host "  Creating client secret for app $aadClientId..." -ForegroundColor Gray
         Write-Host "  Secret description: $secretDisplayName" -ForegroundColor Gray
         
-        $secretResult = az ad app credential reset --id $aadClientId --append --display-name $secretDisplayName --query password -o tsv 2>&1
+        $secretResult = az ad app credential reset --id $aadClientId --append --display-name $secretDisplayName --query password -o tsv
         if ($LASTEXITCODE -ne 0) {
             Write-Host ""
             Write-Error "Failed to create client secret. Error: $secretResult`n`nPlease create manually in Azure Portal and re-run setup."
