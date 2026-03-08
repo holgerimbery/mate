@@ -621,9 +621,33 @@ if ($deploymentParams['deployPostgres'] -eq $true -and $postgresPasswordPlain) {
         Write-Host "  PostgreSQL public network access is disabled; expecting private networking configuration." -ForegroundColor Gray
     }
 
-    Write-Host "Configuring Container Apps database connection secrets..." -ForegroundColor Gray
+    Write-Host "Configuring Container Apps runtime secret references..." -ForegroundColor Gray
 
     $dbConnectionString = "Host=$EnvironmentName-pg.postgres.database.azure.com;Database=mate;Username=pgadmin;Password=$postgresPasswordPlain;SSL Mode=Require"
+
+    $storageAccountName = az resource list `
+        --resource-group $ResourceGroupName `
+        --resource-type 'Microsoft.Storage/storageAccounts' `
+        --query "[0].name" -o tsv 2>$null
+
+    $blobConnectionString = $null
+    if ($LASTEXITCODE -eq 0 -and $storageAccountName) {
+        $storageKey = az storage account keys list `
+            --resource-group $ResourceGroupName `
+            --account-name $storageAccountName `
+            --query "[0].value" -o tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0 -and $storageKey) {
+            $blobConnectionString = "DefaultEndpointsProtocol=https;AccountName=$storageAccountName;AccountKey=$storageKey;EndpointSuffix=core.windows.net"
+        }
+        else {
+            Write-Host "  Could not resolve storage account key automatically; blob runtime secret will not be updated." -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "  No storage account found in resource group; blob runtime secret will not be updated." -ForegroundColor Yellow
+    }
+
     $containerApps = @("$EnvironmentName-webui", "$EnvironmentName-worker")
 
     foreach ($appName in $containerApps) {
@@ -633,32 +657,42 @@ if ($deploymentParams['deployPostgres'] -eq $true -and $postgresPasswordPlain) {
             continue
         }
 
+        $secrets = @("postgres-conn=$dbConnectionString")
+        if ($blobConnectionString) {
+            $secrets += "blob-conn=$blobConnectionString"
+        }
+
         az containerapp secret set `
             --resource-group $ResourceGroupName `
             --name $appName `
-            --secrets "postgres-conn=$dbConnectionString" `
+            --secrets $secrets `
             -o none 2>$null
 
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "  Failed to set DB secret on '$appName'." -ForegroundColor Yellow
+            Write-Host "  Failed to set runtime secrets on '$appName'." -ForegroundColor Yellow
             continue
+        }
+
+        $envUpdates = @("ConnectionStrings__Default=secretref:postgres-conn")
+        if ($blobConnectionString) {
+            $envUpdates += "AzureInfrastructure__BlobConnectionString=secretref:blob-conn"
         }
 
         az containerapp update `
             --resource-group $ResourceGroupName `
             --name $appName `
-            --set-env-vars "ConnectionStrings__Default=secretref:postgres-conn" `
+            --set-env-vars $envUpdates `
             -o none 2>$null
 
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "  Failed to update DB env on '$appName'." -ForegroundColor Yellow
+            Write-Host "  Failed to update runtime env on '$appName'." -ForegroundColor Yellow
             continue
         }
 
-        Write-Host "  Configured database secret reference on '$appName'." -ForegroundColor Green
+        Write-Host "  Configured runtime secret references on '$appName'." -ForegroundColor Green
     }
 
-    Write-Host "Container App database secret configuration completed." -ForegroundColor Gray
+    Write-Host "Container App runtime secret configuration completed." -ForegroundColor Gray
     Write-Host ""
 }
 

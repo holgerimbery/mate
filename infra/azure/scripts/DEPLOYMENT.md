@@ -90,6 +90,7 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 - Automatically recover known first-run Key Vault secret bootstrap failures (when `.credentials` is available)
 - Ensure PostgreSQL connectivity prerequisites for Azure-hosted apps when public network mode is used
 - Configure WebUI/Worker runtime DB secret references (`ConnectionStrings__Default` -> `secretref:postgres-conn`)
+- Configure WebUI/Worker runtime Blob secret references (`AzureInfrastructure__BlobConnectionString` -> `secretref:blob-conn`)
 
 **To override .env values**, pass parameters:
 

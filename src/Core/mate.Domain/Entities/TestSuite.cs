@@ -21,7 +21,7 @@ public class TestSuite
 
     /// <summary>
     /// Optional delay (milliseconds) between executing individual test cases.
-    /// Use to avoid triggering rate-limit errors on the target agent (e.g. GenAIToolPlannerRateLimitReached).
+    /// Use to avoid triggering rate-limit errors on the target agent (e.g. enAIToolPlannerRateLimitReached).
     /// 0 = no delay (default).
     /// </summary>
     public int DelayBetweenTestsMs { get; set; } = 0;
