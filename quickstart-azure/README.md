@@ -293,7 +293,7 @@ For issues or questions:
 1. Check [Troubleshooting](#troubleshooting) above
 2. Review logs using Azure CLI commands above
 3. Open an issue on [GitHub](https://github.com/holgerimbery/mate/issues)
-4. See [docs/wiki/Developer-Getting-Started.md](../../docs/wiki/Developer-Getting-Started.md) for more details
+4. See [docs/wiki/Developer-Getting-Started.md](https://github.com/holgerimbery/mate/blob/main/docs/wiki/Developer-Getting-Started.md) for more details
 
 ---
 

@@ -31,6 +31,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - image: mate-webui
@@ -84,12 +85,24 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GitHub Container Registry (with retry)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for attempt in 1 2 3; do
+            if echo "$GHCR_TOKEN" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin; then
+              echo "GHCR login succeeded on attempt ${attempt}."
+              exit 0
+            fi
+
+            echo "GHCR login attempt ${attempt} failed."
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Unable to log in to GHCR after 3 attempts."
+              exit 1
+            fi
+
+            sleep $((attempt * 10))
+          done
 
       - name: Extract Docker metadata
         id: meta
