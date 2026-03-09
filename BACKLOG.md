@@ -393,6 +393,8 @@ Implement a collapsible icon sidebar:
 - [ ] **E6-12** Trend charts — 7-day and 30-day pass rate trend line
 - [ ] **E6-13** Full-text search over document chunks — Lucene.NET index at `Storage:LuceneIndexPath`; index updated on ingest/delete; `GET /api/documents/search?q=` endpoint; surfaced in Documents page search box
 - [ ] **E6-14** Run report PDF export — generate a formatted PDF from a completed run's results and verdict summary (in addition to the existing CSV export in E4-21)
+- [ ] **E6-15** Integration test smoke suite — add `mate.Tests.Integration` startup + health endpoint tests (WebUI boot, DI wiring, `/health/live`, `/health/ready`)
+- [ ] **E6-16** End-to-end happy path suite — add `mate.Tests.EndToEnd` scenario covering run execution lifecycle (create test suite/cases → trigger run → validate persisted report outcome)
 
 ---
 
@@ -471,6 +473,9 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 #### Attachment / Adaptive Card Assertion
 - [ ] **E8-20** Attachment presence assertion in RubricsJudge — new `EvaluationType.AttachmentPresent` criteria: asserts that the bot response includes an attachment of the specified `contentType` (e.g. `application/vnd.microsoft.card.adaptive`); mandatory-gate capable
+
+#### Test Coverage Hardening
+- [ ] **E8-21** ModelAsJudge provider unit tests with mocked HTTP client factory — cover success payloads, malformed JSON, preamble/postamble JSON extraction, non-2xx API responses, and cancellation behavior
 
 ---
 
