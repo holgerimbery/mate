@@ -546,8 +546,8 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 - [x] **E13-06** Tenant mapping seeder: `SeedEntraIdTenantMappingAsync` maps dev tenant `ExternalTenantId` → Azure AD `tid` GUID (idempotent)
 - [x] **E13-07** `ITenantContext` factory Blazor Server fallback via `AuthenticationStateProvider` (fixes null `HttpContext` in SignalR circuits)
 - [x] **E13-08** `Agents.razor`, `TestSuites.razor`, `Wizard.razor` updated to use `@inject ITenantContext TenantCtx`
-- [ ] **E13-09** `infra/local/.env.template` — document `Authentication__Scheme`, `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`
-- [ ] **E13-10** README section: "Switching to EntraId authentication" setup guide
+- [x] **E13-09** `infra/local/.env.template` — document `Authentication__Scheme`, `AzureAd__TenantId`, `AzureAd__ClientId`, `AzureAd__ClientSecret`
+- [x] **E13-10** README/wiki section: "Switching to EntraId authentication" setup guide (local Docker scope)
 - [x] **E13-11** ~~BLOCKED~~ **RESOLVED** — EntraId login on HTTP localhost works via nginx reverse proxy at a production deployment; full OIDC flow confirmed working.
 - [x] **E13-12** Fixed circular DI infinite loop: `TenantLookupService` now constructs `mateDbContext` directly with `null` tenant context — no DI involvement, loop impossible.
 - [x] **E13-13** Fixed Blazor sync-context deadlock: `Task.Run()` in `ITenantContext` factory escapes `RendererSynchronizationContext`.
