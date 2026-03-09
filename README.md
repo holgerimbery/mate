@@ -114,11 +114,23 @@ Open **<http://localhost:5000>**. No login required in the default `Generic` aut
 
 > **PostgreSQL + Azurite** are always started alongside webui and worker — no extra flags required. The default `.env.template` values work out of the box for local development.
 
-### Option C — Deploy to Azure (planned)
+### Option C — Deploy to Azure
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](BACKLOG.md#e1--foundation--infrastructure)
+Download the `mate-quickstart-azure-<version>.zip` from [GitHub Releases](https://github.com/holgerimbery/mate/releases/latest) or use the scripts in `infra/azure/scripts/`:
 
-> Azure one-click deployment (Bicep + `azd`) is tracked in backlog item **E1-13** and is not yet shipped.
+**Windows (PowerShell)**
+```powershell
+cd infra/azure/scripts
+pwsh ./check-prerequisites.ps1      # Validate tools
+pwsh ./setup-env.ps1                # Configure Azure credentials
+pwsh ./deploy-whatif.ps1            # Preview changes (recommended)
+pwsh ./deploy.ps1                   # Deploy infrastructure
+pwsh ./setup-keyvault-secrets.ps1   # Configure secrets & RBAC
+```
+
+See [quickstart-azure/README.md](quickstart-azure/README.md) for full deployment guide, troubleshooting, architecture details, and cost estimates.
+
+> **Prerequisites:** Azure CLI, PowerShell 7+, Bicep CLI. Estimated deployment time: 3–5 minutes.
 
 
 ---

@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      prerelease_suffix:
+        description: "Optional prerelease suffix (example: rc.1). If empty, branch.run_number is used"
+        required: false
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -18,6 +24,10 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.value }}
+      base_version: ${{ steps.version.outputs.base_value }}
+      image_tag: ${{ steps.version.outputs.image_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
 
     strategy:
       fail-fast: false
@@ -36,12 +46,37 @@ jobs:
         id: version
         run: |
           VERSION=$(cat VERSION | tr -d '[:space:]')
-          TAG="${GITHUB_REF_NAME}"
-          if [ "$VERSION" != "$TAG" ]; then
-            echo "::error::VERSION file ($VERSION) does not match git tag ($TAG)"
-            exit 1
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            if [ "$VERSION" != "$TAG" ]; then
+              echo "::error::VERSION file ($VERSION) does not match git tag ($TAG)"
+              exit 1
+            fi
+
+            RELEASE_VERSION="$VERSION"
+            RELEASE_TAG="$TAG"
+            PRERELEASE="false"
+          else
+            BRANCH=$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//' | sed 's/-$//')
+            SUFFIX="${{ inputs.prerelease_suffix }}"
+
+            if [ -z "$SUFFIX" ]; then
+              SUFFIX="${BRANCH}.${GITHUB_RUN_NUMBER}"
+            fi
+
+            RELEASE_VERSION="${VERSION}-${SUFFIX}"
+            RELEASE_TAG="$RELEASE_VERSION"
+            PRERELEASE="true"
           fi
-          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+          IMAGE_TAG="${RELEASE_VERSION#v}"
+
+          echo "value=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_value=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU (for multi-arch builds)
         uses: docker/setup-qemu-action@v3
@@ -62,12 +97,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            # Tag with full semver on version tags (e.g. v1.2.3 → 1.2.3)
-            type=semver,pattern={{version}}
-            # Tag with major.minor (e.g. 1.2)
-            type=semver,pattern={{major}}.{{minor}}
+            # Tag with resolved release version (stable tags and branch pre-releases)
+            type=raw,value=${{ steps.version.outputs.image_tag }}
             # Only tag `latest` for stable releases (no pre-release suffix like -rc.1)
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.prerelease == 'false' }}
             # Always tag with short SHA for traceability
             type=sha,prefix=sha-,format=short
 
@@ -94,22 +127,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Read VERSION file
-        id: version
-        run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
-          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
-
       - name: Extract changelog for this version
         run: |
-          VERSION="${{ steps.version.outputs.value }}"
-          # Extract the section between ## [$VERSION] and the next ## [
-          NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
-          echo "$NOTES" > release-notes.md
+          BASE_VERSION="${{ needs.build-and-push.outputs.base_version }}"
+          VERSION="${{ needs.build-and-push.outputs.version }}"
 
-      - name: Generate quickstart package
+          # Extract the section between ## [BASE_VERSION] and the next ## [
+          NOTES=$(awk "/^## \[$BASE_VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Pre-release build from ${GITHUB_REF_NAME} (${GITHUB_SHA})."
+          fi
+
+          if [ "${{ needs.build-and-push.outputs.prerelease }}" = "true" ]; then
+            {
+              echo "Pre-release build"
+              echo
+              echo "Version: $VERSION"
+              echo "Branch: ${GITHUB_REF_NAME}"
+              echo "Commit: ${GITHUB_SHA}"
+              echo
+              echo "$NOTES"
+            } > release-notes.md
+          else
+            echo "$NOTES" > release-notes.md
+          fi
+
+      - name: Generate local quickstart package
         run: |
-          VERSION="${{ steps.version.outputs.value }}"
+          VERSION="${{ needs.build-and-push.outputs.version }}"
           DIR="mate-quickstart-${VERSION}"
           mkdir -p "$DIR"
 
@@ -121,11 +167,38 @@ jobs:
           cp quickstart/README.txt "$DIR/README.txt"
 
           zip -r "mate-quickstart-${VERSION}.zip" "$DIR"
+          rm -rf "$DIR"
+
+      - name: Generate Azure quickstart package
+        run: |
+          VERSION="${{ needs.build-and-push.outputs.version }}"
+          DIR="mate-quickstart-azure-${VERSION}"
+          mkdir -p "$DIR"
+
+          # Copy all Azure quickstart files
+          cp quickstart-azure/.env.template "$DIR/.env.template"
+          cp quickstart-azure/README.md "$DIR/README.md"
+          cp quickstart-azure/QUICKSTART.md "$DIR/QUICKSTART.md"
+          cp quickstart-azure/DEPLOYMENT.md "$DIR/DEPLOYMENT.md"
+          cp quickstart-azure/check-prerequisites.ps1 "$DIR/check-prerequisites.ps1"
+          cp quickstart-azure/setup-env.ps1 "$DIR/setup-env.ps1"
+          cp quickstart-azure/deploy-whatif.ps1 "$DIR/deploy-whatif.ps1"
+          cp quickstart-azure/deploy.ps1 "$DIR/deploy.ps1"
+          cp quickstart-azure/setup-keyvault-secrets.ps1 "$DIR/setup-keyvault-secrets.ps1"
+          cp quickstart-azure/cleanup-rg.ps1 "$DIR/cleanup-rg.ps1"
+
+          zip -r "mate-quickstart-azure-${VERSION}.zip" "$DIR"
+          rm -rf "$DIR"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "${{ steps.version.outputs.value }}"
+          tag_name: "${{ needs.build-and-push.outputs.tag_name }}"
+          target_commitish: "${{ github.sha }}"
+          name: "${{ needs.build-and-push.outputs.version }}"
+          prerelease: ${{ needs.build-and-push.outputs.prerelease == 'true' }}
           body_path: release-notes.md
-          files: mate-quickstart-${{ steps.version.outputs.value }}.zip
+          files: |
+            mate-quickstart-${{ needs.build-and-push.outputs.version }}.zip
+            mate-quickstart-azure-${{ needs.build-and-push.outputs.version }}.zip
           fail_on_unmatched_files: true
