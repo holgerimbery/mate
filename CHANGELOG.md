@@ -6,6 +6,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [v0.6.1] — 2026-03-09
+
 ### Added
 - **Azure deployment automation** — Post-deployment automation in `deploy.ps1` for PostgreSQL firewall rule creation, blob storage secret injection, and connection string binding; idempotent for both WebUI and Worker containers (E13-13a).
 - **Standalone Azure quickstart package** — `quickstart-azure/` directory with complete deployment guide, configuration template, and all 6 PowerShell scripts; enables one-command deployment without git clone (E13-13b).

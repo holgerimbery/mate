@@ -8,7 +8,7 @@
 mate connects to multiple AI agents, runs automated evaluation suites against them, tracks quality over time, and red-teams them for adversarial vulnerabilities. It supports Microsoft Copilot Studio, Azure AI Foundry*, generic HTTP agents*, and Parloa* out of the box — and is extensible with custom connector, judge, and red-team modules.   
 > *backlog item   
 
-Current version: **v0.6.0**  
+Current version: **v0.6.1**  
 
 
 
