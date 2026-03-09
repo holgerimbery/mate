@@ -114,4 +114,4 @@ az group delete --name rg-mate-dev
 
 ---
 
-**Next:** After deployment succeeds, read [docs/wiki/User-Getting-Started.md](../../docs/wiki/User-Getting-Started.md) to set up your first test suite.
+**Next:** After deployment succeeds, read [docs/wiki/User-Getting-Started.md](https://github.com/holgerimbery/mate/blob/main/docs/wiki/User-Getting-Started.md) to set up your first test suite.
