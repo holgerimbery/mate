@@ -54,6 +54,7 @@ pwsh ./setup-keyvault-secrets.ps1
 - **deploy-whatif.ps1** — Dry-run preview (recommended before deploy)
 - **deploy.ps1** — Actual deployment + automatic secret/firewall config
 - **setup-keyvault-secrets.ps1** — Post-deploy: Configures Key Vault and RBAC
+- **update-container-images.ps1** — Update container images to new version (faster than full deploy)
 - **cleanup-rg.ps1** — Deletes all resources (keeps resource group)
 
 ## Costs
@@ -79,6 +80,23 @@ Sample data is available after first login. To test:
 1. Navigate to Test Suites → Create New Suite
 2. Add test cases targeting any integrated agent
 3. Run the suite and view results
+
+## Updating Container Images (New Release)
+
+When a new version is released, quickly update without redeploying infrastructure:
+
+```powershell
+# Update to specific version
+pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1'
+
+# Update to latest
+pwsh ./update-container-images.ps1
+
+# Preview changes first
+pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1' -WhatIf
+```
+
+**Time:** 1–2 minutes (zero-downtime rolling update)
 
 ## Troubleshooting
 

@@ -8,7 +8,11 @@ Update container images in Azure Container Apps to a new version.
 
 .DESCRIPTION
 This script updates the WebUI and Worker container apps to use a new image tag from GHCR.
-It performs a zero-downtime rolling update by creating new revisions with the updated images.
+It performs a zero-downtime rolling update by:
+1. Updating the image tag in .env (maintains Bicep state)
+2. Running the Bicep deployment to reconcile all resources
+
+This maintains full Bicep state tracking. The next deploy.ps1 run will use the updated tag.
 
 .PARAMETER ImageTag
 Container image tag from GHCR (e.g., 'v0.6.1', 'latest'). Default: 'latest'.
@@ -93,6 +97,9 @@ if (Test-Path $envFile) {
             switch ($key) {
                 'AZURE_RESOURCE_GROUP' { if (-not $ResourceGroupName) { $ResourceGroupName = $value } }
                 'AZURE_ENVIRONMENT_NAME' { if (-not $EnvironmentName) { $EnvironmentName = $value } }
+                'AZURE_LOCATION' { if (-not $Location) { $Location = $value } }
+                'AZURE_PROFILE' { if (-not $Profile) { $Profile = $value } }
+                'AZURE_AAD_CLIENT_ID' { if (-not $AadClientId) { $AadClientId = $value } }
             }
         }
     }
@@ -100,6 +107,8 @@ if (Test-Path $envFile) {
 
 # Apply defaults
 if (-not $EnvironmentName) { $EnvironmentName = 'mate-dev' }
+if (-not $Location) { $Location = 'eastus' }
+if (-not $Profile) { $Profile = 's' }
 if (-not $ResourceGroupName) { $ResourceGroupName = "$EnvironmentName-rg" }
 if (-not $WebAppName) { $WebAppName = "$EnvironmentName-webui" }
 if (-not $WorkerAppName) { $WorkerAppName = "$EnvironmentName-worker" }
@@ -107,6 +116,9 @@ if (-not $WorkerAppName) { $WorkerAppName = "$EnvironmentName-worker" }
 # Validate Azure CLI
 if (-not (Get-Command 'az' -ErrorAction SilentlyContinue)) {
     Write-Error "Azure CLI not found. Install: https://learn.microsoft.com/cli/azure/install-azure-cli"
+}
+
+Write-Host ""
 if ($WhatIf) {
     Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
     Write-Host "║      Azure Container Apps - Image Update (DRY-RUN)         ║" -ForegroundColor Yellow
@@ -116,9 +128,6 @@ if ($WhatIf) {
     Write-Host "║      Azure Container Apps - Image Update                   ║" -ForegroundColor Cyan
     Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 }
-Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║      Azure Container Apps - Image Update                   ║" -ForegroundColor Cyan
-Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "UPDATE PARAMETERS:" -ForegroundColor Yellow
@@ -160,7 +169,13 @@ Write-Host ""
 
 $newWebImage = "ghcr.io/holgerimbery/mate-webui:$ImageTag"
 $newWorkerImage = "ghcr.io/holgerimbery/mate-worker:$ImageTag"
-$WhatIf) {
+
+Write-Host "NEW IMAGES:" -ForegroundColor Green
+Write-Host "  WebUI:   $newWebImage"
+Write-Host "  Worker:  $newWorkerImage"
+Write-Host ""
+
+if ($WhatIf) {
     Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Yellow
     Write-Host "DRY-RUN MODE: No changes will be made" -ForegroundColor Yellow
     Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Yellow
@@ -185,12 +200,6 @@ $WhatIf) {
     return
 }
 
-if (
-Write-Host "NEW IMAGES:" -ForegroundColor Green
-Write-Host "  WebUI:   $newWebImage"
-Write-Host "  Worker:  $newWorkerImage"
-Write-Host ""
-
 if (-not $Force) {
     Write-Host "⚠️  This will update the container images and create new revisions." -ForegroundColor Yellow
     Write-Host "   • Current containers will be replaced (zero-downtime rolling update)"
@@ -211,51 +220,93 @@ Write-Host "Starting container image updates..." -ForegroundColor Cyan
 Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
-# Update WebUI
-Write-Host "[1/2] Updating WebUI container app..." -ForegroundColor Magenta
-$webUpdateStart = Get-Date
-try {
-    az containerapp update `
-        --name $WebAppName `
-        --resource-group $ResourceGroupName `
-        --image $newWebImage `
-        --output none 2>&1 | Out-Null
+# Update .env file with new image tag to maintain Bicep state
+Write-Host "[1/3] Updating .env with new image tag..." -ForegroundColor Magenta
+$envUpdated = $false
+if (Test-Path $envFile) {
+    $envContent = Get-Content $envFile -Raw
+    $oldEnvContent = $envContent
     
-    if ($LASTEXITCODE -ne 0) {
-        throw "Azure CLI returned exit code $LASTEXITCODE"
+    # Update or add AZURE_IMAGE_TAG
+    if ($envContent -match "AZURE_IMAGE_TAG=.*") {
+        $envContent = $envContent -replace "AZURE_IMAGE_TAG=.*", "AZURE_IMAGE_TAG=$ImageTag"
+        $envUpdated = $true
+    } else {
+        $envContent += "`nAZURE_IMAGE_TAG=$ImageTag"
+        $envUpdated = $true
     }
     
-    $webUpdateDuration = [math]::Round(((Get-Date) - $webUpdateStart).TotalSeconds, 1)
-    Write-Host "  ✓ WebUI updated successfully ($webUpdateDuration s)" -ForegroundColor Green
-} catch {
-    Write-Error "Failed to update WebUI container app: $_"
+    if ($envUpdated -and $envContent -ne $oldEnvContent) {
+        Set-Content $envFile -Value $envContent -NoNewline
+        Write-Host "  ✓ .env updated: AZURE_IMAGE_TAG=$ImageTag" -ForegroundColor Green
+    } else {
+        Write-Host "  ✓ .env already has AZURE_IMAGE_TAG=$ImageTag" -ForegroundColor Green
+    }
+} else {
+    Write-Error ".env file not found at $envFile. Please run setup-env.ps1 first."
 }
 
 Write-Host ""
 
-# Update Worker
-Write-Host "[2/2] Updating Worker container app..." -ForegroundColor Magenta
-$workerUpdateStart = Get-Date
-try {
-    az containerapp update `
-        --name $WorkerAppName `
+# Determine template and parameter paths
+Write-Host "[2/3] Preparing Bicep deployment..." -ForegroundColor Magenta
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$templateDir = Split-Path -Parent $scriptDir  # Go up to infra/azure
+$mainTemplate = Join-Path $templateDir "main.bicep"
+$parameterFile = Join-Path $templateDir "parameters" "profile-$Profile.json"
+
+if (-not (Test-Path $mainTemplate)) {
+    Write-Error "Template file not found: $mainTemplate"
+}
+if (-not (Test-Path $parameterFile)) {
+    Write-Error "Parameter file not found: $parameterFile"
+}
+
+Write-Host "  Template: $(Split-Path -Leaf $mainTemplate)" -ForegroundColor Green
+Write-Host "  Parameters: $(Split-Path -Leaf $parameterFile)" -ForegroundColor Green
+Write-Host ""
+
+# Run Bicep deployment to update images while maintaining state
+Write-Host "[3/3] Deploying updated container images..." -ForegroundColor Magenta
+Write-Host ""
+Write-Host "BICEP STATE TRACKING:" -ForegroundColor Yellow
+Write-Host "  ✓ .env has been updated with AZURE_IMAGE_TAG=$ImageTag"
+Write-Host "  ✓ Bicep state is maintained - next deploy.ps1 will use this tag"
+Write-Host "  ✓ Running deployment to apply changes immediately"
+Write-Host ""
+    # Build deployment command with all necessary parameters
+    $deploymentParams = @{
+        'environmentName'       = $EnvironmentName
+        'location'              = $Location
+        'imageTag'              = $ImageTag
+        'aadClientId'           = $AadClientId
+        'postgresAdminLogin'    = 'pgadmin'
+        'postgresAdminPassword' = $PostgresPassword
+        'deployPostgres'        = $true
+    }
+    
+    $paramJson = $deploymentParams | ConvertTo-Json
+    
+    az deployment group create `
         --resource-group $ResourceGroupName `
-        --image $newWorkerImage `
+        --template-file $mainTemplate `
+        --parameters $parameterFile `
+        --parameters imageTag=$ImageTag `
+        --no-wait `
         --output none 2>&1 | Out-Null
     
     if ($LASTEXITCODE -ne 0) {
-        throw "Azure CLI returned exit code $LASTEXITCODE"
+        throw "Azure CLI deployment returned exit code $LASTEXITCODE"
     }
     
-    $workerUpdateDuration = [math]::Round(((Get-Date) - $workerUpdateStart).TotalSeconds, 1)
-    Write-Host "  ✓ Worker updated successfully ($workerUpdateDuration s)" -ForegroundColor Green
+    Write-Host "  ✓ Bicep deployment initiated (running in background)" -ForegroundColor Green
 } catch {
-    Write-Error "Failed to update Worker container app: $_"
+    Write-Error "Failed to deploy with Bicep: $_"
 }
 
 Write-Host ""
 Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
-Write-Host "Container image updates completed!" -ForegroundColor Green
+Write-Host "Container image update in progress!" -ForegroundColor Green
 Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
 

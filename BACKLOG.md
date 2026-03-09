@@ -45,6 +45,7 @@
 - `[x]` Manual prerelease workflows — GitHub Actions `workflow_dispatch` for branch-triggered prereleases with dynamic versioning (E24-04)
 - `[x]` Dual package generation — automated release workflow creates both Docker Compose and Azure quickstart ZIPs; both attached to GitHub Release (E24-05)
 - `[x]` Release metadata automation — conditional prerelease marking, versioned image tags, `latest` tag only for stable releases (E24-06)
+- `[x]` `update-container-images.ps1` script — PowerShell script for quick container image updates; updates `.env`, maintains Bicep state, zero-downtime rolling deployment (E24-07)
 
 ---
 
