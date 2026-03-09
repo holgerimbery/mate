@@ -82,7 +82,25 @@ Open **<http://localhost:5000>**. Images are pulled from GitHub Container Regist
 
 > **Tip:** Pin a specific version by replacing `:latest` with the version tag in `docker-compose.yml`, e.g. `:0.3.2`.
 
-### Option B — Build from source
+### Option B — Deploy to Azure
+
+Download the `mate-quickstart-azure-<version>.zip` from [GitHub Releases](https://github.com/holgerimbery/mate/releases/latest) or use the scripts in `infra/azure/scripts/`:
+
+**Windows (PowerShell)**
+```powershell
+cd infra/azure/scripts
+pwsh ./check-prerequisites.ps1      # Validate tools
+pwsh ./setup-env.ps1                # Configure Azure credentials
+pwsh ./deploy-whatif.ps1            # Preview changes (recommended)
+pwsh ./deploy.ps1                   # Deploy infrastructure
+pwsh ./setup-keyvault-secrets.ps1   # Configure secrets & RBAC
+```
+
+See [quickstart-azure/README.md](quickstart-azure/README.md) for full deployment guide, troubleshooting, architecture details, and cost estimates.
+
+> **Prerequisites:** Azure CLI, PowerShell 7+, Bicep CLI. Estimated deployment time: 3–5 minutes.
+
+### Option C — Build from source
 
 **Prerequisites:** [.NET 9 SDK](https://dotnet.microsoft.com/download) · [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
@@ -113,24 +131,6 @@ docker compose up --build
 Open **<http://localhost:5000>**. No login required in the default `Generic` auth mode.
 
 > **PostgreSQL + Azurite** are always started alongside webui and worker — no extra flags required. The default `.env.template` values work out of the box for local development.
-
-### Option C — Deploy to Azure
-
-Download the `mate-quickstart-azure-<version>.zip` from [GitHub Releases](https://github.com/holgerimbery/mate/releases/latest) or use the scripts in `infra/azure/scripts/`:
-
-**Windows (PowerShell)**
-```powershell
-cd infra/azure/scripts
-pwsh ./check-prerequisites.ps1      # Validate tools
-pwsh ./setup-env.ps1                # Configure Azure credentials
-pwsh ./deploy-whatif.ps1            # Preview changes (recommended)
-pwsh ./deploy.ps1                   # Deploy infrastructure
-pwsh ./setup-keyvault-secrets.ps1   # Configure secrets & RBAC
-```
-
-See [quickstart-azure/README.md](quickstart-azure/README.md) for full deployment guide, troubleshooting, architecture details, and cost estimates.
-
-> **Prerequisites:** Azure CLI, PowerShell 7+, Bicep CLI. Estimated deployment time: 3–5 minutes.
 
 
 ---
