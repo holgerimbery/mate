@@ -33,6 +33,18 @@
 | E21 | CI/CD — GitHub Actions & Quickstart | Done |
 | E22 | Module Tier Labels (Free / Premium) | Done |
 | E23 | Run Report Enhancements (Tags, Refine Rubric, Draft Rubric Sets) | Done |
+| E24 | Azure Deployment Automation & Release Packaging | Done |
+
+---
+
+## E24 — Azure Deployment Automation & Release Packaging *(v0.6.1)* ✅
+
+- `[x]` PostgreSQL firewall automation — post-deployment rule creation for Azure service connectivity (E24-01)
+- `[x]` Blob storage secret automation — automatic connection string injection and binding during deployment (E24-02)
+- `[x]` Standalone Azure quickstart package — `quickstart-azure/` with README, QUICKSTART, DEPLOYMENT guides, .env template, and 6 PowerShell scripts (E24-03)
+- `[x]` Manual prerelease workflows — GitHub Actions `workflow_dispatch` for branch-triggered prereleases with dynamic versioning (E24-04)
+- `[x]` Dual package generation — automated release workflow creates both Docker Compose and Azure quickstart ZIPs; both attached to GitHub Release (E24-05)
+- `[x]` Release metadata automation — conditional prerelease marking, versioned image tags, `latest` tag only for stable releases (E24-06)
 
 ---
 
