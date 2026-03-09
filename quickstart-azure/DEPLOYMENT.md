@@ -98,6 +98,49 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 .\deploy.ps1 -Location 'westeurope' -Profile 'm'
 ```
 
+---
+
+## 5. Update Container Images (After New Release)
+
+After a new version is released, update the container images without redeploying the entire infrastructure:
+
+```powershell
+.\update-container-images.ps1 -ImageTag 'v0.6.1'
+```
+
+**This will:**
+- Update `.env` with the new image tag (maintains Bicep state)
+- Run a focused Bicep deployment for container images only
+- Create new revisions for WebUI and Worker (zero-downtime rolling update)
+- Automatically switch traffic to new revisions
+- Maintain full Bicep state tracking for future deployments
+
+**Preview changes first:**
+
+```powershell
+.\update-container-images.ps1 -ImageTag 'v0.6.1' -WhatIf
+```
+
+**Update to latest without specifying tag:**
+
+```powershell
+.\update-container-images.ps1  # Defaults to 'latest'
+```
+
+**Typical update time:** 1–2 minutes (much faster than full `deploy.ps1`)
+
+### When to Use Each Script
+
+| Scenario | Script |
+|----------|--------|
+| Initial deployment | `deploy.ps1` |
+| New release available | `update-container-images.ps1` |
+| Scale up/down (Profile change) | `deploy.ps1` |
+| Hotfix or rollback | `update-container-images.ps1` |
+| PostgreSQL or storage changes | `deploy.ps1` |
+
+---
+
 **Warning:** This creates real Azure resources and incurs costs. Always run `deploy-whatif.ps1` first.
 
 ## Deployment Profiles

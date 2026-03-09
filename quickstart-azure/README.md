@@ -82,7 +82,33 @@ This command:
 
 **Typical deployment time:** 3–5 minutes
 
-### 5. Post-Deployment: Key Vault & RBAC Setup
+### 5. Update Container Images (New Release)
+
+After a new version is released, quickly update the container images:
+
+```powershell
+pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1'
+```
+
+Or update to `latest`:
+
+```powershell
+pwsh ./update-container-images.ps1
+```
+
+This performs a **zero-downtime rolling update**:
+- ✅ Updates `.env` (maintains Bicep state)
+- ✅ Deploys new container revisions
+- ✅ Traffic automatically switches
+- ✅ Completes in 1–2 minutes
+
+**Preview first:**
+
+```powershell
+pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1' -WhatIf
+```
+
+---
 
 ```powershell
 pwsh ./setup-keyvault-secrets.ps1

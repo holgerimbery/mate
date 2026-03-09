@@ -11,19 +11,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [v0.6.1] — 2026-03-09
 
 ### Added
-- **Azure deployment automation** — Post-deployment automation in `deploy.ps1` for PostgreSQL firewall rule creation, blob storage secret injection, and connection string binding; idempotent for both WebUI and Worker containers (E13-13a).
-- **Standalone Azure quickstart package** — `quickstart-azure/` directory with complete deployment guide, configuration template, and all 6 PowerShell scripts; enables one-command deployment without git clone (E13-13b).
-- **`quickstart-azure/README.md`** — Comprehensive Azure deployment guide with prerequisites, 5-step workflow, profiles (xs/s/m/l), cost estimates, troubleshooting, and architecture details (E13-13b).
-- **`quickstart-azure/QUICKSTART.md`** — Quick reference for rapid deployment (3-5 minutes); includes scripts overview, deployment options, and cleanup instructions (E13-13b).
-- **`quickstart-azure/DEPLOYMENT.md`** — Technical reference documentation for post-deployment workflow phases and verification (E13-13b).
-- **Manual prerelease workflows** — GitHub Actions `workflow_dispatch` trigger enabling prerelease creation from any branch; supports dynamic prerelease versioning (v0.6.0-branch.runNumber or custom suffix) (E21-21b).
-- **Dual quickstart package generation** — GitHub Actions automatically generates both `mate-quickstart-<version>.zip` (Docker Compose) and `mate-quickstart-azure-<version>.zip` (Azure deployment) during release; both attached to GitHub Release (E21-21b).
+- **Azure deployment automation** — Post-deployment automation in `deploy.ps1` for PostgreSQL firewall rule creation, blob storage secret injection, and connection string binding; idempotent for both WebUI and Worker containers (E24-01).
+- **Standalone Azure quickstart package** — `quickstart-azure/` directory with complete deployment guide, configuration template, and all 6 PowerShell scripts; enables one-command deployment without git clone (E24-02).
+- **`quickstart-azure/README.md`** — Comprehensive Azure deployment guide with prerequisites, 5-step workflow, profiles (xs/s/m/l), cost estimates, troubleshooting, and architecture details (E24-02).
+- **`quickstart-azure/QUICKSTART.md`** — Quick reference for rapid deployment (3-5 minutes); includes scripts overview, deployment options, and cleanup instructions (E24-02).
+- **`quickstart-azure/DEPLOYMENT.md`** — Technical reference documentation for post-deployment workflow phases and verification (E24-02).
+- **Manual prerelease workflows** — GitHub Actions `workflow_dispatch` trigger enabling prerelease creation from any branch; supports dynamic prerelease versioning (v0.6.0-branch.runNumber or custom suffix) (E24-03).
+- **Dual quickstart package generation** — GitHub Actions automatically generates both `mate-quickstart-<version>.zip` (Docker Compose) and `mate-quickstart-azure-<version>.zip` (Azure deployment) during release; both attached to GitHub Release (E24-04).
+- **`update-container-images.ps1` script** — PowerShell script for quick container image updates without full infrastructure redeploy; updates `.env`, maintains Bicep state, performs zero-downtime rolling updates; available in both `infra/azure/scripts/` and `quickstart-azure/` (E24-07).
 
 ### Changed
-- **README.md quickstart order** — Reordered deployment options: Option B now Deploy to Azure (recommended), Option C now Build from Source (E13-13c).
-- **GitHub Actions release workflow** — Extended `docker-publish.yml` with `workflow_dispatch` input for prerelease suffix; conditional prerelease marking in GitHub Release; separate image tagging logic for stable vs. prerelease versions (E21-21b).
-- **Release package generation** — Post-deployment steps now handle postgres-conn, blob-conn, and all 10 quickstart-azure files; ZIP generation for both local and Azure packages (E21-21b).
-- **Docker image tagging** — `latest` tag only applied to stable releases from version tags; prerelease versions use versioned tags only (E21-21b).
+- **README.md quickstart order** — Reordered deployment options: Option B now Deploy to Azure (recommended), Option C now Build from Source (E24-05).
+- **GitHub Actions release workflow** — Extended `docker-publish.yml` with `workflow_dispatch` input for prerelease suffix; conditional prerelease marking in GitHub Release; separate image tagging logic for stable vs. prerelease versions (E24-03).
+- **Release package generation** — Post-deployment steps now handle postgres-conn, blob-conn, and all 10 quickstart-azure files; ZIP generation for both local and Azure packages (E24-04).
+- **Docker image tagging** — `latest` tag only applied to stable releases from version tags; prerelease versions use versioned tags only (E24-03).
+- **Matrix build parallelism** — GHCR publish workflow now uses `max-parallel: 1` to serialize image builds and reduce transient timeout failures; GHCR login retries up to 3 times with exponential backoff (E24-06).
 
 ---
 
