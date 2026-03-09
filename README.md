@@ -147,6 +147,7 @@ mate.sln
 │   └── Modules/            — agent connectors, judge modules, auth, monitoring, red teaming
 ├── tests/                  — Unit, Integration, EndToEnd
 ├── infra/local/            — docker-compose.yml, Dockerfiles, .env.template
+├── infra/azure/            — Azure Deployment Scripts
 └── docs/
     ├── wiki/               — full user and developer documentation
     └── concepts/           — architecture blueprints
