@@ -49,6 +49,7 @@ See [BACKLOG.md](BACKLOG.md) for planned epics and work items.
 - **Multi-tenant** — EF Core global query filters isolate all data per tenant
 - **Auth-flexible** — runs anonymous in local dev (`None`); Microsoft Entra ID (Azure AD) OIDC in production
 - **Docker-first** — single `docker compose up` for the full local stack
+- **Azure Containers Apps** - deployable with interactice deployment secripts
 
 *not yet in the code, see premium modules
 
