@@ -138,4 +138,17 @@ public sealed class DocumentChunkerTests
                 $"chunk of length {chunk.Length} should not exceed 2× the token budget");
         }
     }
+
+    [Fact]
+    public void Chunk_LongTextWithoutSentencePunctuation_SplitsByWords()
+    {
+        var chunker = CreateChunker(maxTokens: 10, overlapTokens: 2);
+
+        // No sentence punctuation means SplitLongParagraph falls back to word-level splitting.
+        var text = string.Join(' ', Enumerable.Repeat("longword", 120));
+        var result = chunker.Chunk(text);
+
+        result.Should().HaveCountGreaterThan(1);
+        result.Should().OnlyContain(c => !string.IsNullOrWhiteSpace(c));
+    }
 }

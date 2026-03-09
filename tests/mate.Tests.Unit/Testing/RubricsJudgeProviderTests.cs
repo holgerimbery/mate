@@ -23,6 +23,27 @@ public sealed class RubricsJudgeProviderTests
             RubricCriteria = criteria,
         };
 
+    [Fact]
+    public async Task EvaluateAsync_NullRequest_ThrowsArgumentNullException()
+    {
+        var judge = CreateJudge();
+        var act = async () => await judge.EvaluateAsync(null!);
+
+        await act.Should().ThrowAsync<ArgumentNullException>();
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_CancelledToken_ThrowsOperationCanceledException()
+    {
+        var judge = CreateJudge();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var act = async () => await judge.EvaluateAsync(BuildRequest("text", []), cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
     // ── No criteria → automatic pass ─────────────────────────────────────────
 
     [Fact]
@@ -196,5 +217,34 @@ public sealed class RubricsJudgeProviderTests
             BuildRequest("hello world", criteria));
 
         result.Verdict.Should().Be("pass");
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_UnknownEvaluationType_IsTreatedAsPassed()
+    {
+        var criteria = new List<EvaluationCriterion>
+        {
+            new("UnknownType", "Custom", "ignored", Weight: 1.0, IsMandatory: false)
+        };
+
+        var result = await CreateJudge().EvaluateAsync(BuildRequest("any", criteria));
+
+        result.Verdict.Should().Be("pass");
+        result.OverallScore.Should().Be(1.0);
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_AllCriteriaZeroWeight_ReturnsZeroScoreAndFail()
+    {
+        var criteria = new List<EvaluationCriterion>
+        {
+            new("A", "Contains", "hello", Weight: 0.0, IsMandatory: false),
+            new("B", "NotContains", "forbidden", Weight: 0.0, IsMandatory: false),
+        };
+
+        var result = await CreateJudge().EvaluateAsync(BuildRequest("hello world", criteria));
+
+        result.OverallScore.Should().Be(0.0);
+        result.Verdict.Should().Be("fail");
     }
 }
