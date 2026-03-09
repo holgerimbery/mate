@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "webMinReplicas": { "value": 2 },
+    "webMaxReplicas": { "value": 6 },
+    "workerMinReplicas": { "value": 0 },
+    "workerMaxReplicas": { "value": 10 },
+    "webCpu": { "value": "1.0" },
+    "webMemory": { "value": "2Gi" },
+    "workerCpu": { "value": "1.0" },
+    "workerMemory": { "value": "2Gi" },
+    "queueActivationThreshold": { "value": 2 }
+  }
+}

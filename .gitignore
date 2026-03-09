@@ -47,3 +47,6 @@ Thumbs.db
 #concept store
 docs/concepts/
 
+infra/azure/scripts/.pg-password
+.gitignore
+infra/azure/scripts/.credentials

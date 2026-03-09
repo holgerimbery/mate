@@ -33,6 +33,18 @@
 | E21 | CI/CD — GitHub Actions & Quickstart | Done |
 | E22 | Module Tier Labels (Free / Premium) | Done |
 | E23 | Run Report Enhancements (Tags, Refine Rubric, Draft Rubric Sets) | Done |
+| E24 | Azure Deployment Automation & Release Packaging | Done |
+
+---
+
+## E24 — Azure Deployment Automation & Release Packaging *(v0.6.1)* ✅
+
+- `[x]` PostgreSQL firewall automation — post-deployment rule creation for Azure service connectivity (E24-01)
+- `[x]` Blob storage secret automation — automatic connection string injection and binding during deployment (E24-02)
+- `[x]` Standalone Azure quickstart package — `quickstart-azure/` with README, QUICKSTART, DEPLOYMENT guides, .env template, and 6 PowerShell scripts (E24-03)
+- `[x]` Manual prerelease workflows — GitHub Actions `workflow_dispatch` for branch-triggered prereleases with dynamic versioning (E24-04)
+- `[x]` Dual package generation — automated release workflow creates both Docker Compose and Azure quickstart ZIPs; both attached to GitHub Release (E24-05)
+- `[x]` Release metadata automation — conditional prerelease marking, versioned image tags, `latest` tag only for stable releases (E24-06)
 
 ---
 
@@ -134,6 +146,93 @@ GetCapabilities() : List<string>             — declares what the module can do
 - [x] **~~E1-04~~** *(obsolete — SQLite removed)* ~~Create `data/` directory gitkeep in mate root so local SQLite file path works~~
 - [ ] **E1-12** Sample data seeder — auto-create a sample agent, test suite, and 5 test cases on first startup when the database is empty
 - [ ] **E1-13** Azure Container Apps IaC — Bicep + `azd` template for one-command production deployment; includes WebUI + Worker containers, managed identity, Azure SQL, Service Bus
+- [ ] **E1-13a** Full planning document (non-wiki): `docs/concepts/azure-container-landscape-plan.md` — target landscape, profile sizing, scale-to-zero strategy, implementation phases, cost model
+- [ ] **E1-13b** Create `infra/azure/` IaC baseline — `main.bicep`, module split (container apps, postgres, storage, service bus, key vault, diagnostics), `azd` templates with installer-driven environment scope selection
+- [ ] **E1-13c** Flexible sizing profiles (`XS`,`S`,`M`,`L`) — parameterized min/max replicas, CPU/memory, queue thresholds, and cooldown values; internal development default is `dev` + `S`
+- [ ] **E1-13d** Implement Azure Service Bus `IMessageQueue` provider in `mate.Infrastructure.Azure` for durable cross-instance run execution
+- [ ] **E1-13e** Refactor Worker execution path from DB polling to queue consumption (`test-runs`) so KEDA/ACA can scale worker replicas from zero based on queue depth
+- [ ] **E1-13f** Add dedicated migration job in deployment flow; remove startup migration race between WebUI and Worker in cloud mode
+- [ ] **E1-13g** Configure worker scale-to-zero (`minReplicas=0`) with queue-based scale rules; configure web profile (`prod min>=1`, non-prod optionally `min=0`)
+- [ ] **E1-13h** Add non-prod cost mode automation — off-hours schedule to scale web/worker down, with morning warm-up schedule and override controls
+- [ ] **E1-13i** Add DLQ and replay operations — dead-letter policy, replay command/runbook, and alerting for poison messages
+- [ ] **E1-13j** Add production observability and cost governance — OpenTelemetry export, dashboards, budget alerts, and cost-anomaly alerts
+- [ ] **E1-13k** Add production readiness runbooks — deployment/rollback, queue incident handling, backup/restore checks, key rotation, and scale policy tuning; seed with `docs/concepts/container-stack-update-runbook.md`
+- [ ] **E1-13l** Add installer prompt contract — installation asks for environment scope and size profile, validates allowed combinations, and writes deterministic deployment parameters
+
+#### E1-13 Implementation TODO Board (Execution Order)
+
+- [ ] **T1** Backlog hygiene + scope lock (`E1-13a`)
+  - [ ] Resolve duplicate E1 IDs (`E1-08`, `E1-09`) to unique IDs
+  - [ ] Freeze internal engineering scope to `dev` only
+  - [ ] Freeze internal engineering size to `S`
+  - [ ] Confirm installer options: scope + profile (`XS`,`S`,`M`,`L`)
+
+- [ ] **T2** IaC baseline (`E1-13b`)
+  - [ ] Create `infra/azure/` with Bicep modules (ACA, PostgreSQL, Blob, Service Bus, Key Vault, diagnostics)
+  - [ ] Add `azd` templates that can generate selected scope during installation
+  - [ ] Add CI validation for Bicep (lint/what-if)
+
+- [ ] **T3** Flexible sizing and installer prompt (`E1-13c`, `E1-13l`)
+  - [ ] Add parameter files for `XS`/`S`/`M`/`L`
+  - [ ] Wire installation prompt for scope and profile selection
+  - [ ] Validate selected scope/profile combinations and emit deterministic parameter files
+  - [ ] Document internal default: `dev` + `S`
+
+- [ ] **T4** Queue provider implementation (`E1-13d`)
+  - [ ] Implement Azure Service Bus `IMessageQueue`
+  - [ ] Keep WebUI enqueue path for `test-runs`
+  - [ ] Add integration tests for enqueue/consume/ack/abandon
+
+- [ ] **T5** Worker refactor to queue consumption (`E1-13e`)
+  - [ ] Replace DB polling with queue consume path in Azure mode
+  - [ ] Implement idempotency and safe retry behavior
+  - [ ] Validate concurrent processing limits
+
+- [ ] **T6** Migration job and startup race removal (`E1-13f`)
+  - [ ] Add dedicated migration step/job in deployment
+  - [ ] Remove migration race between WebUI and Worker
+  - [ ] Add deployment gate: app rollout only after migration success
+
+- [ ] **T7** Scale-to-zero and autoscaling (`E1-13g`)
+  - [ ] Worker `minReplicas=0` with queue-based scale rule
+  - [ ] Web profile: `prod min>=1`, non-prod optional `min=0`
+  - [ ] Tune thresholds/cooldowns from test telemetry
+
+- [ ] **T8** Non-prod cost mode automation (`E1-13h`)
+  - [ ] Add off-hours scale-down schedule
+  - [ ] Add morning warm-up schedule and override
+  - [ ] Capture baseline vs optimized cost report
+
+- [ ] **T9** DLQ and replay operations (`E1-13i`)
+  - [ ] Configure dead-letter + retry limits
+  - [ ] Add replay workflow/runbook
+  - [ ] Add alerts for poison-message spikes
+
+- [ ] **T10** Observability and governance (`E1-13j`)
+  - [ ] Enable OpenTelemetry + Azure Monitor dashboards
+  - [ ] Alert on queue lag, run failure rate, cold-start latency
+  - [ ] Configure budget + cost anomaly alerts
+
+- [ ] **T11** Operations runbooks (`E1-13k`)
+  - [ ] Deployment and rollback playbook
+  - [ ] Queue incident and DLQ replay playbook
+  - [ ] Backup/restore + key-rotation playbook
+
+- [ ] **T12** Health and readiness dependency (`E10-01`, `E10-02`)
+  - [ ] Implement `/health/live`
+  - [ ] Implement `/health/ready` with DB/blob/queue checks
+  - [ ] Wire probes into Azure Container Apps
+
+- [ ] **T13** Security dependency (`E1-08`)
+  - [ ] Implement Key Vault `ISecretService`
+  - [ ] Enforce Managed Identity in Azure mode
+  - [ ] Validate secret rotation and access policies
+
+- [ ] **T14** Release progression and go-live
+  - [ ] Validate internally on `dev` with `S` profile
+  - [ ] Validate installer-selected rollout scope and profile logic
+  - [ ] Hypercare window with daily performance/cost review
+  - [ ] Sign-off against E1-13 acceptance criteria
 
 ---
 
@@ -646,4 +745,4 @@ All connectors implement `IAgentConnectorModule` with `ModuleId`, `DisplayName`,
 
 ---
 
-*Last updated: 2026-03-04, v0.6.0 released*
+*Last updated: 2026-03-05, v0.6.0 released*
