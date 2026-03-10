@@ -8,11 +8,33 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [v0.6.2] — 2026-03-10
+## [v0.6.3] — 2026-03-10
+
+### Added
+- **`repair-runtime-secrets.ps1` helper** — new recovery/maintenance script in both `infra/azure/scripts/` and `quickstart-azure/` that re-applies `postgres-conn` and `blob-conn` secrets and rewires the Container App environment to `secretref:` values (E25-01).
+
+### Changed
+- **`update-container-images.ps1` sequencing** — image updates now wait for ARM/Bicep deployment completion before applying runtime secret wiring. This removes the `--no-wait` race between template deployment and post-deployment secret updates (E25-01).
+- **Quickstart/Azure documentation** — update-script guidance now reflects synchronous execution, helper-script behavior, and recovery flow instead of background `--no-wait` behavior (E25-01).
 
 ### Fixed
-- **Container image update command documentation** — Enhanced DEPLOYMENT.md and QUICKSTART.md with deployment timing clarification and monitoring commands; clarified deployment runs asynchronously in background (5–10 minutes) with `--no-wait` flag (E24-08).
-- **Deployment progress monitoring** — Added `az deployment group show` command to track deployment progress after running `update-container-images.ps1` (E24-08).
+- **Container App update race condition** — runtime secret wiring no longer runs while the Bicep deployment is still in progress. This prevents partially applied configuration and reduces failed rollouts caused by deployment ordering conflicts (E25-01).
+- **Runtime secret repair path** — secret rewiring is now reusable as a standalone repair step, making recovery deterministic when DB/blob secret references drift or must be repaired manually (E25-01).
+
+---
+
+## [v0.6.2] — 2026-03-10
+
+### Added
+- **`repair-runtime-secrets.ps1` helper** — new recovery/maintenance script in both `infra/azure/scripts/` and `quickstart-azure/` that re-applies `postgres-conn` and `blob-conn` secrets and rewires the Container App environment to `secretref:` values (E25-01).
+
+### Changed
+- **`update-container-images.ps1` sequencing** — image updates now wait for ARM/Bicep deployment completion before applying runtime secret wiring. This removes the `--no-wait` race between template deployment and post-deployment secret updates (E25-01).
+- **Quickstart/Azure documentation** — update-script guidance now reflects synchronous execution, helper-script behavior, and recovery flow instead of background `--no-wait` behavior (E25-01).
+
+### Fixed
+- **Container App update race condition** — runtime secret wiring no longer runs while the Bicep deployment is still in progress. This prevents partially applied configuration and reduces failed rollouts caused by deployment ordering conflicts (E25-01).
+- **Runtime secret repair path** — secret rewiring is now reusable as a standalone repair step, making recovery deterministic when DB/blob secret references drift or must be repaired manually (E25-01).
 
 ---
 

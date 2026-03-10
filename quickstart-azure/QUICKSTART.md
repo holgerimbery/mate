@@ -96,7 +96,7 @@ pwsh ./update-container-images.ps1 -ImageTag '<version>'  # e.g. 'v0.6.2'
 pwsh ./update-container-images.ps1 -ImageTag '<version>' -WhatIf
 ```
 
-> **💡 Note:** Script returns immediately but deployment runs in background (5–10 minutes). Monitor: `az deployment group show --name main --resource-group <rg> --query "{State:properties.provisioningState}" -o table`
+> **💡 Note:** Script waits for completion (typically 5–10 minutes) and then runs `repair-runtime-secrets.ps1` automatically. Monitor (optional): `az deployment group show --name main --resource-group <rg> --query "{State:properties.provisioningState}" -o table`
 
 ## Troubleshooting
 

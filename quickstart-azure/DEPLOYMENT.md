@@ -121,7 +121,9 @@ Or specify a specific version tag:
 - Automatically switch traffic to new revisions
 - Maintain full Bicep state tracking for future deployments
 
-> **💡 Deployment Note:** The script runs with `--no-wait` and returns immediately. The actual container update happens in the background and takes **5–10 minutes** to complete. Monitor progress with:
+> **💡 Deployment Note:** The script waits for deployment completion before returning. Typical runtime is **5–10 minutes**.
+> It also runs `repair-runtime-secrets.ps1` automatically after deployment to enforce DB/blob secret references.
+> Monitor progress (if needed) with:
 > ```powershell
 > az deployment group show --name main --resource-group <your-rg> --query "{State:properties.provisioningState, Duration:properties.duration}" -o table
 > ```

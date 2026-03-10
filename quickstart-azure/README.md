@@ -98,11 +98,12 @@ pwsh ./update-container-images.ps1 -ImageTag '<version>'  # e.g. 'v0.6.2'
 
 This performs a **zero-downtime rolling update**:
 - ✅ Updates `.env` (maintains Bicep state)
-- ✅ Deploys new container revisions in the background
+- ✅ Deploys new container revisions and waits for completion
 - ✅ Traffic automatically switches when ready
-- ⏱️ **Deployment runs asynchronously** (5–10 minutes to complete)
+- ✅ Runs `repair-runtime-secrets.ps1` automatically after deployment
+- ⏱️ **Typical runtime:** 5–10 minutes
 
-> **💡 Note:** The script returns immediately but deployment continues in the background. New containers won't be active instantly. Monitor progress with:
+> **💡 Note:** The script now waits until deployment completes before returning. You can still monitor progress with:
 > ```powershell
 > az deployment group show --name main --resource-group <rg-name> --query "{State:properties.provisioningState, Duration:properties.duration}" -o table
 > ```

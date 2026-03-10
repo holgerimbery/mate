@@ -335,7 +335,7 @@ Write-Host ""
         $deployArgs += @('--parameters', "$key=$($deploymentParams[$key])")
     }
     
-    $deployArgs += @('--no-wait', '--output', 'none')
+    $deployArgs += @('--output', 'none')
     
     & az @deployArgs 2>&1 | Out-Null
     
@@ -343,84 +343,24 @@ Write-Host ""
         throw "Azure CLI deployment returned exit code $LASTEXITCODE"
     }
     
-    Write-Host "  ✓ Bicep deployment initiated (running in background)" -ForegroundColor Green
-    
-    # Configure runtime secret references (same as deploy.ps1 post-deployment step)
-    # This ensures new revisions have working connection strings
+    Write-Host "  ✓ Bicep deployment completed" -ForegroundColor Green
+
     Write-Host ""
-    Write-Host "Configuring runtime secret references for new revision..." -ForegroundColor Cyan
-    
-    $dbConnectionString = "Host=$EnvironmentName-pg.postgres.database.azure.com;Database=mate;Username=pgadmin;Password=$PostgresPasswordPlain;SSL Mode=Require"
-
-    $storageAccountName = az resource list `
-        --resource-group $ResourceGroupName `
-        --resource-type 'Microsoft.Storage/storageAccounts' `
-        --query "[0].name" -o tsv 2>$null
-
-    $blobConnectionString = $null
-    if ($LASTEXITCODE -eq 0 -and $storageAccountName) {
-        $storageKey = az storage account keys list `
-            --resource-group $ResourceGroupName `
-            --account-name $storageAccountName `
-            --query "[0].value" -o tsv 2>$null
-
-        if ($LASTEXITCODE -eq 0 -and $storageKey) {
-            $blobConnectionString = "DefaultEndpointsProtocol=https;AccountName=$storageAccountName;AccountKey=$storageKey;EndpointSuffix=core.windows.net"
-        }
-        else {
-            Write-Host "  Could not resolve storage account key; blob secret will not be updated." -ForegroundColor Yellow
-        }
-    }
-    else {
-        Write-Host "  No storage account found; blob secret will not be updated." -ForegroundColor Yellow
+    Write-Host "Configuring runtime secret references..." -ForegroundColor Cyan
+    $repairScript = Join-Path $scriptDir "repair-runtime-secrets.ps1"
+    if (-not (Test-Path $repairScript)) {
+        throw "Runtime secret helper script not found: $repairScript"
     }
 
-    $containerApps = @("$EnvironmentName-webui", "$EnvironmentName-worker")
+    & $repairScript `
+        -ResourceGroupName $ResourceGroupName `
+        -EnvironmentName $EnvironmentName `
+        -PostgresPassword $postgresPassword
 
-    foreach ($appName in $containerApps) {
-        $appId = az containerapp show --resource-group $ResourceGroupName --name $appName --query id -o tsv 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $appId) {
-            Write-Host "  ⊘ Skipping '$appName' (not found in RG)." -ForegroundColor DarkYellow
-            continue
-        }
-
-        # Set runtime secrets
-        $secrets = @("postgres-conn=$dbConnectionString")
-        if ($blobConnectionString) {
-            $secrets += "blob-conn=$blobConnectionString"
-        }
-
-        az containerapp secret set `
-            --resource-group $ResourceGroupName `
-            --name $appName `
-            --secrets $secrets `
-            -o none 2>$null
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  ⚠ Failed to set runtime secrets on '$appName'." -ForegroundColor Yellow
-            continue
-        }
-
-        # Wire environment variables to secret references
-        $envUpdates = @("ConnectionStrings__Default=secretref:postgres-conn")
-        if ($blobConnectionString) {
-            $envUpdates += "AzureInfrastructure__BlobConnectionString=secretref:blob-conn"
-        }
-
-        az containerapp update `
-            --resource-group $ResourceGroupName `
-            --name $appName `
-            --set-env-vars $envUpdates `
-            -o none 2>$null
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  ⚠ Failed to update runtime env on '$appName'." -ForegroundColor Yellow
-            continue
-        }
-
-        Write-Host "  ✓ Configured runtime secret references on '$appName'." -ForegroundColor Green
+    if ($LASTEXITCODE -ne 0) {
+        throw "Runtime secret wiring script failed with exit code $LASTEXITCODE"
     }
-    
+
     Write-Host "  ✓ Runtime secret wiring completed." -ForegroundColor Green
 } catch {
     Write-Error "Failed to deploy with Bicep: $_"
@@ -428,7 +368,7 @@ Write-Host ""
 
 Write-Host ""
 Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
-Write-Host "Container image update in progress!" -ForegroundColor Green
+Write-Host "Container image update completed." -ForegroundColor Green
 Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
 

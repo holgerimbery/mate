@@ -39,7 +39,7 @@
 
 ## E25 — Container Deployment Safety & Key Vault Refactoring *(Backlog)*
 
-- `[ ]` Runtime secret wiring in `update-container-images.ps1` — add post-Bicep secret configuration to both scripts to prevent crash-loop outages on container image updates (E25-01)
+- `[x]` Synchronous image update + repair helper — remove `--no-wait` from `update-container-images.ps1`, add reusable `repair-runtime-secrets.ps1`, and run repair only after deployment completes (E25-01)
 - `[ ]` Key Vault direct references in Bicep — refactor container-apps.bicep to use `keyVaultUrl` instead of placeholder values for postgres-connection-string and blob-connection-string (E25-02)
 - `[ ]` Pre-deployment Key Vault population — enhance setup-keyvault-secrets.ps1 to store postgres-connection-string and blob-connection-string before container deployment (E25-03)
 - `[ ]` Deploy script simplification — remove post-deployment secret wiring from deploy.ps1 once Key Vault references are in Bicep (E25-04)
