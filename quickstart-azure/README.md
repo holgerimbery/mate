@@ -87,13 +87,13 @@ This command:
 After a new version is released, quickly update the container images:
 
 ```powershell
-pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1'
+pwsh ./update-container-images.ps1  # Defaults to 'latest'
 ```
 
-Or update to `latest`:
+Or specify a specific version tag:
 
 ```powershell
-pwsh ./update-container-images.ps1
+pwsh ./update-container-images.ps1 -ImageTag '<version>'  # e.g. 'v0.6.2'
 ```
 
 This performs a **zero-downtime rolling update**:
@@ -110,7 +110,7 @@ This performs a **zero-downtime rolling update**:
 **Preview first:**
 
 ```powershell
-pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1' -WhatIf
+pwsh ./update-container-images.ps1 -ImageTag '<version>' -WhatIf  # e.g. 'v0.6.2'
 ```
 
 ---

@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [v0.6.2] — 2026-03-10
+
+### Fixed
+- **Container image update command documentation** — Enhanced DEPLOYMENT.md and QUICKSTART.md with deployment timing clarification and monitoring commands; clarified deployment runs asynchronously in background (5–10 minutes) with `--no-wait` flag (E24-08).
+- **Deployment progress monitoring** — Added `az deployment group show` command to track deployment progress after running `update-container-images.ps1` (E24-08).
+
+---
+
 ## [v0.6.1] — 2026-03-09
 
 ### Added

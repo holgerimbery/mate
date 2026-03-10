@@ -86,14 +86,14 @@ Sample data is available after first login. To test:
 When a new version is released, quickly update without redeploying infrastructure:
 
 ```powershell
-# Update to specific version
-pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1'
-
-# Update to latest
+# Update to latest (recommended)
 pwsh ./update-container-images.ps1
 
+# Update to specific version
+pwsh ./update-container-images.ps1 -ImageTag '<version>'  # e.g. 'v0.6.2'
+
 # Preview changes first
-pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1' -WhatIf
+pwsh ./update-container-images.ps1 -ImageTag '<version>' -WhatIf
 ```
 
 > **💡 Note:** Script returns immediately but deployment runs in background (5–10 minutes). Monitor: `az deployment group show --name main --resource-group <rg> --query "{State:properties.provisioningState}" -o table`

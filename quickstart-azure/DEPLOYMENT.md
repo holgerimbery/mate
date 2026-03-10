@@ -105,7 +105,13 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 After a new version is released, update the container images without redeploying the entire infrastructure:
 
 ```powershell
-.\update-container-images.ps1 -ImageTag 'v0.6.1'
+.\update-container-images.ps1  # Defaults to 'latest'
+```
+
+Or specify a specific version tag:
+
+```powershell
+.\update-container-images.ps1 -ImageTag '<version>'  # e.g. 'v0.6.2'
 ```
 
 **This will:**
@@ -123,7 +129,7 @@ After a new version is released, update the container images without redeploying
 **Preview changes first:**
 
 ```powershell
-.\update-container-images.ps1 -ImageTag 'v0.6.1' -WhatIf
+.\update-container-images.ps1 -ImageTag '<version>' -WhatIf  # e.g. 'v0.6.2'
 ```
 
 **Update to latest without specifying tag:**
@@ -242,7 +248,7 @@ az postgres flexible-server firewall-rule list --resource-group <rg-name> --name
 **Solution — Auto (Recommended):**
 ```powershell
 # Rerun the update script, which automatically wires secrets
-.\update-container-images.ps1 -ImageTag '0.6.1'
+.\update-container-images.ps1  # Defaults to 'latest'
 ```
 
 **Solution — Manual (If script fails):**
