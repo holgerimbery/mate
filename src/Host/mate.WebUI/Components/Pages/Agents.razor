@@ -83,11 +83,11 @@ else
             <h2 class="section-title mb-4">Basic Information</h2>
             <div class="form-group">
                 <label class="form-label">Agent Name *</label>
-                <input class="form-control" @bind="_form.Name" placeholder="e.g. My CopilotStudio Bot" />
+                <input class="form-control" @bind="_form.Name" @bind:event="oninput" placeholder="e.g. My CopilotStudio Bot" />
             </div>
             <div class="form-group">
                 <label class="form-label">Description</label>
-                <input class="form-control" @bind="_form.Description" placeholder="Optional description" />
+                <input class="form-control" @bind="_form.Description" @bind:event="oninput" placeholder="Optional description" />
             </div>
             <div class="form-group">
                 <label class="form-label">Environment</label>
@@ -100,7 +100,7 @@ else
             </div>
             <div class="form-group">
                 <label class="form-label">Tags (comma-separated)</label>
-                <input class="form-control" @bind="_form.TagsRaw" placeholder="tag1, tag2" />
+                <input class="form-control" @bind="_form.TagsRaw" @bind:event="oninput" placeholder="tag1, tag2" />
             </div>
             @if (_editAgent is not null)
             {
@@ -181,7 +181,7 @@ else
                             else if (field.FieldType is "password" or "secret")
                             {
                                 <input type="password" class="form-control" value="@GetFormConfigValue(field.Key)"
-                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       @oninput="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
                                        placeholder="@field.Description" />
                             }
                             else if (field.FieldType == "boolean")
@@ -196,7 +196,7 @@ else
                             else
                             {
                                 <input type="text" class="form-control" value="@GetFormConfigValue(field.Key)"
-                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       @oninput="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
                                        placeholder="@field.Description" />
                             }
                             @if (!string.IsNullOrWhiteSpace(field.Description) && field.FieldType is not "boolean")
@@ -256,7 +256,7 @@ else
                             else if (field.FieldType is "password" or "secret")
                             {
                                 <input type="password" class="form-control" value="@GetFormConfigValue(field.Key)"
-                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       @oninput="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
                                        placeholder="@field.Description" />
                             }
                             else if (field.FieldType == "boolean")
@@ -271,7 +271,7 @@ else
                             else
                             {
                                 <input type="text" class="form-control" value="@GetFormConfigValue(field.Key)"
-                                       @onchange="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                                       @oninput="e => SetFormConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
                                        placeholder="@field.Description" />
                             }
                             @if (!string.IsNullOrWhiteSpace(field.Description) && field.FieldType is not "boolean")

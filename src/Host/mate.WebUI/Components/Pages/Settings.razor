@@ -317,7 +317,7 @@
                 <div class="col-md-6">
                     <div class="form-group">
                         <label class="form-label">Name *</label>
-                        <input class="form-control" @bind="_judgeForm.Name" placeholder="Default Judge" />
+                        <input class="form-control" @bind="_judgeForm.Name" @bind:event="oninput" placeholder="Default Judge" />
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -343,13 +343,13 @@
                 <div class="col-md-4">
                     <div class="form-group">
                         <label class="form-label">Model <small class="text-muted">(blank = global)</small></label>
-                        <input class="form-control" @bind="_judgeForm.Model" placeholder="gpt-4o" />
+                        <input class="form-control" @bind="_judgeForm.Model" @bind:event="oninput" placeholder="gpt-4o" />
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="form-group">
                         <label class="form-label">Endpoint</label>
-                        <input class="form-control" @bind="_judgeForm.EndpointRef" placeholder="https://...openai.azure.com/" />
+                        <input class="form-control" @bind="_judgeForm.EndpointRef" @bind:event="oninput" placeholder="https://...openai.azure.com/" />
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -360,7 +360,7 @@
                                 <small class="text-muted ms-1">(configured — enter new to replace)</small>
                             }
                         </label>
-                        <input type="password" class="form-control" @bind="_judgeForm.ApiKeyInput"
+                        <input type="password" class="form-control" @bind="_judgeForm.ApiKeyInput" @bind:event="oninput"
                                placeholder="@(string.IsNullOrWhiteSpace(_judgeForm.ApiKeyRef) ? "Enter API key" : "Enter new key to replace current")" autocomplete="new-password" />
                     </div>
                 </div>
@@ -442,7 +442,7 @@
                         </button>
                     }
                 </div>
-                <textarea class="form-control" rows="12" @bind="_judgeForm.PromptTemplate"
+                <textarea class="form-control" rows="12" @bind="_judgeForm.PromptTemplate" @bind:event="oninput"
                     style="font-family:monospace;font-size:.85em"
                     placeholder="Leave blank to use the built-in model-as-judge evaluation prompt"></textarea>
                 <small class="text-muted">Leave blank = built-in prompt is used. Individual test suites can further override this.</small>
@@ -610,13 +610,13 @@
                 <div class="col-md-6">
                     <div class="form-group">
                         <label class="form-label">Name *</label>
-                        <input class="form-control" @bind="_qgenForm.Name" placeholder="Default GPT-4o Mini" />
+                        <input class="form-control" @bind="_qgenForm.Name" @bind:event="oninput" placeholder="Default GPT-4o Mini" />
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
                         <label class="form-label">Model</label>
-                        <input class="form-control" @bind="_qgenForm.Model" placeholder="gpt-4o-mini" />
+                        <input class="form-control" @bind="_qgenForm.Model" @bind:event="oninput" placeholder="gpt-4o-mini" />
                     </div>
                 </div>
             </div>
@@ -624,7 +624,7 @@
                 <div class="col-md-6">
                     <div class="form-group">
                         <label class="form-label">Endpoint</label>
-                        <input class="form-control" @bind="_qgenForm.Endpoint" placeholder="https://..." />
+                        <input class="form-control" @bind="_qgenForm.Endpoint" @bind:event="oninput" placeholder="https://..." />
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -635,7 +635,7 @@
                                 <small class="text-muted ms-1">(configured — enter new to replace)</small>
                             }
                         </label>
-                        <input type="password" class="form-control" @bind="_qgenForm.ApiKeyInput"
+                        <input type="password" class="form-control" @bind="_qgenForm.ApiKeyInput" @bind:event="oninput"
                                placeholder="@(string.IsNullOrWhiteSpace(_qgenForm.ApiKeyRef) ? "Enter API key" : "Enter new key to replace current")" autocomplete="new-password" />
                     </div>
                 </div>
@@ -687,7 +687,7 @@
                         </button>
                     }
                 </div>
-                <textarea class="form-control" rows="12" @bind="_qgenForm.SystemPrompt"
+                <textarea class="form-control" rows="12" @bind="_qgenForm.SystemPrompt" @bind:event="oninput"
                     style="font-family:monospace;font-size:.85em"
                     placeholder="Leave blank to use the built-in question generation prompt"></textarea>
                 <small class="text-muted">Leave blank = built-in prompt. Individual test suites can further override this.</small>
@@ -1379,17 +1379,27 @@ OAuth__Audience=your-api-audience</pre>
                 _judgeTestMessage = "Endpoint Ref is required to test the connection.";
                 return;
             }
-            string endpoint, apiKey;
+            string endpoint;
             try { endpoint = await SecretSvc.GetSecretAsync(_judgeForm.EndpointRef); }
             catch { endpoint = _judgeForm.EndpointRef; }
-            if (string.IsNullOrWhiteSpace(_judgeForm.ApiKeyRef))
+
+            string apiKey;
+            if (!string.IsNullOrWhiteSpace(_judgeForm.ApiKeyInput))
+            {
+                apiKey = _judgeForm.ApiKeyInput;
+            }
+            else if (!string.IsNullOrWhiteSpace(_judgeForm.ApiKeyRef))
+            {
+                try { apiKey = await SecretSvc.GetSecretAsync(_judgeForm.ApiKeyRef); }
+                catch { apiKey = _judgeForm.ApiKeyRef; }
+            }
+            else
             {
                 _judgeTestPassed = false;
-                _judgeTestMessage = "API Key Ref is required to test the connection.";
+                _judgeTestMessage = "API key is required to test the connection.";
                 return;
             }
-            try { apiKey = await SecretSvc.GetSecretAsync(_judgeForm.ApiKeyRef); }
-            catch { apiKey = _judgeForm.ApiKeyRef; }
+
             var model = _judgeForm.Model ?? "gpt-4o-mini";
             await PingLlmAsync(endpoint, apiKey, model);
             _judgeTestPassed = true;
@@ -1542,9 +1552,24 @@ OAuth__Audience=your-api-audience</pre>
                 _qgenTestMessage = "Endpoint is required to test the connection.";
                 return;
             }
+
             string apiKey;
-            try { apiKey = await SecretSvc.GetSecretAsync(_qgenForm.ApiKeyRef); }
-            catch { apiKey = _qgenForm.ApiKeyRef; }
+            if (!string.IsNullOrWhiteSpace(_qgenForm.ApiKeyInput))
+            {
+                apiKey = _qgenForm.ApiKeyInput;
+            }
+            else if (!string.IsNullOrWhiteSpace(_qgenForm.ApiKeyRef))
+            {
+                try { apiKey = await SecretSvc.GetSecretAsync(_qgenForm.ApiKeyRef); }
+                catch { apiKey = _qgenForm.ApiKeyRef; }
+            }
+            else
+            {
+                _qgenTestPassed = false;
+                _qgenTestMessage = "API key is required to test the connection.";
+                return;
+            }
+
             await PingLlmAsync(_qgenForm.Endpoint, apiKey, _qgenForm.Model);
             _qgenTestPassed = true;
             _qgenTestMessage = $"Connection successful! Model: {_qgenForm.Model}";
