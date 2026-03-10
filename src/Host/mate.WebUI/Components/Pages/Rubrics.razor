@@ -383,7 +383,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
             {
                 var rs = _rubricSets.First(r => r.Id == _editSetId.Value);
                 rs.Name                = _setForm.Name;
-                rs.Description         = _setForm.Description;
+                rs.Description         = _setForm.Description ?? string.Empty;
                 rs.RequireAllMandatory = _setForm.RequireAllMandatory;
                 rs.JudgeSettingId      = judgeId;
             }
@@ -395,7 +395,7 @@ else if (_formMode == "criteria" && _selectedRubricSet is not null)
                     TenantId            = TenantCtx.TenantId,
                     JudgeSettingId      = judgeId,
                     Name                = _setForm.Name,
-                    Description         = _setForm.Description,
+                    Description         = _setForm.Description ?? string.Empty,
                     RequireAllMandatory = _setForm.RequireAllMandatory,
                     CreatedAt           = DateTime.UtcNow
                 });
