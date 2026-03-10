@@ -188,17 +188,14 @@ jobs:
           DIR="mate-quickstart-azure-${VERSION}"
           mkdir -p "$DIR"
 
-          # Copy all Azure quickstart files
+          # Copy Azure quickstart docs/config
           cp quickstart-azure/.env.template "$DIR/.env.template"
           cp quickstart-azure/README.md "$DIR/README.md"
           cp quickstart-azure/QUICKSTART.md "$DIR/QUICKSTART.md"
           cp quickstart-azure/DEPLOYMENT.md "$DIR/DEPLOYMENT.md"
-          cp quickstart-azure/check-prerequisites.ps1 "$DIR/check-prerequisites.ps1"
-          cp quickstart-azure/setup-env.ps1 "$DIR/setup-env.ps1"
-          cp quickstart-azure/deploy-whatif.ps1 "$DIR/deploy-whatif.ps1"
-          cp quickstart-azure/deploy.ps1 "$DIR/deploy.ps1"
-          cp quickstart-azure/setup-keyvault-secrets.ps1 "$DIR/setup-keyvault-secrets.ps1"
-          cp quickstart-azure/cleanup-rg.ps1 "$DIR/cleanup-rg.ps1"
+
+          # Copy all Azure quickstart scripts (keeps package in sync when scripts are added)
+          cp quickstart-azure/*.ps1 "$DIR/"
 
           zip -r "mate-quickstart-azure-${VERSION}.zip" "$DIR"
           rm -rf "$DIR"
