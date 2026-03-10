@@ -49,12 +49,23 @@ h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
     --text-tertiary:  #78787f;
     --text-muted:     #9ca3af;
     --surface-2:      #2c2d32;
+    color-scheme: dark;
 }
 
 [data-theme="dark"] body {
     background-color: var(--light-bg);
     color: var(--text-primary);
 }
+
+[data-theme="dark"] a { color: var(--primary); }
+
+[data-theme="dark"] .text-muted,
+[data-theme="dark"] .text-body-secondary,
+[data-theme="dark"] .text-secondary,
+[data-theme="dark"] .text-body,
+[data-theme="dark"] .text-black-50 { color: var(--text-muted) !important; }
+
+[data-theme="dark"] .form-check-label { color: var(--text-primary); }
 
 [data-theme="dark"] .mate-sidebar {
     background: var(--card-bg);
@@ -82,22 +93,73 @@ h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
 
 [data-theme="dark"] .form-control { background: #1e1f22; color: var(--text-primary); border-color: var(--border); }
 
+[data-theme="dark"] .form-control::placeholder,
+[data-theme="dark"] .filter-input::placeholder { color: var(--text-tertiary); opacity: 1; }
+
 [data-theme="dark"] .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(77,159,255,0.15); }
 
-[data-theme="dark"] select option { background: #25262b; }
+/* Browser autofill injects its own background overlay — override it so text stays readable */
+[data-theme="dark"] input:-webkit-autofill,
+[data-theme="dark"] input:-webkit-autofill:hover,
+[data-theme="dark"] input:-webkit-autofill:focus,
+[data-theme="dark"] textarea:-webkit-autofill,
+[data-theme="dark"] textarea:-webkit-autofill:hover,
+[data-theme="dark"] textarea:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text-primary);
+    -webkit-box-shadow: 0 0 0 1000px #1e1f22 inset;
+    transition: background-color 5000s ease-in-out 0s;
+    caret-color: var(--text-primary);
+}
+
+[data-theme="dark"] select option { background: #25262b; color: var(--text-primary); }
+
+[data-theme="dark"] .form-check-input {
+    background-color: #1e1f22;
+    border-color: #5c616b;
+}
+
+[data-theme="dark"] .form-check-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(77,159,255,0.15);
+}
+
+[data-theme="dark"] .form-check-input:checked {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+    opacity: 0.85;
+}
+
+[data-theme="dark"] .btn-close:hover { opacity: 1; }
+
+[data-theme="dark"] .btn-close:focus { box-shadow: 0 0 0 3px rgba(77,159,255,0.15); }
 
 [data-theme="dark"] .btn-secondary { background: #373a40; color: var(--text-primary); border-color: var(--border); }
 [data-theme="dark"] .btn-secondary:hover { background: #4a4d55; }
 
 [data-theme="dark"] .filter-input, [data-theme="dark"] .filter-select { background: #1e1f22; color: var(--text-primary); }
 
-[data-theme="dark"] .modal-box { background: var(--card-bg); }
+[data-theme="dark"] .modal-box { background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border); }
 
 [data-theme="dark"] .transcript-bubble.bot { background: #2c2d32; border-color: var(--border); }
 
 [data-theme="dark"] .kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 
 [data-theme="dark"] .home-action-card:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.4); }
+
+/* Explicitly set text color on card surfaces so Bootstrap's --bs-body-color (#212529)
+    cannot leak through when data-bs-theme is not set */
+[data-theme="dark"] .section-card,
+[data-theme="dark"] .kpi-card,
+[data-theme="dark"] .mate-header,
+[data-theme="dark"] .mate-page { color: var(--text-primary); }
+
+/* Bootstrap spinner uses currentcolor — ensure it's light in dark mode */
+[data-theme="dark"] .spinner-border { color: var(--text-primary); }
+[data-theme="dark"] .btn-primary .spinner-border { color: #fff; }
 
 /* Badge text colours in dark mode — use semantic CSS vars for legibility */
 [data-theme="dark"] .badge-pass,
@@ -109,7 +171,8 @@ h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
 [data-theme="dark"] .badge-unhealthy    { color: var(--danger); }
 [data-theme="dark"] .badge-running      { color: var(--info); }
 [data-theme="dark"] .badge-pending,
-[data-theme="dark"] .badge-skip         { color: var(--accent); }
+[data-theme="dark"] .badge-skip,
+[data-theme="dark"] .badge-skipped      { color: var(--accent); }
 [data-theme="dark"] .badge-purple       { color: var(--secondary); }
 [data-theme="dark"] .badge-premium      { color: var(--accent); }
 /* Alert text + border in dark mode */
@@ -122,6 +185,7 @@ h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
 /* Bootstrap border utilities — follow our theme border colour */
 [data-theme="dark"] .border-bottom { border-bottom-color: var(--border) !important; }
 [data-theme="dark"] .border-top    { border-top-color:    var(--border) !important; }
+[data-theme="dark"] .border-primary { border-color: rgba(77,159,255,0.5) !important; }
 
 /* ── Reset & Base ──────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
@@ -466,6 +530,27 @@ html, body {
     font-size: 24px; color: white;
 }
 
+/* ── Icon tile utility classes ────────────────────────────── */
+/* Base layouts */
+.icon-tile    { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.icon-tile-md { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.icon-tile-lg { width: 48px; height: 48px; border-radius: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; }
+/* Solid gradients */
+.icon-tile-warning      { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.icon-tile-primary      { background: linear-gradient(135deg, #0066cc, #003d99); }
+.icon-tile-secondary    { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+.icon-tile-info         { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+.icon-tile-success      { background: linear-gradient(135deg, #10b981, #047857); }
+.icon-tile-danger       { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.icon-tile-github       { background: linear-gradient(135deg, #2d333b, #555f6b); }
+.icon-tile-neutral-dark { background: linear-gradient(135deg, #37474f, #1c2529); }
+/* Soft (translucent) gradients */
+.icon-tile-primary-soft { background: linear-gradient(135deg, rgba(0,102,204,0.12), rgba(139,92,246,0.12)); }
+.icon-tile-success-soft { background: linear-gradient(135deg, rgba(22,163,74,0.12), rgba(0,102,204,0.12)); }
+.icon-tile-warning-soft { background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(0,102,204,0.12)); }
+.icon-tile-teal-soft    { background: linear-gradient(135deg, rgba(32,201,151,0.12), rgba(0,102,204,0.12)); }
+.icon-tile-danger-soft  { background: linear-gradient(135deg, rgba(220,38,38,0.12), rgba(124,58,237,0.12)); }
+
 /* ── Section Card ──────────────────────────────────────────── */
 .section-card {
     background: var(--card-bg);
@@ -567,7 +652,7 @@ html, body {
 }
 .badge-pass, .badge-completed, .badge-healthy        { background: rgba(16,185,129,0.12); color: #059669; }
 .badge-fail, .badge-failed, .badge-error, .badge-unhealthy { background: rgba(239,68,68,0.12);  color: #dc2626; }
-.badge-pending, .badge-skip                          { background: rgba(245,158,11,0.12); color: #b45309; }
+.badge-pending, .badge-skip, .badge-skipped           { background: rgba(245,158,11,0.12); color: #b45309; }
 .badge-running                                       { background: rgba(59,130,246,0.12); color: #2563eb; }
 .badge-info                                          { background: rgba(0,102,204,0.12);  color: var(--primary); }
 .badge-neutral                                       { background: rgba(107,114,128,0.1); color: var(--text-secondary); }
@@ -592,6 +677,7 @@ html, body {
 .health-dot.unknown   { background: var(--warning); }
 
 /* ── Modal ─────────────────────────────────────────────────── */
+.modal-backdrop,
 .modal-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.4);
@@ -599,6 +685,7 @@ html, body {
     z-index: 9000;
     animation: fadeIn 0.2s ease-out;
 }
+.modal-backdrop { padding: 16px; }
 .modal-box {
     background: var(--card-bg);
     border-radius: 12px;
@@ -615,6 +702,15 @@ html, body {
 }
 .modal-title { font-size: 18px; font-weight: 700; margin: 0; }
 .modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--text-secondary); }
+
+/* ── Report callouts ───────────────────────────────────────── */
+.report-callout {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 6px;
+    padding: 12px;
+}
 
 /* ── Wizard Steps ──────────────────────────────────────────── */
 .wizard-steps {

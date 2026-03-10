@@ -41,32 +41,32 @@ else
     <!-- Action cards -->
     <div class="home-action-grid mb-4">
         <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/wizard")'>
-            <div class="home-action-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)"><i class="bi bi-magic"></i></div>
+            <div class="home-action-icon icon-tile-warning"><i class="bi bi-magic"></i></div>
             <div class="fw-600">Setup Wizard</div>
             <div class="text-muted" style="font-size:12px">Guided setup</div>
         </div>
         <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/test-suites")'>
-            <div class="home-action-icon" style="background:linear-gradient(135deg,#0066cc,#003d99)"><i class="bi bi-list-check"></i></div>
+            <div class="home-action-icon icon-tile-primary"><i class="bi bi-list-check"></i></div>
             <div class="fw-600">Test Suites</div>
             <div class="text-muted" style="font-size:12px">Manage &amp; run</div>
         </div>
         <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/documents")'>
-            <div class="home-action-icon" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)"><i class="bi bi-file-earmark-text"></i></div>
+            <div class="home-action-icon icon-tile-secondary"><i class="bi bi-file-earmark-text"></i></div>
             <div class="fw-600">Documents</div>
             <div class="text-muted" style="font-size:12px">Upload &amp; manage</div>
         </div>
         <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/agents")'>
-            <div class="home-action-icon" style="background:linear-gradient(135deg,#06b6d4,#0891b2)"><i class="bi bi-robot"></i></div>
+            <div class="home-action-icon icon-tile-info"><i class="bi bi-robot"></i></div>
             <div class="fw-600">Agents</div>
             <div class="text-muted" style="font-size:12px">Configure connectors</div>
         </div>
         <div class="home-action-card" @onclick='() => Navigation.NavigateTo("/dashboard")'>
-            <div class="home-action-icon" style="background:linear-gradient(135deg,#10b981,#047857)"><i class="bi bi-graph-up"></i></div>
+            <div class="home-action-icon icon-tile-success"><i class="bi bi-graph-up"></i></div>
             <div class="fw-600">Dashboard</div>
             <div class="text-muted" style="font-size:12px">KPIs &amp; history</div>
         </div>
         <div class="home-action-card" @onclick="OpenQuickRun">
-            <div class="home-action-icon" style="background:linear-gradient(135deg,#ef4444,#b91c1c)"><i class="bi bi-play-fill"></i></div>
+            <div class="home-action-icon icon-tile-danger"><i class="bi bi-play-fill"></i></div>
             <div class="fw-600">Quick Run</div>
             <div class="text-muted" style="font-size:12px">Run suite now</div>
         </div>
@@ -193,8 +193,8 @@ else
             <div class="row g-3">
                 <div class="col-md-3">
                     <div class="d-flex gap-3">
-                        <div style="width:32px;height:32px;background:#e6f0ff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                            <span style="font-size:14px;font-weight:700;color:#0066cc">1</span>
+                        <div style="width:32px;height:32px;background:rgba(0,102,204,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:var(--primary)">1</span>
                         </div>
                         <div>
                             <div style="font-size:13px;font-weight:600">Configure Settings</div>
@@ -204,8 +204,8 @@ else
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex gap-3">
-                        <div style="width:32px;height:32px;background:#f3e8ff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                            <span style="font-size:14px;font-weight:700;color:#8b5cf6">2</span>
+                        <div style="width:32px;height:32px;background:rgba(139,92,246,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:var(--secondary)">2</span>
                         </div>
                         <div>
                             <div style="font-size:13px;font-weight:600">Register an Agent</div>
@@ -215,8 +215,8 @@ else
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex gap-3">
-                        <div style="width:32px;height:32px;background:#d1fae5;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                            <span style="font-size:14px;font-weight:700;color:#059669">3</span>
+                        <div style="width:32px;height:32px;background:rgba(16,185,129,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:var(--success)">3</span>
                         </div>
                         <div>
                             <div style="font-size:13px;font-weight:600">Create a Test Suite</div>
@@ -226,8 +226,8 @@ else
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex gap-3">
-                        <div style="width:32px;height:32px;background:#fff7ed;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                            <span style="font-size:14px;font-weight:700;color:#ea580c">4</span>
+                        <div style="width:32px;height:32px;background:rgba(234,88,12,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <span style="font-size:14px;font-weight:700;color:var(--warning)">4</span>
                         </div>
                         <div>
                             <div style="font-size:13px;font-weight:600">Run &amp; Evaluate</div>
@@ -248,7 +248,7 @@ else
 {
     <div class="modal-backdrop" @onclick="CloseQuickRun">
         <div class="modal-box" @onclick:stopPropagation style="width:460px">
-            <h2><i class="bi bi-play-fill me-2" style="color:#10b981"></i>Quick Run</h2>
+            <h2><i class="bi bi-play-fill me-2" style="color:var(--success)"></i>Quick Run</h2>
             @if (!string.IsNullOrEmpty(_quickRunMsg))
             {
                 <div class="alert @(_quickRunSuccess ? "alert-success" : "alert-danger") mb-3" style="font-size:13px">@_quickRunMsg</div>

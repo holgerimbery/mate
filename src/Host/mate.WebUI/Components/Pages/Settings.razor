@@ -52,7 +52,7 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="section-card h-100">
                         <div class="d-flex align-items-center gap-3 mb-3">
-                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#0066cc20,#8b5cf620);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <div class="icon-tile-md icon-tile-primary-soft">
                                 <i class="bi @ConnectorIcon(m.ConnectorType)" style="color:var(--primary);font-size:18px"></i>
                             </div>
                             <div>
@@ -99,7 +99,7 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="section-card h-100">
                         <div class="d-flex align-items-center gap-3 mb-3">
-                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#16a34a20,#0066cc20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <div class="icon-tile-md icon-tile-success-soft">
                                 <i class="bi bi-award" style="color:var(--success);font-size:18px"></i>
                             </div>
                             <div>
@@ -142,8 +142,8 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="section-card">
                         <div class="d-flex align-items-center gap-3">
-                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#f59e0b20,#0066cc20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                <i class="bi bi-activity" style="color:#f59e0b;font-size:18px"></i>
+                            <div class="icon-tile-md icon-tile-warning-soft">
+                                <i class="bi bi-activity" style="color:var(--warning);font-size:18px"></i>
                             </div>
                             <div>
                                 <div style="font-weight:600">@m.DisplayName</div>
@@ -170,8 +170,8 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="section-card h-100">
                         <div class="d-flex align-items-center gap-3 mb-3">
-                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#20c99720,#0066cc20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                <i class="bi bi-stars" style="color:#20c997;font-size:18px"></i>
+                            <div class="icon-tile-md icon-tile-teal-soft">
+                                <i class="bi bi-stars" style="color:var(--success);font-size:18px"></i>
                             </div>
                             <div>
                                 <div style="font-weight:600">@QGenDisplayName(m.ProviderType)</div>
@@ -201,8 +201,8 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="section-card h-100">
                         <div class="d-flex align-items-center gap-3 mb-3">
-                            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#dc262620,#7c3aed20);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                <i class="bi bi-shield-exclamation" style="color:#dc2626;font-size:18px"></i>
+                            <div class="icon-tile-md icon-tile-danger-soft">
+                                <i class="bi bi-shield-exclamation" style="color:var(--danger);font-size:18px"></i>
                             </div>
                             <div>
                                 <div style="font-weight:600">@m.DisplayName</div>
@@ -1035,7 +1035,7 @@
             <span class="section-title">Authentication</span>
             @if (_authScheme is "None" or "Generic")
             {
-                <span class="connector-badge" style="background:#e65100">Development Mode</span>
+                <span class="connector-badge" style="background:var(--warning);color:#fff">Development Mode</span>
             }
             else if (_authScheme is "EntraId" or "OAuth")
             {

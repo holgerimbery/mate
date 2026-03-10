@@ -78,7 +78,7 @@
                             @if (_expandedSuiteId == suite.Id)
                             {
                                 <tr>
-                                    <td colspan="5" style="padding:0 1rem 1rem;background:var(--bg-page,#f5f7fa)">
+                                    <td colspan="5" style="padding:0 1rem 1rem;background:var(--surface-2);color:var(--text-primary)">
                                         <div class="section-header" style="margin-top:12px;margin-bottom:8px">
                                             <strong>Test Cases</strong>
                                             <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">
@@ -187,13 +187,13 @@ else if (_showSuiteForm)
         </div>
 
         <div class="section-card">
-            <h2 class="section-title mb-3" style="color:#6f42c1"><i class="bi bi-award me-2"></i>Judge Configuration</h2>
+            <h2 class="section-title mb-3" style="color:var(--secondary)"><i class="bi bi-award me-2"></i>Judge Configuration</h2>
             @{
                 var defaultJudge = _judgeSettings.FirstOrDefault(j => j.IsDefault);
             }
             @if (defaultJudge is not null)
             {
-                <div style="background:#f5f0ff;padding:10px 14px;border-radius:6px;border-left:4px solid #6f42c1;font-size:13px;margin-bottom:16px">
+                <div style="background:rgba(139,92,246,0.08);padding:10px 14px;border-radius:6px;border-left:4px solid var(--secondary);font-size:13px;margin-bottom:16px">
                     <strong>System default:</strong> @defaultJudge.Name (@defaultJudge.ProviderType) — threshold @defaultJudge.PassThreshold.ToString("P0")
                 </div>
             }
@@ -213,7 +213,7 @@ else if (_showSuiteForm)
             }
             @if (selJudge is not null)
             {
-                <div style="background:#f8f9fa;padding:12px;border-radius:8px;border-left:4px solid #6f42c1;font-size:13px;margin-top:8px">
+                <div style="background:var(--surface-2);padding:12px;border-radius:8px;border-left:4px solid var(--secondary);font-size:13px;margin-top:8px">
                     <div class="mb-1"><strong>Provider:</strong> @selJudge.ProviderType</div>
                     <div class="mb-1"><strong>Pass Threshold:</strong> @selJudge.PassThreshold.ToString("P0")</div>
                     <div class="mb-1"><strong>Weights:</strong> Task @selJudge.TaskSuccessWeight.ToString("P0") · Intent @selJudge.IntentMatchWeight.ToString("P0") · Factuality @selJudge.FactualityWeight.ToString("P0") · Helpfulness @selJudge.HelpfulnessWeight.ToString("P0") · Safety @selJudge.SafetyWeight.ToString("P0")</div>
@@ -234,10 +234,10 @@ else if (_showSuiteForm)
         </div>
 
         <div class="section-card">
-            <h2 class="section-title mb-3" style="color:#20c997"><i class="bi bi-stars me-2"></i>AI Question Generation</h2>
+            <h2 class="section-title mb-3" style="color:var(--success)"><i class="bi bi-stars me-2"></i>AI Question Generation</h2>
             @if (_qgenSetting is not null)
             {
-                <div style="background:#f0fdf4;padding:10px 14px;border-radius:6px;border-left:4px solid #20c997;font-size:13px;margin-bottom:16px">
+                <div style="background:rgba(32,201,151,0.08);padding:10px 14px;border-radius:6px;border-left:4px solid var(--success);font-size:13px;margin-bottom:16px">
                     <strong>System default:</strong> @_qgenSetting.Model
                     @if (!string.IsNullOrWhiteSpace(_qgenSetting.SystemPrompt))
                     {
