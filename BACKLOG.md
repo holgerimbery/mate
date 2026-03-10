@@ -37,6 +37,16 @@
 
 ---
 
+## E25 — Container Deployment Safety & Key Vault Refactoring *(Backlog)*
+
+- `[ ]` Runtime secret wiring in `update-container-images.ps1` — add post-Bicep secret configuration to both scripts to prevent crash-loop outages on container image updates (E25-01)
+- `[ ]` Key Vault direct references in Bicep — refactor container-apps.bicep to use `keyVaultUrl` instead of placeholder values for postgres-connection-string and blob-connection-string (E25-02)
+- `[ ]` Pre-deployment Key Vault population — enhance setup-keyvault-secrets.ps1 to store postgres-connection-string and blob-connection-string before container deployment (E25-03)
+- `[ ]` Deploy script simplification — remove post-deployment secret wiring from deploy.ps1 once Key Vault references are in Bicep (E25-04)
+- `[ ]` Documentation & migration guide — update DEPLOYMENT.md and QUICKSTART.md with new Key Vault-first deployment flow (E25-05)
+
+---
+
 ## E24 — Azure Deployment Automation & Release Packaging *(v0.6.1)* ✅
 
 - `[x]` PostgreSQL firewall automation — post-deployment rule creation for Azure service connectivity (E24-01)
@@ -46,6 +56,7 @@
 - `[x]` Dual package generation — automated release workflow creates both Docker Compose and Azure quickstart ZIPs; both attached to GitHub Release (E24-05)
 - `[x]` Release metadata automation — conditional prerelease marking, versioned image tags, `latest` tag only for stable releases (E24-06)
 - `[x]` `update-container-images.ps1` script — PowerShell script for quick container image updates; updates `.env`, maintains Bicep state, zero-downtime rolling deployment (E24-07)
+- `[x]` Runtime secret wiring in `update-container-images.ps1` — add post-Bicep secret configuration to prevent connection string crashes (E24-08)
 
 ---
 

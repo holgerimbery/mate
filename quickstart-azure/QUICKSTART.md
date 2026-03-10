@@ -96,7 +96,7 @@ pwsh ./update-container-images.ps1
 pwsh ./update-container-images.ps1 -ImageTag 'v0.6.1' -WhatIf
 ```
 
-**Time:** 1–2 minutes (zero-downtime rolling update)
+> **💡 Note:** Script returns immediately but deployment runs in background (5–10 minutes). Monitor: `az deployment group show --name main --resource-group <rg> --query "{State:properties.provisioningState}" -o table`
 
 ## Troubleshooting
 

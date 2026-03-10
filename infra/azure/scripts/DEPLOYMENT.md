@@ -115,6 +115,11 @@ After a new version is released, update the container images without redeploying
 - Automatically switch traffic to new revisions
 - Maintain full Bicep state tracking for future deployments
 
+> **💡 Deployment Note:** The script runs with `--no-wait` and returns immediately. The actual container update happens in the background and takes **5–10 minutes** to complete. Monitor progress with:
+> ```powershell
+> az deployment group show --name main --resource-group <your-rg> --query "{State:properties.provisioningState, Duration:properties.duration}" -o table
+> ```
+
 **Preview changes first:**
 
 ```powershell
@@ -126,8 +131,6 @@ After a new version is released, update the container images without redeploying
 ```powershell
 .\update-container-images.ps1  # Defaults to 'latest'
 ```
-
-**Typical update time:** 1–2 minutes (much faster than full `deploy.ps1`)
 
 ### When to Use Each Script
 
@@ -229,6 +232,53 @@ az postgres flexible-server firewall-rule list --resource-group <rg-name> --name
 - Most common cause: database connectivity during startup migration.
    - Verify `ConnectionStrings__Default` uses `secretRef` (`postgres-conn`).
    - Verify PostgreSQL firewall/network access if using public mode.
+
+### Container app crashes after `update-container-images.ps1` (HTTP 404)
+
+**Symptoms:** New revision unhealthy (Degraded), app returns 404 "Container App stopped" after image update.
+
+**Root cause:** Runtime secret wiring may have failed; new revision trying to start with broken placeholder values (`USE-KEYVAULT-REFERENCE`).
+
+**Solution — Auto (Recommended):**
+```powershell
+# Rerun the update script, which automatically wires secrets
+.\update-container-images.ps1 -ImageTag '0.6.1'
+```
+
+**Solution — Manual (If script fails):**
+
+1. **Retrieve PostgreSQL password from safe file:**
+   ```powershell
+   $pgPassword = (Get-Content '.\.pg-password' -Raw).Trim()
+   ```
+
+2. **Build connection strings with password:**
+   ```powershell
+   $rg = '<your-resource-group>'
+   $env = '<environment-name>'  # e.g. 'mate-dev'
+   
+   $storage = az resource list --resource-group $rg --resource-type 'Microsoft.Storage/storageAccounts' --query '[0].name' -o tsv
+   $storageKey = az storage account keys list --resource-group $rg --account-name $storage --query '[0].value' -o tsv
+   
+   $dbConnectionString = "Host=$env-pg.postgres.database.azure.com;Database=mate;Username=pgadmin;Password=$pgPassword;SSL Mode=Require"
+   $blobConnectionString = "DefaultEndpointsProtocol=https;AccountName=$storage;AccountKey=$storageKey;EndpointSuffix=core.windows.net"
+   ```
+
+3. **Set runtime secrets on both container apps:**
+   ```powershell
+   foreach ($appName in @("$env-webui", "$env-worker")) {
+       az containerapp secret set --resource-group $rg --name $appName --secrets "postgres-conn=$dbConnectionString" "blob-conn=$blobConnectionString" -o none
+       az containerapp update --resource-group $rg --name $appName --set-env-vars "ConnectionStrings__Default=secretref:postgres-conn" "AzureInfrastructure__BlobConnectionString=secretref:blob-conn" -o none
+       Write-Host "Secrets configured on $appName"
+   }
+   ```
+
+4. **New revisions should start within 1–2 minutes:**
+   ```powershell
+   az containerapp revision list --resource-group $rg --name <env>-webui --query "[].{Name:name, Health:properties.healthState, Running:properties.runningState}" -o table
+   ```
+
+**Prevention:** Use `update-container-images.ps1` (does this automatically). Avoid manual image updates without running the secret wiring step.
 
 ## Environment Variables & Configuration
 

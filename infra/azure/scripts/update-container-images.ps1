@@ -98,7 +98,7 @@ if (Test-Path $envFile) {
                 'AZURE_RESOURCE_GROUP' { if (-not $ResourceGroupName) { $ResourceGroupName = $value } }
                 'AZURE_ENVIRONMENT_NAME' { if (-not $EnvironmentName) { $EnvironmentName = $value } }
                 'AZURE_LOCATION' { if (-not $Location) { $Location = $value } }
-                'AZURE_PROFILE' { if (-not $Profile) { $Profile = $value } }
+                'AZURE_PROFILE' { if (-not $SizeProfile) { $SizeProfile = $value } }
                 'AZURE_AAD_CLIENT_ID' { if (-not $AadClientId) { $AadClientId = $value } }
             }
         }
@@ -108,7 +108,7 @@ if (Test-Path $envFile) {
 # Apply defaults
 if (-not $EnvironmentName) { $EnvironmentName = 'mate-dev' }
 if (-not $Location) { $Location = 'eastus' }
-if (-not $Profile) { $Profile = 's' }
+if (-not $SizeProfile) { $SizeProfile = 's' }
 if (-not $ResourceGroupName) { $ResourceGroupName = "$EnvironmentName-rg" }
 if (-not $WebAppName) { $WebAppName = "$EnvironmentName-webui" }
 if (-not $WorkerAppName) { $WorkerAppName = "$EnvironmentName-worker" }
@@ -253,7 +253,7 @@ Write-Host "[2/3] Preparing Bicep deployment..." -ForegroundColor Magenta
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $templateDir = Split-Path -Parent $scriptDir  # Go up to infra/azure
 $mainTemplate = Join-Path $templateDir "main.bicep"
-$parameterFile = Join-Path $templateDir "parameters" "profile-$Profile.json"
+$parameterFile = Join-Path $templateDir "parameters" "profile-$SizeProfile.json"
 
 if (-not (Test-Path $mainTemplate)) {
     Write-Error "Template file not found: $mainTemplate"
@@ -266,40 +266,163 @@ Write-Host "  Template: $(Split-Path -Leaf $mainTemplate)" -ForegroundColor Gree
 Write-Host "  Parameters: $(Split-Path -Leaf $parameterFile)" -ForegroundColor Green
 Write-Host ""
 
+# Detect PostgreSQL and load credentials to maintain state
+Write-Host "Checking PostgreSQL state..." -ForegroundColor Gray
+$postgresExists = $false
+$postgresPassword = ''
+
+$postgresServers = az postgres flexible-server list --resource-group $ResourceGroupName --query "[].name" --output tsv 2>$null
+if ($LASTEXITCODE -eq 0 -and $postgresServers) {
+    $postgresExists = $true
+    Write-Host "  PostgreSQL detected - will maintain existing deployment" -ForegroundColor Gray
+    
+    # Load password from .pg-password file (like deploy.ps1 does)
+    $pgPasswordFile = Join-Path $scriptDir ".pg-password"
+    if (Test-Path $pgPasswordFile) {
+        $postgresPassword = Get-Content $pgPasswordFile -Raw | ForEach-Object { $_.Trim() }
+        Write-Host "  ✓ Loaded PostgreSQL credentials from .pg-password" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠ PostgreSQL exists but .pg-password file not found" -ForegroundColor Yellow
+        Write-Host "    Deployment may fail if postgres parameters are required" -ForegroundColor Yellow
+        $postgresPassword = Read-Host "Enter PostgreSQL admin password" -AsSecureString
+        $postgresPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($postgresPassword))
+    }
+} else {
+    Write-Host "  No PostgreSQL detected - will skip postgres deployment" -ForegroundColor Gray
+}
+
+Write-Host ""
+
 # Run Bicep deployment to update images while maintaining state
 Write-Host "[3/3] Deploying updated container images..." -ForegroundColor Magenta
-Write-Host ""
-Write-Host "BICEP STATE TRACKING:" -ForegroundColor Yellow
-Write-Host "  ✓ .env has been updated with AZURE_IMAGE_TAG=$ImageTag"
-Write-Host "  ✓ Bicep state is maintained - next deploy.ps1 will use this tag"
-Write-Host "  ✓ Running deployment to apply changes immediately"
-Write-Host ""
-    # Build deployment command with all necessary parameters
+try {
+    Write-Host ""
+    Write-Host "BICEP STATE TRACKING:" -ForegroundColor Yellow
+    Write-Host "  ✓ .env has been updated with AZURE_IMAGE_TAG=$ImageTag"
+    Write-Host "  ✓ Bicep state is maintained - next deploy.ps1 will use this tag"
+    Write-Host "  ✓ Running deployment to apply changes immediately"
+    if ($postgresExists) {
+        Write-Host "  ✓ PostgreSQL parameters included to maintain existing deployment" -ForegroundColor Yellow
+    } else {
+        Write-Host "  ✓ PostgreSQL deployment disabled (no existing postgres found)" -ForegroundColor Yellow
+    }
+    Write-Host ""
+
+    # Build secure deployment parameters (using array like deploy.ps1)
     $deploymentParams = @{
-        'environmentName'       = $EnvironmentName
-        'location'              = $Location
-        'imageTag'              = $ImageTag
-        'aadClientId'           = $AadClientId
-        'postgresAdminLogin'    = 'pgadmin'
-        'postgresAdminPassword' = $PostgresPassword
-        'deployPostgres'        = $true
+        'environmentName' = $EnvironmentName
+        'location'        = $Location
+        'imageTag'        = $ImageTag
+        'aadClientId'     = $AadClientId
     }
     
-    $paramJson = $deploymentParams | ConvertTo-Json
+    if ($postgresExists -and $postgresPassword) {
+        $deploymentParams['deployPostgres'] = $true
+        $deploymentParams['postgresAdminLogin'] = 'pgadmin'
+        $deploymentParams['postgresAdminPassword'] = $postgresPassword
+    } else {
+        $deploymentParams['deployPostgres'] = $false
+    }
     
-    az deployment group create `
-        --resource-group $ResourceGroupName `
-        --template-file $mainTemplate `
-        --parameters $parameterFile `
-        --parameters imageTag=$ImageTag `
-        --no-wait `
-        --output none 2>&1 | Out-Null
+    # Build argument array (secure method - no password exposure in command line)
+    $deployArgs = @(
+        'deployment', 'group', 'create',
+        '--resource-group', $ResourceGroupName,
+        '--template-file', $mainTemplate,
+        '--parameters', "@$parameterFile"
+    )
     
+    foreach ($key in $deploymentParams.Keys) {
+        $deployArgs += @('--parameters', "$key=$($deploymentParams[$key])")
+    }
+    
+    $deployArgs += @('--no-wait', '--output', 'none')
+    
+    & az @deployArgs 2>&1 | Out-Null
+
     if ($LASTEXITCODE -ne 0) {
         throw "Azure CLI deployment returned exit code $LASTEXITCODE"
     }
-    
+
     Write-Host "  ✓ Bicep deployment initiated (running in background)" -ForegroundColor Green
+    
+    # Configure runtime secret references (same as deploy.ps1 post-deployment step)
+    # This ensures new revisions have working connection strings
+    Write-Host ""
+    Write-Host "Configuring runtime secret references for new revision..." -ForegroundColor Cyan
+    
+    $dbConnectionString = "Host=$EnvironmentName-pg.postgres.database.azure.com;Database=mate;Username=pgadmin;Password=$PostgresPasswordPlain;SSL Mode=Require"
+
+    $storageAccountName = az resource list `
+        --resource-group $ResourceGroupName `
+        --resource-type 'Microsoft.Storage/storageAccounts' `
+        --query "[0].name" -o tsv 2>$null
+
+    $blobConnectionString = $null
+    if ($LASTEXITCODE -eq 0 -and $storageAccountName) {
+        $storageKey = az storage account keys list `
+            --resource-group $ResourceGroupName `
+            --account-name $storageAccountName `
+            --query "[0].value" -o tsv 2>$null
+
+        if ($LASTEXITCODE -eq 0 -and $storageKey) {
+            $blobConnectionString = "DefaultEndpointsProtocol=https;AccountName=$storageAccountName;AccountKey=$storageKey;EndpointSuffix=core.windows.net"
+        }
+        else {
+            Write-Host "  Could not resolve storage account key; blob secret will not be updated." -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "  No storage account found; blob secret will not be updated." -ForegroundColor Yellow
+    }
+
+    $containerApps = @("$EnvironmentName-webui", "$EnvironmentName-worker")
+
+    foreach ($appName in $containerApps) {
+        $appId = az containerapp show --resource-group $ResourceGroupName --name $appName --query id -o tsv 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $appId) {
+            Write-Host "  ⊘ Skipping '$appName' (not found in RG)." -ForegroundColor DarkYellow
+            continue
+        }
+
+        # Set runtime secrets
+        $secrets = @("postgres-conn=$dbConnectionString")
+        if ($blobConnectionString) {
+            $secrets += "blob-conn=$blobConnectionString"
+        }
+
+        az containerapp secret set `
+            --resource-group $ResourceGroupName `
+            --name $appName `
+            --secrets $secrets `
+            -o none 2>$null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  ⚠ Failed to set runtime secrets on '$appName'." -ForegroundColor Yellow
+            continue
+        }
+
+        # Wire environment variables to secret references
+        $envUpdates = @("ConnectionStrings__Default=secretref:postgres-conn")
+        if ($blobConnectionString) {
+            $envUpdates += "AzureInfrastructure__BlobConnectionString=secretref:blob-conn"
+        }
+
+        az containerapp update `
+            --resource-group $ResourceGroupName `
+            --name $appName `
+            --set-env-vars $envUpdates `
+            -o none 2>$null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  ⚠ Failed to update runtime env on '$appName'." -ForegroundColor Yellow
+            continue
+        }
+
+        Write-Host "  ✓ Configured runtime secret references on '$appName'." -ForegroundColor Green
+    }
+    
+    Write-Host "  ✓ Runtime secret wiring completed." -ForegroundColor Green
 } catch {
     Write-Error "Failed to deploy with Bicep: $_"
 }

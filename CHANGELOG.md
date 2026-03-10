@@ -27,6 +27,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Docker image tagging** — `latest` tag only applied to stable releases from version tags; prerelease versions use versioned tags only (E24-03).
 - **Matrix build parallelism** — GHCR publish workflow now uses `max-parallel: 1` to serialize image builds and reduce transient timeout failures; GHCR login retries up to 3 times with exponential backoff (E24-06).
 
+### Fixed
+- **Container app crash-loop on image updates** — `update-container-images.ps1` now configures runtime secret references (`postgres-conn`, `blob-conn`) after Bicep deployment, matching the post-deployment behavior in `deploy.ps1`. Prevents new revisions from starting with broken `USE-KEYVAULT-REFERENCE` placeholder values, ensuring zero-downtime rolling updates succeed with healthy revisions (E24-08).
+
 ---
 
 ## [v0.6.0] — 2026-03-04
