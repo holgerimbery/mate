@@ -323,7 +323,7 @@ else
         if (!File.Exists(versionFile))
             versionFile = Path.Combine(Directory.GetCurrentDirectory(), "VERSION");
         if (File.Exists(versionFile))
-            _version = (await File.ReadAllTextAsync(versionFile)).Trim();
+            _version = NormalizeVersion((await File.ReadAllTextAsync(versionFile)).Trim());
 
         var changelogFile = Path.Combine(HostEnv.ContentRootPath, "CHANGELOG.md");
         if (!File.Exists(changelogFile))
@@ -361,6 +361,12 @@ else
         _qgenModules      = Registry.GetAllQuestionProviders().ToList();
 
         _loading = false;
+    }
+
+    private static string NormalizeVersion(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version)) return string.Empty;
+        return version.Trim().TrimStart('v', 'V');
     }
 
     private async Task OpenQuickRun()
