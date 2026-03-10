@@ -273,4 +273,4 @@ if ($Watch) {
 Write-Host "`nStreaming /app/logs from container (Ctrl+C to stop)..." -ForegroundColor Cyan
 Write-Host "Tips: -Watch (filtered events)  -DB (query results)  -Logs (raw output)" -ForegroundColor DarkGray
 Write-Host "      -Source ghcr (GHCR image)  -Source ghcr -Tag v0.3.2 (specific release)" -ForegroundColor DarkGray
-docker compose -f $activeCompose exec $serviceWebUI sh -c "tail -f /app/logs/webui-`$(date +%Y%m%d).txt 2>/dev/null || tail -f /app/logs/*.txt"
+docker compose -f $activeCompose exec $serviceWebUI sh -c "tail -f /app/logs/webui-`$(date +%Y%m%d).log 2>/dev/null || tail -f /app/logs/*.log 2>/dev/null || (echo 'No log files yet — waiting...'; sleep 5; tail -f /app/logs/*.log)"
