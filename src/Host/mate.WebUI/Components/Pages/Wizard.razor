@@ -98,11 +98,11 @@
         <h2 class="section-title mb-4">Step 2 — Configure Agent</h2>
         <div class="form-group">
             <label class="form-label">Agent Name *</label>
-            <input class="form-control" @bind="_agentName" placeholder="e.g. My CopilotStudio Bot" />
+            <input class="form-control" @bind="_agentName" @bind:event="oninput" placeholder="e.g. My CopilotStudio Bot" />
         </div>
         <div class="form-group">
             <label class="form-label">Description</label>
-            <input class="form-control" @bind="_agentDescription" placeholder="Optional description" />
+            <input class="form-control" @bind="_agentDescription" @bind:event="oninput" placeholder="Optional description" />
         </div>
         <div class="form-group">
             <label class="form-label">Environment</label>
@@ -115,7 +115,7 @@
         </div>
         <div class="form-group">
             <label class="form-label">Tags (comma-separated)</label>
-            <input class="form-control" @bind="_agentTags" placeholder="tag1, tag2" />
+            <input class="form-control" @bind="_agentTags" @bind:event="oninput" placeholder="tag1, tag2" />
         </div>
         @if (_configFields.Any())
         {
@@ -137,7 +137,7 @@
                     else if (field.FieldType is "password" or "secret")
                     {
                         <input type="password" class="form-control" value="@GetConfigValue(field.Key)"
-                               @onchange="e => SetConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                               @oninput="e => SetConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
                                placeholder="@field.Description" />
                     }
                     else if (field.FieldType == "boolean")
@@ -152,7 +152,7 @@
                     else
                     {
                         <input type="text" class="form-control" value="@GetConfigValue(field.Key)"
-                               @onchange="e => SetConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
+                               @oninput="e => SetConfigValue(field.Key, e.Value?.ToString() ?? string.Empty)"
                                placeholder="@field.Description" />
                     }
                 </div>
@@ -210,11 +210,11 @@
         <h2 class="section-title mb-4">Step 4 — Create Test Suite <small class="text-muted ms-2" style="font-size:13px">(optional)</small></h2>
         <div class="form-group">
             <label class="form-label">Test Suite Name</label>
-            <input class="form-control" @bind="_suiteName" placeholder="Leave blank to skip" />
+            <input class="form-control" @bind="_suiteName" @bind:event="oninput" placeholder="Leave blank to skip" />
         </div>
         <div class="form-group">
             <label class="form-label">Description</label>
-            <input class="form-control" @bind="_suiteDescription" placeholder="Optional" />
+            <input class="form-control" @bind="_suiteDescription" @bind:event="oninput" placeholder="Optional" />
         </div>
         <div class="form-group">
             <label class="form-label">Pass Threshold</label>
