@@ -312,7 +312,7 @@ else
                                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px">
                                     @if (r.TestCase?.UserInput?.Length > 0)
                                     {
-                                        <div style="background:white;padding:12px;border-radius:6px;border-left:3px solid var(--primary)">
+                                        <div class="report-callout" style="border-left-color:var(--primary)">
                                             <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">User Input</div>
                                             <div style="font-size:13px;color:var(--text-primary);line-height:1.5">@string.Join(" → ", r.TestCase.UserInput.Take(3))@(r.TestCase.UserInput.Length > 3 ? "…" : "")</div>
                                         </div>
@@ -320,14 +320,14 @@ else
                                     @if (!string.IsNullOrWhiteSpace(r.TestCase?.ReferenceAnswer) || !string.IsNullOrWhiteSpace(r.TestCase?.AcceptanceCriteria))
                                     {
                                         var _exp = r.TestCase?.ReferenceAnswer ?? r.TestCase?.AcceptanceCriteria ?? "";
-                                        <div style="background:white;padding:12px;border-radius:6px;border-left:3px solid var(--success)">
+                                        <div class="report-callout" style="border-left-color:var(--success)">
                                             <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Expected</div>
                                             <div style="font-size:13px;color:var(--text-primary);line-height:1.5">@(_exp.Length > 250 ? _exp[..248] + "…" : _exp)</div>
                                         </div>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(r.Rationale))
                                     {
-                                        <div style="background:white;padding:12px;border-radius:6px;border-left:3px solid var(--warning)">
+                                        <div class="report-callout" style="border-left-color:var(--warning)">
                                             <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Judge Rationale</div>
                                             <div style="font-size:13px;color:var(--text-primary);line-height:1.5">@r.Rationale</div>
                                         </div>
@@ -353,8 +353,8 @@ else
                                 @if (_scoreHistory.TryGetValue(r.TestCaseId, out var _hist) && _hist.Count >= 2)
                                 {
                                     var _delta = _hist.Last() - _hist.First();
-                                    <div style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:white;border-radius:6px;border-left:3px solid #8b5cf6">
-                                        <span style="font-weight:600;color:#6d28d9">Score history (@_hist.Count runs):</span>
+                                    <div class="report-callout" style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-left-color:var(--secondary);padding:8px 12px">
+                                        <span style="font-weight:600;color:var(--secondary)">Score history (@_hist.Count runs):</span>
                                         <div style="display:flex;gap:3px;align-items:center">
                                             @foreach (var _s in _hist)
                                             {

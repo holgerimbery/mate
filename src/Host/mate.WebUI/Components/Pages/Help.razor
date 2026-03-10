@@ -17,7 +17,7 @@
     <p>Source, author info, runtime environment and API reference for @BrandInfo.BrandName
         @if (!string.IsNullOrEmpty(_appVersion))
         {
-            <span class="badge ms-2" style="background:var(--primary,#0066cc);color:#fff;font-size:11px;font-weight:600;padding:2px 10px;border-radius:10px;vertical-align:middle">@_appVersion</span>
+            <span class="badge ms-2" style="background:var(--primary);color:#fff;font-size:11px;font-weight:600;padding:2px 10px;border-radius:10px;vertical-align:middle">@_appVersion</span>
         }
     </p>
 
@@ -26,7 +26,7 @@
     <!-- Source & Documentation -->
     <div class="col-md-4">
         <div class="section-card h-100 d-flex flex-column">
-            <div style="width:48px;height:48px;background:linear-gradient(135deg,#24292e,#1a1e22);border-radius:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">
+            <div class="icon-tile-lg icon-tile-github">
                 <i class="bi bi-github" style="font-size:24px"></i>
             </div>
             <h2 class="section-title">Source &amp; Documentation</h2>
@@ -41,7 +41,7 @@
     <!-- About the Author -->
     <div class="col-md-4">
         <div class="section-card h-100 d-flex flex-column">
-            <div style="width:48px;height:48px;background:linear-gradient(135deg,#0066cc,#003d99);border-radius:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">
+            <div class="icon-tile-lg icon-tile-primary">
                 <i class="bi bi-person-circle" style="font-size:24px"></i>
             </div>
             <h2 class="section-title">About the Author</h2>
@@ -56,7 +56,7 @@
     <!-- Runtime Environment -->
     <div class="col-md-4">
         <div class="section-card h-100">
-            <div style="width:48px;height:48px;background:linear-gradient(135deg,#37474f,#1c2529);border-radius:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:center;color:#fff">
+            <div class="icon-tile-lg icon-tile-neutral-dark">
                 <i class="bi bi-server" style="font-size:24px"></i>
             </div>
             <h2 class="section-title">Runtime Environment</h2>
@@ -157,15 +157,15 @@
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
                     @foreach (var check in _healthChecks)
                     {
-                        <div class="kpi-card" style="border-left:4px solid @(check.Ok ? "#28a745" : "#dc3545");text-align:left;min-height:90px">
+                        <div class="kpi-card" style="border-left:4px solid @(check.Ok ? "var(--success)" : "var(--danger)");text-align:left;min-height:90px">
                             <div style="font-size:1rem;margin-bottom:4px">
                                 @if (check.Ok)
                                 {
-                                    <i class="bi bi-check-circle-fill" style="color:#28a745"></i>
+                                    <i class="bi bi-check-circle-fill" style="color:var(--success)"></i>
                                 }
                                 else
                                 {
-                                    <i class="bi bi-x-circle-fill" style="color:#dc3545"></i>
+                                    <i class="bi bi-x-circle-fill" style="color:var(--danger)"></i>
                                 }
                                 <strong style="margin-left:6px;font-size:13px">@check.Name</strong>
                             </div>
