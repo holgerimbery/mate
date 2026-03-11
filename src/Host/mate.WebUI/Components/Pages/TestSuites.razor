@@ -116,6 +116,7 @@
                                                         <td>@(tc.IsActive ? "✓" : "✗")</td>
                                                         <td>
                                                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
+                                                            <button class="btn btn-sm btn-secondary" @onclick="() => CloneCase(tc)" title="Clone this test case"><i class="bi bi-copy"></i> Clone</button>
                                                             <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
                                                         </td>
                                                     </tr>
@@ -994,6 +995,35 @@ else if (_showSuiteForm)
         Db.TestCases.Remove(_deleteCase);
         await Db.SaveChangesAsync();
         _deleteCase = null;
+        await LoadAsync();
+    }
+
+    private async Task CloneCase(TestCase original)
+    {
+        var suite = _suites.FirstOrDefault(s => s.Id == original.SuiteId);
+        var maxSortOrder = suite?.TestCases.Any() == true ? suite.TestCases.Max(tc => tc.SortOrder) : 0;
+        var clone = new TestCase
+        {
+            Id = Guid.NewGuid(),
+            SuiteId = original.SuiteId,
+            TenantId = original.TenantId,
+            Name = $"Copy of {original.Name}",
+            Description = original.Description,
+            UserInput = [.. original.UserInput],
+            AcceptanceCriteria = original.AcceptanceCriteria,
+            ExpectedIntent = original.ExpectedIntent,
+            ExpectedEntities = [.. original.ExpectedEntities],
+            ReferenceAnswer = original.ReferenceAnswer,
+            Tags = [.. original.Tags],
+            SortOrder = maxSortOrder + 1,
+            IsActive = original.IsActive,
+            SourceDocumentId = original.SourceDocumentId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        Db.TestCases.Add(clone);
+        AuditHelper.Log(Db, clone.TenantId, "Cloned", "TestCase", clone.Id, _userId, clone.Name);
+        await Db.SaveChangesAsync();
         await LoadAsync();
     }
 
