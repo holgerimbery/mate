@@ -311,54 +311,56 @@ Implement a collapsible icon sidebar:
 - [x] **E4-08** **Dashboard page** — KPI cards, pass rate trend chart, recent runs table, per-module breakdown
 - [x] **E4-09** **Judge Rubrics page** — RubricSet CRUD, criteria editor, assign to test suite
 - [x] **E4-10** **Run Report page** — results table, transcript modal, human verdict override
-- [x] **E4-11** **Help page** — documentation links, REST API reference table, OpenAPI download, Interactive API Explorer link
+- [x] **E4-11** **Help page** — documentation links, REST API reference table, OpenAPI download, Interactive API Explorer link, changelog link, runtime database mode badge
 - [x] **E4-12** **Audit Log page** (admin) — paginated event log with filters
 - [x] **E4-13** **API Keys page** (admin) — generate, list, revoke keys; show scopes
 - [x] **E4-14** **Settings page** (admin) — tabs: AI Judge config, Question Generation, Modules, Tenant
 
 ### v0.1.0 — Visual Design
 
-- [ ] **E4-15** Target color palette: `#f5f6f8` background, `#ffffff` card/sidebar, `#1f1f23` text, Bootstrap Icons
-- [ ] **E4-16** Responsive layout — mobile-friendly collapsed sidebar state
-- [ ] **E4-17** Page-level title + description header
+- [x] **E4-15** Dark mode contrast fixes — explicit `color: var(--text-primary)` on card/header surfaces, spinner color fix, expanded row styling, improved icon tile contrast
+- [x] **E4-16** CSS gradient tokenization — migrated 16 inline gradient styles to reusable `.icon-tile` utility classes with 8 solid and 5 soft variants; applied across Home, Settings, Help, Agents, Wizard, RunReport
+- [x] **E4-17** Version badge normalization — strip leading `v`/`V` prefix from VERSION file; applied consistently on Home and Help pages
+- [ ] **E4-18** Responsive layout — mobile-friendly collapsed sidebar state
+- [ ] **E4-19** Page-level title + description header
 
 ### v0.1.0 — Run Report
 
-- [x] **E4-18** Regression detection panel — amber warning panel when a test case result changes from pass → fail vs. the previous run; side-by-side rationale diff
-- [x] **E4-19** Pass rate by category/tag breakdown table on Run Report
-- [x] **E4-20** Per-result confidence score trend — sparkline of last 6 runs + delta indicator per test case row
-- [x] **E4-21** CSV export of run results from Run Report page
-- [x] **E4-22** Refine Rubric button — sends all human-override disagreements (human ≠ AI verdict) to LLM and returns proposed rubric update; one-click on Run Report
+- [x] **E4-20** Regression detection panel — amber warning panel when a test case result changes from pass → fail vs. the previous run; side-by-side rationale diff
+- [x] **E4-21** Pass rate by category/tag breakdown table on Run Report
+- [x] **E4-22** Per-result confidence score trend — sparkline of last 6 runs + delta indicator per test case row
+- [x] **E4-23** CSV export of run results from Run Report page
+- [x] **E4-24** Refine Rubric button — sends all human-override disagreements (human ≠ AI verdict) to LLM and returns proposed rubric update; one-click on Run Report
 
 ### v0.1.0 — Dashboard
 
-- [ ] **E4-23** Pass rate sparkline trend (last 10 runs) on Dashboard/Home page
-- [ ] **E4-24** Latency P95 sparkline trend (last 10 runs) on Dashboard/Home page
-- [ ] **E4-25** Top-5 most frequently failing test cases widget on Dashboard
-- [ ] **E4-26** System status badges on Dashboard — shows DB / AI judge / active connector health at a glance (DB/DirectLine/AI Judge)
-- [ ] **E4-27** Agent environment filter on run history table (dev/test/staging/production)
+- [ ] **E4-25** Pass rate sparkline trend (last 10 runs) on Dashboard/Home page
+- [ ] **E4-26** Latency P95 sparkline trend (last 10 runs) on Dashboard/Home page
+- [ ] **E4-27** Top-5 most frequently failing test cases widget on Dashboard
+- [ ] **E4-28** System status badges on Dashboard — shows DB / AI judge / active connector health at a glance (DB/DirectLine/AI Judge)
+- [ ] **E4-29** Agent environment filter on run history table (dev/test/staging/production)
 
 ### v0.1.0 — Test Suites page
 
-- [ ] **E4-28** Import / export test suite as JSON — download whole suite + test cases as JSON; import from JSON file
-- [ ] **E4-29** Test case bulk import via CSV/Excel file (standard CSV format with question, expectedAnswer, tags columns)
-- [ ] **E4-30** Bulk test case operations — multi-select checkboxes → bulk delete / activate / deactivate
-- [ ] **E4-31** Clone test case — copy a test case within the same suite with a single click
-- [ ] **E4-32** Keyword search + active/inactive filter for test cases within a suite
-- [ ] **E4-33** Re-run failed — re-execute only the failed test cases from a previous run (passes selective `TestCaseIds[]` to the run API)
+- [ ] **E4-30** Import / export test suite as JSON — download whole suite + test cases as JSON; import from JSON file
+- [ ] **E4-31** Test case bulk import via CSV/Excel file (standard CSV format with question, expectedAnswer, tags columns)
+- [ ] **E4-32** Bulk test case operations — multi-select checkboxes → bulk delete / activate / deactivate
+- [ ] **E4-33** Clone test case — copy a test case within the same suite with a single click
+- [ ] **E4-34** Keyword search + active/inactive filter for test cases within a suite
+- [ ] **E4-35** Re-run failed — re-execute only the failed test cases from a previous run (passes selective `TestCaseIds[]` to the run API)
 
 ### v0.1.0 — Documents page
 
-- [ ] **E4-34** HTTP/HTTPS URL paste import — user pastes a public URL; server-side fetch with SSRF protection (block loopback/private CIDRs); 30-second timeout; content chunked same as file uploads
-- [ ] **E4-35** Generate test cases from document — per-document button in Documents page that triggers the `ModelQGen` module and optionally assigns generated cases to a selected suite
+- [ ] **E4-40** HTTP/HTTPS URL paste import — user pastes a public URL; server-side fetch with SSRF protection (block loopback/private CIDRs); 30-second timeout; content chunked same as file uploads
+- [ ] **E4-41** Generate test cases from document — per-document button in Documents page that triggers the `ModelQGen` module and optionally assigns generated cases to a selected suite
 
 ### v0.1.0 — Settings page
 
-- [ ] **E4-36** Run history pruning — retention threshold in days + "Prune Now" button in Settings; deletes runs (and their results/transcripts) older than the threshold
+- [ ] **E4-42** Run history pruning — retention threshold in days + "Prune Now" button in Settings; deletes runs (and their results/transcripts) older than the threshold
 
 ### v0.1.0 — Auth-enabled pages
 
-- [ ] **E4-37** `WelcomePage.razor` (`/welcome`) — new-user landing page shown before onboarding; `AccessDenied.razor` (`/access-denied`) — 403 page for insufficient role; both needed when `Authentication:Scheme != None`
+- [ ] **E4-43** `WelcomePage.razor` (`/welcome`) — new-user landing page shown before onboarding; `AccessDenied.razor` (`/access-denied`) — 403 page for insufficient role; both needed when `Authentication:Scheme != None`
 
 ---
 
