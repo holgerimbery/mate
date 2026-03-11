@@ -269,7 +269,22 @@ Example: When completing E4-17, E4-18 and all subsequent items shift:
 
 3. **Mirror to `docs/wiki/Developer-Backlog.md`** with identical renumbering.
 
-#### 3d. Security & Integrity Checks (CRITICAL)
+#### 3d. Update User-Facing Version References
+
+1. **Update `README.md`** — bump version in:
+   - Version badge or first-line version reference
+   - Any installation/quickstart instructions mentioning specific version
+   - Replace `vX.Y.Z-1` with `vX.Y.Z`
+
+2. **Update `docs/wiki/Home.md`** — bump version in:
+   - Welcome header or introduction section
+   - Current version display
+   - Any "Latest Release" references
+   - Replace `vX.Y.Z-1` with `vX.Y.Z`
+
+**Note:** These are user-facing files that must match VERSION file for consistency.
+
+#### 3e. Security & Integrity Checks (CRITICAL)
 
 **Before committing, verify NONE of the following appear in the final files:**
 
@@ -293,11 +308,13 @@ git diff HEAD --cached CHANGELOG.md BACKLOG.md docs/wiki/Developer-Changelog.md 
 - ✅ Use placeholders like `__TENANT_ID__`, `__CLIENT_ID__`, `__SECRET__`
 - ✅ Document in a separate `.env.example` or `.env.template` file instead
 
-#### 3e. Final Verification Checklist
+#### 3f. Final Verification Checklist
 
 Before creating the final commit:
 
 - [ ] **VERSION file updated** to correct semver format (v#.#.#)
+- [ ] **README.md updated** with new version reference
+- [ ] **docs/wiki/Home.md updated** with new version reference
 - [ ] **CHANGELOG.md updated** with [Unreleased] → [v#.#.#] promotion
 - [ ] **docs/wiki/Developer-Changelog.md mirrored** with identical content
 - [ ] **BACKLOG.md updated** with completed item checkmarks and renumbering
@@ -306,12 +323,12 @@ Before creating the final commit:
 - [ ] **NO credentials or keys** in CHANGELOG/BACKLOG entries
 - [ ] **NO hardcoded URLs, emails, or paths** that reveal infrastructure
 - [ ] **Format consistent** — epic references (EPIC-##) on all entries
-- [ ] **All 4 files staged** before commit
+- [ ] **All 6 files staged** before commit (VERSION, README.md, Home.md, CHANGELOG.md, Developer-Changelog.md, BACKLOG.md, Developer-Backlog.md)
 
-#### 3f. Commit & Tag
+#### 3g. Commit & Tag
 
 ```bash
-git add VERSION CHANGELOG.md docs/wiki/Developer-Changelog.md BACKLOG.md docs/wiki/Developer-Backlog.md
+git add VERSION README.md docs/wiki/Home.md CHANGELOG.md docs/wiki/Developer-Changelog.md BACKLOG.md docs/wiki/Developer-Backlog.md
 
 git commit -m "release: vX.Y.Z
 
@@ -319,6 +336,7 @@ git commit -m "release: vX.Y.Z
 - Fixes: [description of fixes] (EPIC-##, EPIC-##)
 - UI: [description of UI changes] (EPIC-##)
 
+Updated version references in README and wiki Home page.
 Changelog and backlog synchronized across root and wiki.
 VERSION: vX.Y.Z
 Security: no credentials or secrets in release notes."
