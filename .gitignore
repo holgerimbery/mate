@@ -50,3 +50,5 @@ docs/concepts/
 infra/azure/scripts/.pg-password
 .gitignore
 infra/azure/scripts/.credentials
+.github/project-roadmap
+.github/project-roadmap/README.md
