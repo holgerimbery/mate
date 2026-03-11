@@ -6,6 +6,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Help page changelog link** — new "View Changelog" button in the Source & Documentation section linking to Developer-Changelog wiki for easy access to release history and feature updates.
+- **Database mode badge on Help page** — new Runtime Environment row showing detected PostgreSQL or SQLite database provider; helps developers verify deployment database configuration at a glance.
+
+### Changed
+- **CSS gradient tokenization** — migrated 16 inline gradient styles from Razor components to reusable utility classes (`.icon-tile`, `.icon-tile-{size}`, `.icon-tile-{color}`, soft variants); reduces markup duplication across Home, Settings, Help, Agents, Wizard, and RunReport pages.
+- **Version badge normalization** — strip leading `v`/`V` prefix from version string read from VERSION file; applied consistently across Home and Help version badges for uniform display.
+
+### Fixed
+- **Dark mode contrast issues** — explicitly set `color: var(--text-primary)` on `.section-card`, `.kpi-card`, `.mate-header`, `.mate-page` to prevent Bootstrap's `--bs-body-color` from leaking through card surfaces when `data-bs-theme` is not set.
+- **Dark mode spinner color** — fix `.spinner-border` icon color in dark mode to use theme-aware styling instead of default Bootstrap color.
+- **TestSuites expanded row styling** — replace ad-hoc `var(--bg-page,#f5f7fa)` fallback (always light) with consistent `var(--surface-2)` + explicit text colors for dark mode compatibility.
+- **Help page GitHub icon contrast** — adjust icon tile color from `#24292e` to `#2d333b`/`#555f6b` for better contrast in both light and dark modes.
+- **Health check status icons** — use theme-aware `var(--success)` and `var(--danger)` for pass/fail indicators instead of hardcoded colors.
+- **Azure quickstart package script synchronization** — ensure all helper scripts (setup-env, setup-keyvault-secrets, deploy, update-container-images, deploy-whatif, cleanup-rg, repair-runtime-secrets) are copied into the standalone quickstart package for consistent deployment experience.
+
 ---
 
 ## [v0.6.3] — 2026-03-10
