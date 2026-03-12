@@ -103,6 +103,14 @@ This performs a **zero-downtime rolling update**:
 - ✅ Runs `repair-runtime-secrets.ps1` automatically after deployment
 - ⏱️ **Typical runtime:** 5–10 minutes
 
+> **Custom domain note:** `update-container-images.ps1` redeploys Container App configuration from Bicep state. If your custom hostname is not tracked in IaC, rebind it after the update.
+>
+> ```powershell
+> pwsh ../infra/azure/scripts/bind-custom-domain.ps1 -DomainName '<your-custom-domain>'
+> ```
+>
+> Example values: `app.example.com`, `portal.contoso.com`
+
 > **💡 Note:** The script now waits until deployment completes before returning. You can still monitor progress with:
 > ```powershell
 > az deployment group show --name main --resource-group <rg-name> --query "{State:properties.provisioningState, Duration:properties.duration}" -o table
