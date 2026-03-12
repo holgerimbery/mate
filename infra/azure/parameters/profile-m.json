@@ -10,6 +10,12 @@
     "webMemory": { "value": "2Gi" },
     "workerCpu": { "value": "1.0" },
     "workerMemory": { "value": "2Gi" },
-    "queueActivationThreshold": { "value": 2 }
+    "queueActivationThreshold": { "value": 2 },
+    "brandingBrandName": { "value": "mate" },
+    "brandingBrandTagline": { "value": "Multi-Agent Testing Environment - AI agent quality testing platform" },
+    "brandingBrandCliDescription": { "value": "quality testing tool for conversational AI agents" },
+    "brandingLogoUrl": { "value": "/mate-logo.png" },
+    "brandingLogoWideUrl": { "value": "/mate-logo-wide.png" },
+    "brandingApiKeyPrefix": { "value": "mate_" }
   }
 }

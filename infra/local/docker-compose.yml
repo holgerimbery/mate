@@ -65,6 +65,12 @@ services:
       - AzureAd__RedirectUri=${AzureAd__RedirectUri:-}
       - ReverseProxy__TrustedProxyAddress=${ReverseProxy__TrustedProxyAddress:-}
       - Monitoring__Provider=Generic
+      - Branding__BrandName=${Branding__BrandName:-mate}
+      - Branding__BrandTagline=${Branding__BrandTagline:-Multi-Agent Testing Environment - AI agent quality testing platform}
+      - Branding__BrandCliDescription=${Branding__BrandCliDescription:-quality testing tool for conversational AI agents}
+      - Branding__LogoUrl=${Branding__LogoUrl:-/mate-logo.png}
+      - Branding__LogoWideUrl=${Branding__LogoWideUrl:-/mate-logo-wide.png}
+      - Branding__ApiKeyPrefix=${Branding__ApiKeyPrefix:-mate_}
       # ── Storage tier ──────────────────────────────────────────────────────
       # "Container" = PostgreSQL + Azurite  (default)
       # "Azure"     = Azure Database for PostgreSQL + Azure Blob Storage
