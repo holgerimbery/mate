@@ -209,6 +209,60 @@
     .feature.success .feature-icon { background: var(--success); }
     .feature.warning .feature-icon { background: var(--accent); }
 
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .info-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    }
+
+    .info-card-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .icon-tile {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .icon-tile.primary { background: var(--primary); }
+    .icon-tile.info { background: var(--info); }
+
+    .info-card h3 {
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    .info-card p {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .link-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     .actions {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -273,7 +327,8 @@
 
     @media (max-width: 900px) {
       .hero-body,
-      .features {
+      .features,
+      .info-grid {
         grid-template-columns: 1fr 1fr;
       }
     }
@@ -282,6 +337,7 @@
       .hero-top,
       .hero-body,
       .features,
+      .info-grid,
       .stats {
         grid-template-columns: 1fr;
         display: grid;
@@ -313,7 +369,7 @@
                src="https://raw.githubusercontent.com/holgerimbery/mate/main/src/Host/mate.WebUI/wwwroot/mate-logo.png"
                alt="mate logo" />
           <div>
-            <h1>mate</h1>
+            <h1>mate365</h1>
             <p class="tagline">Multi-Agent Testing Environment — AI Agent Quality Testing Platform</p>
           </div>
         </div>
@@ -332,8 +388,8 @@
             tracks quality over time, and red-teams them for adversarial vulnerabilities. It supports
             Microsoft Copilot Studio, Azure AI Foundry*, generic HTTP agents*, and Parloa* out of the box,
             with a modular architecture for custom connectors, judges, and red-team providers.
-        <p> * Roadmap items  
-        </p>
+          </p>
+          <p class="actions-note">* Roadmap items</p>
         </div>
         <div class="section-card">
           <div class="section-title">At a Glance</div>
@@ -347,7 +403,7 @@
               <div class="stat-label">Connector Types</div>
             </div>
             <div class="stat">
-              <div class="stat-value">3</div>
+              <div class="stat-value">4</div>
               <div class="stat-label">Judge Modes</div>
             </div>
             <div class="stat">
@@ -368,7 +424,7 @@
       <article class="feature secondary">
         <div class="feature-icon">J</div>
         <h3>Pluggable judge modules</h3>
-        <p>Combine deterministic rubrics, LLM scoring, and hybrid evaluation strategies.</p>
+        <p>Combine deterministic rubrics, LLM scoring, CopilotStudioJudge Mode with rubrics and hybrid evaluation strategies.</p>
       </article>
       <article class="feature success">
         <div class="feature-icon">R</div>
@@ -379,6 +435,30 @@
         <div class="feature-icon">D</div>
         <h3>Docker and Azure ready</h3>
         <p>Run locally with Docker Compose or deploy with Bicep to Azure Container Apps.</p>
+      </article>
+    </section>
+
+    <section class="info-grid">
+      <article class="info-card">
+        <div class="info-card-head">
+          <div class="icon-tile primary">H</div>
+          <h3>About the Author</h3>
+        </div>
+        <p>Created by Holger Imbery. Connect on GitHub or LinkedIn to learn more.</p>
+        <div class="link-row">
+          <a class="btn btn-secondary" href="https://github.com/holgerimbery" target="_blank" rel="noopener noreferrer">GitHub Profile</a>
+          <a class="btn btn-secondary" href="https://www.linkedin.com/in/holgerimbery/" target="_blank" rel="noopener noreferrer">LinkedIn Profile</a>
+        </div>
+      </article>
+      <article class="info-card">
+        <div class="info-card-head">
+          <div class="icon-tile info">R</div>
+          <h3>Latest Release</h3>
+        </div>
+        <p>Open the newest release package and changelog directly on GitHub.</p>
+        <div class="link-row">
+          <a class="btn btn-secondary" href="https://github.com/holgerimbery/mate/releases/latest" target="_blank" rel="noopener noreferrer">Open Latest Release</a>
+        </div>
       </article>
     </section>
 
@@ -405,6 +485,11 @@
               <path d="M3 3.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5z"/>
             </svg>
             Documentation Wiki
+          </a>
+          <a class="btn btn-secondary"
+             href="https://github.com/holgerimbery/mate/releases/latest"
+             target="_blank" rel="noopener noreferrer">
+            Latest Release
           </a>
         </div>
       </div>
