@@ -58,6 +58,24 @@ param blobContainerName string = 'mate-blobs'
 @description('Service Bus queue name for test runs')
 param serviceBusQueueName string = 'test-runs'
 
+@description('Instance-wide brand name shown in UI and API metadata')
+param brandingBrandName string = 'mate'
+
+@description('Instance-wide brand tagline shown on the home page')
+param brandingBrandTagline string = 'Multi-Agent Testing Environment - AI agent quality testing platform'
+
+@description('CLI short description used in help text')
+param brandingBrandCliDescription string = 'quality testing tool for conversational AI agents'
+
+@description('Square logo URL/path (for favicon and compact sidebar)')
+param brandingLogoUrl string = '/mate-logo.png'
+
+@description('Wide logo URL/path (for expanded sidebar)')
+param brandingLogoWideUrl string = '/mate-logo-wide.png'
+
+@description('API key visible prefix (for example mate_)')
+param brandingApiKeyPrefix string = 'mate_'
+
 @description('PostgreSQL database name')
 param postgresDatabaseName string = 'mate'
 
@@ -131,6 +149,12 @@ module containerApps './modules/container-apps.bicep' = {
     workerCpu: workerCpu
     workerMemory: workerMemory
     queueActivationThreshold: queueActivationThreshold
+    brandingBrandName: brandingBrandName
+    brandingBrandTagline: brandingBrandTagline
+    brandingBrandCliDescription: brandingBrandCliDescription
+    brandingLogoUrl: brandingLogoUrl
+    brandingLogoWideUrl: brandingLogoWideUrl
+    brandingApiKeyPrefix: brandingApiKeyPrefix
     postgresServerName: deployPostgres ? postgres!.outputs.serverName : ''
     postgresDatabaseName: deployPostgres ? postgres!.outputs.databaseName : ''
     postgresAdminLogin: postgresAdminLogin

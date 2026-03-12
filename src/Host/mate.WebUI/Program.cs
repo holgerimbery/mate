@@ -13,6 +13,7 @@ using mate.Core.DocumentProcessing;
 using mate.Core.Execution;
 using mate.Core.Tenancy;
 using mate.Data;
+using mate.Domain;
 using mate.Domain.Contracts.Infrastructure;
 using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
@@ -67,6 +68,7 @@ try
     });
 
     var config = builder.Configuration;
+    BrandInfo.ConfigureFromConfiguration(config);
 
     // ── Forwarded Headers (nginx / reverse proxy) ────────────────────────────
     // ASPNETCORE_FORWARDEDHEADERS_ENABLED=true in the container environment
@@ -225,10 +227,10 @@ try
     {
         options.AddDocumentTransformer((document, context, ct) =>
         {
-            document.Info.Title       = "mate — AI Agent Quality Testing Platform";
+            document.Info.Title       = $"{BrandInfo.BrandName} — AI Agent Quality Testing Platform";
             document.Info.Version     = "v1";
             document.Info.Description =
-                "REST API for the **mate** AI Agent Quality Testing Platform. " +
+                $"REST API for the **{BrandInfo.BrandName}** AI Agent Quality Testing Platform. " +
                 "Manage agents, define and run test suites, retrieve per-case evaluation results " +
                 "and conversation transcripts, and administer the platform.\n\n" +
                 "**Authentication:** include your key in the `X-Api-Key` request header. " +
@@ -376,7 +378,7 @@ try
     app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference(options =>
     {
-        options.Title = "mate API Reference";
+        options.Title = $"{BrandInfo.BrandName} API Reference";
         options.Theme = ScalarTheme.Default;
         options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
     }).AllowAnonymous();
@@ -949,7 +951,7 @@ try
     {
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.BadRequest("Name is required.");
-        var rawKey = $"mate_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
+        var rawKey = $"{BrandInfo.ApiKeyPrefix}{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
         var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
         var prefix = rawKey[..12];
         var apiKey = new ApiKey

@@ -17,6 +17,12 @@ param webMemory string
 param workerCpu string
 param workerMemory string
 param queueActivationThreshold int
+param brandingBrandName string
+param brandingBrandTagline string
+param brandingBrandCliDescription string
+param brandingLogoUrl string
+param brandingLogoWideUrl string
+param brandingApiKeyPrefix string
 param postgresServerName string = ''
 param postgresDatabaseName string = ''
 param postgresAdminLogin string = ''
@@ -130,6 +136,30 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'Monitoring__Provider'
               value: 'ApplicationInsights'
+            }
+            {
+              name: 'Branding__BrandName'
+              value: brandingBrandName
+            }
+            {
+              name: 'Branding__BrandTagline'
+              value: brandingBrandTagline
+            }
+            {
+              name: 'Branding__BrandCliDescription'
+              value: brandingBrandCliDescription
+            }
+            {
+              name: 'Branding__LogoUrl'
+              value: brandingLogoUrl
+            }
+            {
+              name: 'Branding__LogoWideUrl'
+              value: brandingLogoWideUrl
+            }
+            {
+              name: 'Branding__ApiKeyPrefix'
+              value: brandingApiKeyPrefix
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
