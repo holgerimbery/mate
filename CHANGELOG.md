@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [v0.7.1] — 2026-03-12
+
+### Fixed
+- minor branding issue
+- custom domain binding for azure container apps
+
+---
+
 ## [v0.7.0] — 2026-03-11
 
 ### Added
