@@ -62,4 +62,22 @@ Before creating any commit:
 4. Only commit after user approval.
 5. After committing, ask the user whether to proceed to the next item.
 
+## 7. Mandatory Item Status Transitions
+
+For each tracked backlog item:
+
+1. When implementation work starts, immediately move the item status to `In Progress`.
+2. Keep the item in `In Progress` while implementation/verification/docs/commit are in progress.
+3. After the item is committed, immediately move the item status to `Done`.
+4. Never leave a committed item in `Todo` or `In Progress`.
+
+## 8. Mandatory Commit Transparency In Chat
+
+For every commit-related handover in chat:
+
+1. Show the exact commit message in the chat.
+2. Show the list of files affected by that commit.
+3. When asking for approval before commit, include the planned file list.
+4. After committing, include the final committed file list and commit hash.
+
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
