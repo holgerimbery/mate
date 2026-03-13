@@ -14,10 +14,9 @@
 
 @if (!_showCreateForm)
 {
-    <div class="mate-header">
-        <h1>API Keys</h1>
-        <p>Machine-to-machine keys for CI/CD pipelines and external tooling. The raw key is shown only once on creation — store it in a secure secret store.</p>
-    </div>
+    <PageHeader
+        Title="API Keys"
+        Description="Machine-to-machine keys for CI/CD pipelines and external tooling. The raw key is shown only once on creation — store it in a secure secret store." />
     <div class="mate-page">
 
     @if (!string.IsNullOrEmpty(_error))
@@ -138,10 +137,9 @@
 }
 else
 {
-    <div class="mate-header">
-        <h1>Generate API Key</h1>
-        <p>Create a new machine-to-machine key. The raw key is shown only once — store it securely.</p>
-    </div>
+    <PageHeader
+        Title="Generate API Key"
+        Description="Create a new machine-to-machine key. The raw key is shown only once — store it securely." />
     <div class="mate-page">
         <div class="section-card">
             <h2 class="section-title mb-4">Key Details</h2>

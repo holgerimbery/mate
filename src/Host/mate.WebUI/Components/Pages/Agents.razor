@@ -16,10 +16,7 @@
 
 @if (!_showForm)
 {
-    <div class="mate-header">
-        <h1>Agents</h1>
-        <p>Manage AI agent connections and configurations.</p>
-    </div>
+    <PageHeader Title="Agents" Description="Manage AI agent connections and configurations." />
     <div class="mate-page">
         <div class="section-card">
             <div class="section-header">
@@ -72,10 +69,9 @@
 }
 else
 {
-    <div class="mate-header">
-        <h1>@(_editAgent is null ? "New Agent" : "Edit Agent — " + _editAgent.Name)</h1>
-        <p>@(_editAgent is null ? "Configure a new agent connection." : "Update agent details and connector configuration.")</p>
-    </div>
+    <PageHeader
+        Title="@(_editAgent is null ? "New Agent" : "Edit Agent — " + _editAgent.Name)"
+        Description="@(_editAgent is null ? "Configure a new agent connection." : "Update agent details and connector configuration.")" />
     <div class="mate-page">
 
         <!-- Basic Information -->

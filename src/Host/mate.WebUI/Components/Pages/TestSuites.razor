@@ -18,10 +18,7 @@
 
 @if (!_showSuiteForm && _runSuite is null)
 {
-    <div class="mate-header">
-        <h1>Test Suites</h1>
-        <p>Manage test suites, test cases, and run evaluations against your agents.</p>
-    </div>
+    <PageHeader Title="Test Suites" Description="Manage test suites, test cases, and run evaluations against your agents." />
     <div class="mate-page">
         <div class="section-card">
             <div class="section-header">
@@ -142,10 +139,9 @@
 }
 else if (_showSuiteForm)
 {
-    <div class="mate-header">
-        <h1>@(_editSuite is null ? "New Test Suite" : "Edit Test Suite — " + _editSuite.Name)</h1>
-        <p>@(_editSuite is null ? "Create a new test suite to organise test cases." : "Update test suite details.")</p>
-    </div>
+    <PageHeader
+        Title="@(_editSuite is null ? "New Test Suite" : "Edit Test Suite — " + _editSuite.Name)"
+        Description="@(_editSuite is null ? "Create a new test suite to organise test cases." : "Update test suite details.")" />
     <div class="mate-page">
         <div class="section-card">
             <h2 class="section-title mb-4">Suite Details</h2>
@@ -419,10 +415,9 @@ else if (_showSuiteForm)
 @* ── Run view (in-page, no modal) ────────────────────────────────────────── *@
 @if (_runSuite is not null && !_showSuiteForm)
 {
-    <div class="mate-header">
-        <h1>Run — @_runSuite.Name</h1>
-        <p>Configure and start a test run for this suite.</p>
-    </div>
+    <PageHeader
+        Title="@($"Run — {_runSuite.Name}")"
+        Description="Configure and start a test run for this suite." />
     <div class="mate-page">
         <div class="section-card">
             <h2 class="section-title mb-4">Suite Details</h2>

@@ -10,10 +10,9 @@
 
 @if (!_showForm)
 {
-    <div class="mate-header">
-        <h1>Rubrics</h1>
-        <p>Define deterministic evaluation criteria for scoring agent responses without an LLM.</p>
-    </div>
+    <PageHeader
+        Title="Rubrics"
+        Description="Define deterministic evaluation criteria for scoring agent responses without an LLM." />
     <div class="mate-page">
         @if (!string.IsNullOrEmpty(_error))
         {
@@ -96,10 +95,9 @@
 else if (_formMode == "set")
 {
     <!-- Edit / New Rubric Set -->
-    <div class="mate-header">
-        <h1>@(_editSetId.HasValue ? "Edit Rubric Set" : "New Rubric Set")</h1>
-        <p>@(_editSetId.HasValue ? "Update the rubric set name, description, and scoring options." : "Define a new set of weighted evaluation criteria.")</p>
-    </div>
+    <PageHeader
+        Title="@(_editSetId.HasValue ? "Edit Rubric Set" : "New Rubric Set")"
+        Description="@(_editSetId.HasValue ? "Update the rubric set name, description, and scoring options." : "Define a new set of weighted evaluation criteria.")" />
     <div class="mate-page">
         <div class="section-card">
             <div class="form-group">
@@ -141,10 +139,9 @@ else if (_formMode == "set")
 else if (_formMode == "criteria" && _selectedRubricSet is not null)
 {
     <!-- Manage Criteria for a Rubric Set -->
-    <div class="mate-header">
-        <h1>Criteria — @_selectedRubricSet.Name</h1>
-        <p>Add, edit, and reorder evaluation criteria for this rubric set.</p>
-    </div>
+    <PageHeader
+        Title="@($"Criteria — {_selectedRubricSet.Name}")"
+        Description="Add, edit, and reorder evaluation criteria for this rubric set." />
     <div class="mate-page">
         <div class="d-flex justify-content-end mb-3">
             <button class="btn btn-secondary" @onclick="CloseForm"><i class="bi bi-arrow-left me-1"></i>Back to Rubrics</button>

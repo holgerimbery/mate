@@ -1,0 +1,22 @@
+<div class="mate-header page-header-pattern">
+    <div class="page-header-main">
+        <h1>@Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <p>@Description</p>
+        }
+    </div>
+
+    @if (HeaderContent is not null)
+    {
+        <div class="page-header-actions">
+            @HeaderContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? HeaderContent { get; set; }
+}
