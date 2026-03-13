@@ -22,9 +22,15 @@ Always do the following after implementing each item (unless the user explicitly
 
 1. Verify the app compiles successfully.
 2. Start all required local dependencies/services.
-3. Start the application so it is ready for browser testing.
+3. Start the application in container mode (not bare-metal) using a clean cycle with `debug-container.ps1 -Stop` followed by `debug-container.ps1 -Source build -Rebuild`.
 4. Share the exact URL(s) and minimal test steps so the user only needs to open the browser and verify.
 5. If startup fails, fix the startup/runtime issue before handing over verification steps.
+
+Container-first testing notes:
+
+1. Use `./debug-container.ps1 -Stop` followed by `./debug-container.ps1 -Source build -Rebuild` as the default verification/startup sequence.
+2. Do not hand over browser verification based on bare-metal `dotnet run` unless the user explicitly asks for bare-metal.
+3. Verify container health/readiness before claiming availability.
 
 ## 3. Mandatory Availability Validation Before Reporting
 
@@ -79,5 +85,14 @@ For every commit-related handover in chat:
 2. Show the list of files affected by that commit.
 3. When asking for approval before commit, include the planned file list.
 4. After committing, include the final committed file list and commit hash.
+
+## 9. Mandatory Outcome Reporting In Chat
+
+For every implementation/verification/commit handover in chat:
+
+1. Always state the concrete outcome first (what changed, what passed/failed, and current status).
+2. Do not use generic completion phrases without evidence.
+3. When a command or verification step is run, report the specific result (success/failure and key evidence).
+4. If something is pending, blocked, or not yet verified, state that explicitly.
 
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
