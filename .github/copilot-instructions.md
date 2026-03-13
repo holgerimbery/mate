@@ -52,4 +52,14 @@ When handing over an implemented item for verification:
 4. For UI changes, include checks for desktop and mobile (if applicable), and light mode + dark mode.
 5. Provide expected outcomes for each check so the user can confirm quickly.
 
+## 6. Mandatory Commit Message Confirmation
+
+Before creating any commit:
+
+1. Propose the exact commit message to the user.
+2. Provide short context with the approval request (what changed, scope/files, and why).
+3. Ask for explicit confirmation/approval of that commit message.
+4. Only commit after user approval.
+5. After committing, ask the user whether to proceed to the next item.
+
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
