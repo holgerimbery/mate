@@ -169,8 +169,10 @@ try
 
     // ── Authentication ───────────────────────────────────────────────────────
     var authScheme = config["Authentication:Scheme"] ?? "EntraId";
+    // "None" is treated as development bypass auth and should use the Generic handler.
+    var resolvedAuthScheme = authScheme is "None" ? "Generic" : authScheme;
 
-    IAuthModule authModule = authScheme switch
+    IAuthModule authModule = resolvedAuthScheme switch
     {
         "None" or "Generic" => new mate.Modules.Auth.Generic.GenericAuthModule(),
         "EntraId" or _ => new mate.Modules.Auth.EntraId.EntraIdAuthModule(),
@@ -181,14 +183,14 @@ try
     // DefaultScheme=Cookies, DefaultChallengeScheme=OpenIdConnect.
     // Overriding those options explicitly (as we did before) can conflict with
     // what the library configures in its own IConfigureOptions pass.
-    AuthenticationBuilder authBuilder = authScheme is "EntraId"
+    AuthenticationBuilder authBuilder = resolvedAuthScheme is "EntraId"
         ? builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-        : builder.Services.AddAuthentication(authScheme);
+        : builder.Services.AddAuthentication(authModule.SchemeName);
 
     authModule.ConfigureAuthentication(authBuilder, config);
 
     // EntraId browser sign-in: register /MicrosoftIdentity/Account/* controller routes
-    if (authScheme is "EntraId")
+    if (resolvedAuthScheme is "EntraId")
         mate.Modules.Auth.EntraId.EntraIdAuthModule.AddMicrosoftIdentityUI(builder.Services);
 
     // No extra AddScheme — API key is handled by inline middleware only.
@@ -314,7 +316,7 @@ try
     // GET (HTTP 301), stripping the body → state is null → "message.State is null or empty".
     // For EntraId: nginx terminates TLS (prod) or the container runs plain HTTP (dev/Docker);
     // in both cases no HTTPS redirect is needed or safe.
-    if (authScheme is not "EntraId")
+    if (resolvedAuthScheme is not "EntraId")
     {
         app.UseHttpsRedirection();
     }
@@ -331,7 +333,7 @@ try
     app.UseAuthentication();
 
     // API key authentication middleware.
-    if (authScheme is not "Generic" and not "None")
+    if (resolvedAuthScheme is not "Generic")
     {
         app.Use(async (ctx, next) =>
         {
@@ -370,7 +372,7 @@ try
 
     // EntraId: map /MicrosoftIdentity/Account/{SignIn,SignOut,AccessDenied} controller routes
     // Registered AFTER UseAntiforgery.
-    if (authScheme is "EntraId")
+    if (resolvedAuthScheme is "EntraId")
         app.MapControllers();
 
     // ── Platform endpoints ───────────────────────────────────────────────────

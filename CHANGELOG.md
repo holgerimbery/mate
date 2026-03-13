@@ -6,6 +6,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Responsive sidebar behavior (E4-18)** — WebUI layout now uses an off-canvas sidebar on mobile (hidden by default), a topbar menu trigger, backdrop tap-to-close, and auto-close on navigation; desktop expand/collapse behavior remains intact.
+
+### Fixed
+- **WebUI startup 500 with Authentication:Scheme=None** — normalized runtime auth resolution to use the registered Generic handler for `None`, fixing `No default challenge scheme` failures on `/`.
+
 ---
 
 ## [v0.7.1] — 2026-03-12

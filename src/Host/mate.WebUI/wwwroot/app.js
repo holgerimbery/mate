@@ -63,6 +63,10 @@ window.focusElement = function (elementId) {
     if (el) el.focus();
 };
 
+window.mateIsMobile = function () {
+    return window.matchMedia('(max-width: 768px)').matches;
+};
+
 window.triggerUrlDownload = function (url) {
     const a = document.createElement('a');
     a.href = url;

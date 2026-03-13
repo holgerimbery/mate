@@ -344,6 +344,21 @@ html, body {
     border-bottom: 1px solid var(--border);
     min-height: 52px;
 }
+.topbar-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin-right: auto;
+}
+.topbar-menu-btn:hover { background: var(--light-bg); }
 .mate-topbar-user { position: relative; }
 .topbar-user-btn {
     display: flex;
@@ -460,6 +475,12 @@ html, body {
 .user-popup-logout:hover { color: #b71c1c; text-decoration: none; }
 .user-popup-devnote { font-size: 11px; color: #e65100; display: flex; align-items: flex-start; gap: 6px; line-height: 1.4; word-break: break-word; }
 .sidebar-backdrop { position: fixed; inset: 0; z-index: 1999; }
+.sidebar-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: rgba(0, 0, 0, 0.25);
+}
 
 /* ── Main content ──────────────────────────────────────────── */
 .mate-main {
@@ -825,8 +846,31 @@ pre {
 
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 768px) {
-    .mate-sidebar.expanded { width: var(--sidebar-width-collapsed); }
-    .sidebar-brand-text, .nav-item span { display: none; }
+    .topbar-menu-btn { display: inline-flex; }
+
+    .mate-sidebar.mobile {
+        width: var(--sidebar-width-expanded);
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1000;
+    }
+    .mate-sidebar.mobile.expanded {
+        transform: translateX(0);
+    }
+    .mate-sidebar.mobile.collapsed {
+        transform: translateX(-100%);
+    }
+
+    .mate-main.expanded,
+    .mate-main.collapsed {
+        margin-left: 0;
+    }
+
+    .mate-sidebar.mobile .sidebar-brand-text,
+    .mate-sidebar.mobile .nav-item span {
+        display: inline;
+    }
+
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .mate-page { padding: 16px; }
     .mate-header { padding: 16px; }

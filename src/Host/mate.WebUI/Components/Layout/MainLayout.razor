@@ -6,7 +6,7 @@
 @implements IDisposable
 
 <!-- Sidebar -->
-<div class="mate-sidebar @(_expanded ? "expanded" : "collapsed")">
+<div class="mate-sidebar @(_expanded ? "expanded" : "collapsed") @(_isMobile ? "mobile" : "")">
 
     <!-- Toggle -->
     <div class="sidebar-toggle">
@@ -55,6 +55,10 @@
 
     <!-- Top bar -->
     <div class="mate-topbar">
+        <button class="topbar-menu-btn" @onclick="ToggleSidebar" title="Toggle menu" aria-label="Toggle menu">
+            <i class="bi-list"></i>
+        </button>
+
         <div class="mate-topbar-user">
             <AuthorizeView>
                 <Authorized Context="authCtx">
@@ -121,6 +125,11 @@
     <div class="sidebar-backdrop" @onclick="CloseUserPopup"></div>
 }
 
+@if (_isMobile && _expanded)
+{
+    <div class="sidebar-menu-backdrop" @onclick="ToggleSidebar"></div>
+}
+
 @code {
     private bool _expanded = true;
     private string _currentPage = "home";
@@ -128,6 +137,7 @@
     private bool _layoutFirstRender;
     private bool _userPopupOpen;
     private string _authScheme = "None";
+    private bool _isMobile;
 
     protected override void OnInitialized()
     {
@@ -144,6 +154,11 @@
             try
             {
                 _darkMode = await JS.InvokeAsync<bool>("mateInitDarkMode");
+                _isMobile = await JS.InvokeAsync<bool>("mateIsMobile");
+                if (_isMobile)
+                {
+                    _expanded = false;
+                }
             }
             catch (Exception)
             {
@@ -184,7 +199,16 @@
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => InvokeAsync(() => { UpdateCurrentPage(e.Location); _userPopupOpen = false; StateHasChanged(); });
+        => InvokeAsync(() =>
+        {
+            UpdateCurrentPage(e.Location);
+            _userPopupOpen = false;
+            if (_isMobile)
+            {
+                _expanded = false;
+            }
+            StateHasChanged();
+        });
 
     private void UpdateCurrentPage(string uri)
     {
