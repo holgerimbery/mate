@@ -31,38 +31,60 @@
             }
             else
             {
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Environment</th>
-                            <th>Connectors</th>
-                            <th>Active</th>
-                            <th>Created</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var agent in _agents)
-                        {
+                <div class="data-table-wrapper">
+                    <table class="data-table agents-table">
+                        <thead>
                             <tr>
-                                <td><strong>@agent.Name</strong><br /><small>@agent.Description</small></td>
-                                <td><span class="badge badge-@agent.Environment">@agent.Environment</span></td>
-                                <td>@string.Join(", ", agent.ConnectorConfigs.Select(c => c.ConnectorType))</td>
-                                <td>@(agent.IsActive ? "✓" : "✗")</td>
-                                <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
-                                <td>
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
-                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
-                                </td>
+                                <th>Name</th>
+                                <th>Environment</th>
+                                <th>Connectors</th>
+                                <th>Health</th>
+                                <th>Active</th>
+                                <th>Created</th>
+                                <th></th>
                             </tr>
-                        }
-                        @if (!_agents.Any())
-                        {
-                            <tr><td colspan="6" class="empty-row">No agents configured yet.</td></tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var agent in _agents)
+                            {
+                                <tr>
+                                    <td><strong>@agent.Name</strong><br /><small class="agent-description">@agent.Description</small></td>
+                                    <td><span class="badge badge-@agent.Environment">@agent.Environment</span></td>
+                                    <td>
+                                        @if (agent.ConnectorConfigs.Any())
+                                        {
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @foreach (var cfg in agent.ConnectorConfigs)
+                                                {
+                                                    <span class="connector-badge @GetConnectorBadgeClass(cfg.ConnectorType)">@cfg.ConnectorType</span>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-neutral">None</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetHealthBadgeClass(agent)">
+                                            <span class="health-dot @GetHealthDotClass(agent)"></span>@GetHealthLabel(agent)
+                                        </span>
+                                    </td>
+                                    <td>@(agent.IsActive ? "✓" : "✗")</td>
+                                    <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
+                                    <td class="agent-actions-cell">
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!_agents.Any())
+                            {
+                                <tr><td colspan="7" class="empty-row">No agents configured yet.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     </div>
@@ -672,6 +694,41 @@ else
     }
 
     private void ConfirmDelete(Agent a) => _deleteAgent = a;
+
+    private static string GetConnectorBadgeClass(string connectorType)
+        => connectorType.ToLowerInvariant() switch
+        {
+            "copilotstudio" => "copilot-studio",
+            "aifoundry" => "ai-foundry",
+            "parloa" => "parloa",
+            "generic" => "generic",
+            _ => "generic"
+        };
+
+    private static string GetHealthLabel(Agent agent)
+    {
+        if (!agent.IsActive || !agent.ConnectorConfigs.Any(c => c.IsActive))
+            return "Unhealthy";
+        if (agent.ConnectorConfigs.All(c => c.IsActive))
+            return "Healthy";
+        return "Unknown";
+    }
+
+    private static string GetHealthBadgeClass(Agent agent)
+        => GetHealthLabel(agent) switch
+        {
+            "Healthy" => "badge badge-healthy",
+            "Unhealthy" => "badge badge-unhealthy",
+            _ => "badge badge-pending"
+        };
+
+    private static string GetHealthDotClass(Agent agent)
+        => GetHealthLabel(agent) switch
+        {
+            "Healthy" => "healthy",
+            "Unhealthy" => "unhealthy",
+            _ => "unknown"
+        };
 
     private async Task DeleteAgent()
     {

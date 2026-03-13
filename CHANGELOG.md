@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - **Responsive sidebar behavior (E4-18)** — WebUI layout now uses an off-canvas sidebar on mobile (hidden by default), a topbar menu trigger, backdrop tap-to-close, and auto-close on navigation; desktop expand/collapse behavior remains intact.
 - **Page-level header pattern (E4-19)** — introduced reusable `PageHeader` component (title + description + optional actions layout) and applied it across core WebUI pages for a consistent page-entry experience in list/edit/run modes, with responsive behavior on mobile.
+- **Agents page parity completion (E4-06)** — completed agents CRUD experience with dynamic connector config forms, connector module-type badges in list rows, and agent health badges; also refined table containment/wrapping and mobile/desktop menu behavior to avoid overflow and desktop-only menu artifacts.
 
 ### Fixed
 - **WebUI startup 500 with Authentication:Scheme=None** — normalized runtime auth resolution to use the registered Generic handler for `None`, fixing `No default challenge scheme` failures on `/`.

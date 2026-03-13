@@ -55,9 +55,12 @@
 
     <!-- Top bar -->
     <div class="mate-topbar">
-        <button class="topbar-menu-btn" @onclick="ToggleSidebar" title="Toggle menu" aria-label="Toggle menu">
-            <i class="bi-list"></i>
-        </button>
+        @if (_isMobile)
+        {
+            <button class="topbar-menu-btn" @onclick="ToggleSidebar" title="Toggle menu" aria-label="Toggle menu">
+                <i class="bi-list"></i>
+            </button>
+        }
 
         <div class="mate-topbar-user">
             <AuthorizeView>

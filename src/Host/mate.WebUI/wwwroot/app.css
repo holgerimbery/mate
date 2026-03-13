@@ -348,6 +348,8 @@ html, body {
     display: none;
     background: none;
     border: none;
+    appearance: none;
+    -webkit-appearance: none;
     width: 40px;
     height: 40px;
     border-radius: 8px;
@@ -359,6 +361,11 @@ html, body {
     margin-right: auto;
 }
 .topbar-menu-btn:hover { background: var(--light-bg); }
+.topbar-menu-btn:focus,
+.topbar-menu-btn:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
 .mate-topbar-user { position: relative; }
 .topbar-user-btn {
     display: flex;
@@ -614,6 +621,10 @@ html, body {
     border-collapse: collapse;
     font-size: 14px;
 }
+.data-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
 .data-table th {
     padding: 10px 12px;
     text-align: left;
@@ -632,6 +643,25 @@ html, body {
 }
 .data-table tr:hover td { background: rgba(0,102,204,0.02); }
 .data-table tr:last-child td { border-bottom: none; }
+
+.agent-description {
+    overflow-wrap: anywhere;
+}
+
+.agent-actions-cell {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.agents-table .agent-actions-cell {
+    min-width: 130px;
+}
+
+.agents-table .badge,
+.agents-table .connector-badge {
+    white-space: nowrap;
+}
 
 /* ── Form Controls ─────────────────────────────────────────── */
 .form-control {
