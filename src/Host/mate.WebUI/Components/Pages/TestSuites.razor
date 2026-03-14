@@ -68,6 +68,7 @@
                                         @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
                                     </button>
                                     <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)"><i class="bi bi-play-fill"></i> Run</button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => CloneSuite(suite)">Clone</button>
                                     <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
                                     <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
                                 </td>
@@ -891,6 +892,83 @@ else if (_showSuiteForm)
         await Db.SaveChangesAsync();
         _deleteSuite = null;
         await LoadAsync();
+    }
+
+    private async Task CloneSuite(TestSuite source)
+    {
+        var cloneSuite = new TestSuite
+        {
+            Id = Guid.NewGuid(),
+            TenantId = source.TenantId,
+            Name = GetClonedSuiteName(source.Name),
+            Description = source.Description,
+            PassThreshold = source.PassThreshold,
+            JudgeSettingId = source.JudgeSettingId,
+            DelayBetweenTestsMs = source.DelayBetweenTestsMs,
+            Tags = source.Tags.ToArray(),
+            IsActive = source.IsActive,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = _userId
+        };
+
+        Db.TestSuites.Add(cloneSuite);
+
+        foreach (var tc in source.TestCases.OrderBy(tc => tc.SortOrder))
+        {
+            Db.TestCases.Add(new TestCase
+            {
+                Id = Guid.NewGuid(),
+                SuiteId = cloneSuite.Id,
+                TenantId = source.TenantId,
+                Name = tc.Name,
+                Description = tc.Description,
+                UserInput = tc.UserInput.ToArray(),
+                AcceptanceCriteria = tc.AcceptanceCriteria,
+                ExpectedIntent = tc.ExpectedIntent,
+                ExpectedEntities = tc.ExpectedEntities.ToArray(),
+                ReferenceAnswer = tc.ReferenceAnswer,
+                IsActive = tc.IsActive,
+                SortOrder = tc.SortOrder,
+                Tags = tc.Tags.ToArray(),
+                SourceDocumentId = tc.SourceDocumentId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+
+        AuditHelper.Log(
+            Db,
+            source.TenantId,
+            "Cloned",
+            "TestSuite",
+            cloneSuite.Id,
+            _userId,
+            $"{cloneSuite.Name} copied from {source.Name} with {source.TestCases.Count} test case(s)");
+
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    private string GetClonedSuiteName(string sourceName)
+    {
+        var existingNames = _suites
+            .Select(s => s.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var copyName = $"{sourceName} (Copy)";
+        if (!existingNames.Contains(copyName))
+        {
+            return copyName;
+        }
+
+        var suffix = 2;
+        while (existingNames.Contains($"{sourceName} (Copy {suffix})"))
+        {
+            suffix++;
+        }
+
+        return $"{sourceName} (Copy {suffix})";
     }
 
     // ── TestCase CRUD ─────────────────────────────────────────────────────────
