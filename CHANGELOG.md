@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **Test case cloning (E4-33)** — Test Suites now includes a one-click `Clone` action for test cases. Cloned cases stay in the same suite, copy the original content and active state, receive a new ID, append a safe copy suffix to the name, and are inserted at the end of the suite with audit logging.
 - **Test suite cloning (E4-44)** — Test Suites now includes a one-click `Clone` action for suites. Cloned suites stay in the same tenant, copy suite metadata, duplicate all contained test cases with new IDs and fresh timestamps, use collision-safe copy names, and write an audit log entry.
+- **Agent cloning (E4-45)** — Agents now includes a one-click `Clone` action. Cloned agents stay in the same tenant, copy agent metadata and connector configs with new IDs, keep stored secret references (no resolved secret duplication), use collision-safe copy names, and write an audit log entry.
 
 ### Changed
 - **Responsive sidebar behavior (E4-18)** — WebUI layout now uses an off-canvas sidebar on mobile (hidden by default), a topbar menu trigger, backdrop tap-to-close, and auto-close on navigation; desktop expand/collapse behavior remains intact.

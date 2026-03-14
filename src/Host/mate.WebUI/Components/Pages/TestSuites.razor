@@ -33,7 +33,7 @@
             }
             else
             {
-                <table class="data-table">
+                <table class="data-table test-suites-table">
                     <thead>
                         <tr>
                             <th>Name</th>
@@ -63,68 +63,74 @@
                                 <td>@suite.TestCases.Count</td>
                                 <td>@suite.PassThreshold.ToString("P0")</td>
                                 <td>@(suite.IsActive ? "✓" : "✗")</td>
-                                <td>
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => ExpandSuite(suite)">
-                                        @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
-                                    </button>
-                                    <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)"><i class="bi bi-play-fill"></i> Run</button>
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => CloneSuite(suite)">Clone</button>
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
-                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
+                                <td class="suite-actions-cell">
+                                    <div class="suite-actions">
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => ExpandSuite(suite)">
+                                            @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)"><i class="bi bi-play-fill"></i> Run</button>
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => CloneSuite(suite)">Clone</button>
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
+                                    </div>
                                 </td>
                             </tr>
                             @if (_expandedSuiteId == suite.Id)
                             {
                                 <tr>
-                                    <td colspan="5" style="padding:0 1rem 1rem;background:var(--surface-2);color:var(--text-primary)">
+                                    <td colspan="5" class="suite-expanded-cell" style="padding:0 1rem 1rem;background:var(--surface-2);color:var(--text-primary)">
                                         <div class="section-header" style="margin-top:12px;margin-bottom:8px">
                                             <strong>Test Cases</strong>
                                             <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">
                                                 <i class="bi bi-plus-lg"></i> Add Case
                                             </button>
                                         </div>
-                                        <table class="data-table sub-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>Name</th>
-                                                    <th>Input(s)</th>
-                                                    <th>Active</th>
-                                                    <th></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
-                                                {
+                                        <div class="data-table-wrapper">
+                                            <table class="data-table sub-table">
+                                                <thead>
                                                     <tr>
-                                                        <td>@tc.SortOrder</td>
-                                                        <td>
-                                                            @tc.Name<br /><small>@tc.Description</small>
-                                                            @if (tc.Tags.Length > 0)
-                                                            {
-                                                                <div class="d-flex flex-wrap gap-1 mt-1">
-                                                                    @foreach (var t in tc.Tags)
-                                                                    {
-                                                                        <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px">@t</span>
-                                                                    }
-                                                                </div>
-                                                            }
-                                                        </td>
-                                                        <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
-                                                        <td>@(tc.IsActive ? "✓" : "✗")</td>
-                                                        <td>
-                                                            <button class="btn btn-sm btn-secondary" @onclick="() => CloneCase(suite, tc)">Clone</button>
-                                                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
-                                                        </td>
+                                                        <th>#</th>
+                                                        <th>Name</th>
+                                                        <th>Input(s)</th>
+                                                        <th>Active</th>
+                                                        <th></th>
                                                     </tr>
-                                                }
-                                                @if (!suite.TestCases.Any())
-                                                {
-                                                    <tr><td colspan="5" class="empty-row">No test cases yet.</td></tr>
-                                                }
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
+                                                    {
+                                                        <tr>
+                                                            <td>@tc.SortOrder</td>
+                                                            <td>
+                                                                @tc.Name<br /><small>@tc.Description</small>
+                                                                @if (tc.Tags.Length > 0)
+                                                                {
+                                                                    <div class="d-flex flex-wrap gap-1 mt-1">
+                                                                        @foreach (var t in tc.Tags)
+                                                                        {
+                                                                            <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px">@t</span>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </td>
+                                                            <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
+                                                            <td>@(tc.IsActive ? "✓" : "✗")</td>
+                                                            <td class="suite-case-actions-cell">
+                                                                <div class="suite-case-actions">
+                                                                    <button class="btn btn-sm btn-secondary" @onclick="() => CloneCase(suite, tc)">Clone</button>
+                                                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
+                                                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                    @if (!suite.TestCases.Any())
+                                                    {
+                                                        <tr><td colspan="5" class="empty-row">No test cases yet.</td></tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </td>
                                 </tr>
                             }

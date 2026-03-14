@@ -649,18 +649,53 @@ html, body {
 }
 
 .agent-actions-cell {
+    white-space: normal;
+}
+
+.agent-actions {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .agents-table .agent-actions-cell {
-    min-width: 130px;
+    min-width: 152px;
 }
 
 .agents-table .badge,
 .agents-table .connector-badge {
     white-space: nowrap;
+}
+
+.suite-actions-cell,
+.suite-case-actions-cell {
+    white-space: normal;
+}
+
+.suite-actions,
+.suite-case-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.test-suites-table .suite-actions-cell,
+.test-suites-table .suite-case-actions-cell {
+    min-width: 0;
+}
+
+.test-suites-table .suite-expanded-cell {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+@media (min-width: 769px) {
+    .test-suites-table .suite-actions-cell,
+    .test-suites-table .suite-case-actions-cell {
+        min-width: 170px;
+    }
 }
 
 /* ── Form Controls ─────────────────────────────────────────── */
@@ -930,6 +965,31 @@ pre {
         width: 100%;
         justify-content: flex-start;
         flex-wrap: wrap;
+    }
+
+    .agents-table .agent-actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .agents-table .agent-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .test-suites-table .suite-actions,
+    .test-suites-table .suite-case-actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .test-suites-table .suite-actions .btn,
+    .test-suites-table .suite-case-actions .btn {
+        width: 100%;
+        max-width: 100%;
+        justify-content: center;
     }
 }
 

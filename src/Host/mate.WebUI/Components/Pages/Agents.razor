@@ -73,8 +73,11 @@
                                     <td>@(agent.IsActive ? "✓" : "✗")</td>
                                     <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
                                     <td class="agent-actions-cell">
-                                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
-                                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
+                                        <div class="agent-actions">
+                                            <button class="btn btn-sm btn-secondary" @onclick="() => CloneAgent(agent)">Clone</button>
+                                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -738,6 +741,72 @@ else
         await Db.SaveChangesAsync();
         _deleteAgent = null;
         await LoadAsync();
+    }
+
+    private async Task CloneAgent(Agent source)
+    {
+        var clone = new Agent
+        {
+            Id = Guid.NewGuid(),
+            TenantId = source.TenantId,
+            Name = GetClonedAgentName(source.Name),
+            Description = source.Description,
+            Environment = source.Environment,
+            Tags = source.Tags.ToArray(),
+            IsActive = source.IsActive,
+            JudgeSettingId = source.JudgeSettingId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = _userId
+        };
+
+        foreach (var cfg in source.ConnectorConfigs)
+        {
+            clone.ConnectorConfigs.Add(new AgentConnectorConfig
+            {
+                Id = Guid.NewGuid(),
+                AgentId = clone.Id,
+                TenantId = source.TenantId,
+                ConnectorType = cfg.ConnectorType,
+                ConfigJson = cfg.ConfigJson,
+                IsActive = cfg.IsActive,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        Db.Agents.Add(clone);
+        AuditHelper.Log(
+            Db,
+            source.TenantId,
+            "Cloned",
+            "Agent",
+            clone.Id,
+            _userId,
+            $"{clone.Name} copied from {source.Name} with {source.ConnectorConfigs.Count} connector config(s)");
+
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    private string GetClonedAgentName(string sourceName)
+    {
+        var existingNames = _agents
+            .Select(a => a.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var copyName = $"{sourceName} (Copy)";
+        if (!existingNames.Contains(copyName))
+        {
+            return copyName;
+        }
+
+        var suffix = 2;
+        while (existingNames.Contains($"{sourceName} (Copy {suffix})"))
+        {
+            suffix++;
+        }
+
+        return $"{sourceName} (Copy {suffix})";
     }
 
     private async Task ToggleConnector(AgentConnectorConfig cfg)

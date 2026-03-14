@@ -107,4 +107,22 @@ When a new backlog item is discovered during implementation:
 5. Continue and finish the current item first.
 6. Only start the newly created follow-on item after the active item has completed its normal workflow.
 
+## 11. Mandatory Broader Consistency Checks
+
+When implementing a UI/CSS/layout change:
+
+1. Perform a broader nearby check, not only the exact changed element (same page/section and common breakpoints).
+2. Verify layout integrity for desktop and mobile so controls stay inside their containers and remain usable.
+3. Report any additional findings in chat with concrete evidence.
+4. Ask for explicit confirmation before applying extra fixes beyond the requested change.
+5. After confirmation, apply the approved fixes and re-run verification.
+
+When updating documentation that references UI controls or interaction text:
+
+1. Check nearby related documentation statements for UI wording accuracy.
+2. Verify text matches the actual UI (for example icon-vs-text button labels such as pencil icon versus Edit button text).
+3. Report mismatches in chat first.
+4. Ask for explicit confirmation before changing additional documentation or UI for those mismatches.
+5. After confirmation, apply the approved corrections and verify again.
+
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
