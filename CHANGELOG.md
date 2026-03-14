@@ -6,6 +6,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Test case cloning (E4-33)** — Test Suites now includes a one-click `Clone` action for test cases. Cloned cases stay in the same suite, copy the original content and active state, receive a new ID, append a safe copy suffix to the name, and are inserted at the end of the suite with audit logging.
+
 ### Changed
 - **Responsive sidebar behavior (E4-18)** — WebUI layout now uses an off-canvas sidebar on mobile (hidden by default), a topbar menu trigger, backdrop tap-to-close, and auto-close on navigation; desktop expand/collapse behavior remains intact.
 - **Page-level header pattern (E4-19)** — introduced reusable `PageHeader` component (title + description + optional actions layout) and applied it across core WebUI pages for a consistent page-entry experience in list/edit/run modes, with responsive behavior on mobile.

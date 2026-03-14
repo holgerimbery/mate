@@ -63,10 +63,11 @@ When handing over an implemented item for verification:
 Before creating any commit:
 
 1. Propose the exact commit message to the user.
-2. Provide short context with the approval request (what changed, scope/files, and why).
-3. Ask for explicit confirmation/approval of that commit message.
-4. Only commit after user approval.
-5. After committing, ask the user whether to proceed to the next item.
+2. Include the backlog/issue item number in the commit message (for example: `E4-33: ...` or `[E4-33] ...`).
+3. Provide short context with the approval request (what changed, scope/files, and why).
+4. Ask for explicit confirmation/approval of that commit message.
+5. Only commit after user approval.
+6. After committing, ask the user whether to proceed to the next item.
 
 ## 7. Mandatory Item Status Transitions
 
@@ -94,5 +95,16 @@ For every implementation/verification/commit handover in chat:
 2. Do not use generic completion phrases without evidence.
 3. When a command or verification step is run, report the specific result (success/failure and key evidence).
 4. If something is pending, blocked, or not yet verified, state that explicitly.
+
+## 10. Mandatory Follow-On Work Capture
+
+When a new backlog item is discovered during implementation:
+
+1. Do not interrupt the current implementation, verification, documentation, or commit flow for the active item.
+2. Create a GitHub issue for the newly discovered item.
+3. Assign the issue to `holgerimbery`.
+4. Add the issue to the GitHub Project board in `Todo`.
+5. Continue and finish the current item first.
+6. Only start the newly created follow-on item after the active item has completed its normal workflow.
 
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.

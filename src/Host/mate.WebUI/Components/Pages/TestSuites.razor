@@ -112,6 +112,7 @@
                                                         <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
                                                         <td>@(tc.IsActive ? "✓" : "✗")</td>
                                                         <td>
+                                                            <button class="btn btn-sm btn-secondary" @onclick="() => CloneCase(suite, tc)">Clone</button>
                                                             <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
                                                             <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
                                                         </td>
@@ -922,6 +923,55 @@ else if (_showSuiteForm)
         };
         _caseFormError = string.Empty;
         _showCaseForm = true;
+    }
+
+    private async Task CloneCase(TestSuite suite, TestCase source)
+    {
+        var clone = new TestCase
+        {
+            Id = Guid.NewGuid(),
+            SuiteId = suite.Id,
+            TenantId = suite.TenantId,
+            Name = GetClonedCaseName(suite, source.Name),
+            Description = source.Description,
+            UserInput = source.UserInput.ToArray(),
+            AcceptanceCriteria = source.AcceptanceCriteria,
+            ExpectedIntent = source.ExpectedIntent,
+            ExpectedEntities = source.ExpectedEntities.ToArray(),
+            ReferenceAnswer = source.ReferenceAnswer,
+            IsActive = source.IsActive,
+            SortOrder = suite.TestCases.Count == 0 ? 1 : suite.TestCases.Max(tc => tc.SortOrder) + 1,
+            Tags = source.Tags.ToArray(),
+            SourceDocumentId = source.SourceDocumentId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        Db.TestCases.Add(clone);
+        AuditHelper.Log(Db, suite.TenantId, "Cloned", "TestCase", clone.Id, _userId, $"{clone.Name} copied from {source.Name}");
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    private static string GetClonedCaseName(TestSuite suite, string sourceName)
+    {
+        var existingNames = suite.TestCases
+            .Select(tc => tc.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var copyName = $"{sourceName} (Copy)";
+        if (!existingNames.Contains(copyName))
+        {
+            return copyName;
+        }
+
+        var suffix = 2;
+        while (existingNames.Contains($"{sourceName} (Copy {suffix})"))
+        {
+            suffix++;
+        }
+
+        return $"{sourceName} (Copy {suffix})";
     }
 
     private async Task SaveCase()
