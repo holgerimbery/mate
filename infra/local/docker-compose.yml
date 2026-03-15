@@ -75,6 +75,7 @@ services:
       # "Container" = PostgreSQL + Azurite  (default)
       # "Azure"     = Azure Database for PostgreSQL + Azure Blob Storage
       - Infrastructure__Provider=${Infrastructure__Provider:-Container}
+      - RedmondMode=false
       - ConnectionStrings__Default=Host=postgres;Database=mate;Username=mate;Password=mate_local_pw
       - AzureInfrastructure__BlobConnectionString=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite
       - AzureInfrastructure__BlobContainerName=mate-blobs
@@ -102,6 +103,7 @@ services:
     environment:
       - DOTNET_ENVIRONMENT=Development
       - Infrastructure__Provider=${Infrastructure__Provider:-Container}
+      - RedmondMode=false
       - ConnectionStrings__Default=Host=postgres;Database=mate;Username=mate;Password=mate_local_pw
       - AzureInfrastructure__BlobConnectionString=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite
       - AzureInfrastructure__BlobContainerName=mate-blobs

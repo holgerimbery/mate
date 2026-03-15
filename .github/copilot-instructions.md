@@ -125,4 +125,22 @@ When updating documentation that references UI controls or interaction text:
 4. Ask for explicit confirmation before changing additional documentation or UI for those mismatches.
 5. After confirmation, apply the approved corrections and verify again.
 
+## 12. Mandatory Enterprise Scope Boundary
+
+For `RedmondMode` and `mate-enterprise` topics:
+
+1. Keep enterprise feature implementation and enterprise-specific documentation in the `enterprise/mate-enterprise` submodule.
+2. Do not add enterprise feature details to main-repo backlog, changelog, wiki, or user/developer documentation.
+3. In the main repo, only keep minimal integration hooks and safe defaults required for core behavior.
+4. Treat core mode (`RedmondMode=false`) as the default for all deployment paths unless explicitly overridden by enterprise-specific deployment assets.
+5. Document all enterprise architecture, rollout, and operations details in the `mate-enterprise` repository.
+
+## 13. Mandatory Redmond-Mode Commit Naming
+
+For commits related to `RedmondMode` / `mate-enterprise` integration:
+
+1. In the main repository and wiki repository, use commit message format `redmond-mode-<N>` only (no extra details), where `<N>` is an increasing number.
+2. Keep the number increasing across subsequent Redmond-mode integration commits.
+3. In the `mate-enterprise` repository itself, use normal standard descriptive commit messages.
+
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.

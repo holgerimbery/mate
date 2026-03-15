@@ -116,7 +116,7 @@ foreach ($appName in $containerApps) {
     az containerapp update `
         --resource-group $ResourceGroupName `
         --name $appName `
-        --set-env-vars "ConnectionStrings__Default=secretref:postgres-conn" "AzureInfrastructure__BlobConnectionString=secretref:blob-conn" `
+        --set-env-vars "ConnectionStrings__Default=secretref:postgres-conn" "AzureInfrastructure__BlobConnectionString=secretref:blob-conn" "RedmondMode=false" `
         -o none 2>$null
 
     if ($LASTEXITCODE -ne 0) {

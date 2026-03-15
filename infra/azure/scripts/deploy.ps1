@@ -677,6 +677,7 @@ if ($deploymentParams['deployPostgres'] -eq $true -and $postgresPasswordPlain) {
         if ($blobConnectionString) {
             $envUpdates += "AzureInfrastructure__BlobConnectionString=secretref:blob-conn"
         }
+        $envUpdates += "RedmondMode=false"
 
         az containerapp update `
             --resource-group $ResourceGroupName `
