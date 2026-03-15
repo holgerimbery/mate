@@ -24,6 +24,15 @@ else
         <div class="kpi-card">
             <div class="kpi-value">@(_passRate.ToString("P0"))</div>
             <div class="kpi-label">Avg Pass Rate</div>
+            @if (_passRateTrend.Any())
+            {
+                <div class="sparkline-wrap" role="img" aria-label="Pass rate trend over recent runs">
+                    <svg class="sparkline" viewBox="0 0 120 32" preserveAspectRatio="none">
+                        <polyline class="sparkline-line" points="@_passRateSparklinePoints"></polyline>
+                    </svg>
+                    <div class="sparkline-caption">Last @_passRateTrend.Count completed runs</div>
+                </div>
+            }
         </div>
         <div class="kpi-card">
             <div class="kpi-value">@_totalSuites</div>
@@ -173,6 +182,8 @@ else
     private bool _loading = true;
     private int _totalRuns;
     private double _passRate;
+    private List<double> _passRateTrend = [];
+    private string _passRateSparklinePoints = string.Empty;
     private int _totalSuites;
     private int _totalAgents;
     private double _avgLatency;
@@ -213,6 +224,15 @@ else
         _passRate   = completed.Count > 0 ? completed.Average(r => r.TotalTestCases > 0 ? (double)r.PassedCount / r.TotalTestCases : 0.0) : 0.0;
         _avgLatency = completed.Count > 0 ? completed.Average(r => r.AverageLatencyMs) : 0.0;
 
+        _passRateTrend = completed
+            .Where(r => r.TotalTestCases > 0)
+            .OrderByDescending(r => r.StartedAt)
+            .Take(18)
+            .OrderBy(r => r.StartedAt)
+            .Select(r => (double)r.PassedCount / r.TotalTestCases)
+            .ToList();
+        _passRateSparklinePoints = BuildSparklinePoints(_passRateTrend);
+
         _recentRuns = await Db.Runs
             .Include(r => r.Suite)
             .Include(r => r.Agent)
@@ -246,4 +266,35 @@ else
         }
         _confirmDeleteRunId = null;
     }
+
+    private static string BuildSparklinePoints(IReadOnlyList<double> values)
+    {
+        if (values.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        const double width = 120;
+        const double height = 32;
+        const double padding = 2;
+
+        if (values.Count == 1)
+        {
+            var singleY = padding + (1 - Clamp01(values[0])) * (height - 2 * padding);
+            return $"{width / 2:F1},{singleY:F1}";
+        }
+
+        var xStep = (width - 2 * padding) / (values.Count - 1);
+        var points = values
+            .Select((value, index) =>
+            {
+                var x = padding + index * xStep;
+                var y = padding + (1 - Clamp01(value)) * (height - 2 * padding);
+                return $"{x:F1},{y:F1}";
+            });
+
+        return string.Join(" ", points);
+    }
+
+    private static double Clamp01(double value) => Math.Max(0, Math.Min(1, value));
 }

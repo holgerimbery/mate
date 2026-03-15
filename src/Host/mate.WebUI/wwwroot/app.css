@@ -551,6 +551,30 @@ html, body {
 .kpi-value { font-size: 32px; font-weight: 700; color: var(--primary); }
 .kpi-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
 
+.sparkline-wrap {
+    margin-top: 8px;
+}
+
+.sparkline {
+    width: 100%;
+    height: 32px;
+    display: block;
+}
+
+.sparkline-line {
+    fill: none;
+    stroke: var(--primary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sparkline-caption {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
 /* ── Home Action Cards ─────────────────────────────────────── */
 .home-action-grid {
     display: grid;
