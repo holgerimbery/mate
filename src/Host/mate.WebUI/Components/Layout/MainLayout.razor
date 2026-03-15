@@ -98,7 +98,7 @@
                             <hr class="user-popup-divider" />
                             @if (IsEntraScheme())
                             {
-                                <a href="/MicrosoftIdentity/Account/SignOut" class="user-popup-logout">
+                                <a href="/MicrosoftIdentity/Account/SignOut" class="user-popup-logout" @onclick="SignOut" @onclick:preventDefault="true">
                                     <i class="bi bi-box-arrow-right me-1"></i>Sign out
                                 </a>
                             }
@@ -184,6 +184,12 @@
     private void ToggleUserPopup() => _userPopupOpen = !_userPopupOpen;
     private void CloseUserPopup()  => _userPopupOpen = false;
 
+    private void SignOut()
+    {
+        _userPopupOpen = false;
+        Navigation.NavigateTo("/MicrosoftIdentity/Account/SignOut", forceLoad: true);
+    }
+
     private bool IsEntraScheme() => string.Equals(_authScheme, "EntraId", StringComparison.OrdinalIgnoreCase);
     private bool IsDevScheme()   => string.Equals(_authScheme, "Generic", StringComparison.OrdinalIgnoreCase)
                                  || string.Equals(_authScheme, "None",    StringComparison.OrdinalIgnoreCase);
@@ -199,6 +205,22 @@
 
     private sealed record RoleDisplay(string PrimaryRole, IReadOnlyList<string> AllRoles);
 
+    private static string? NormalizeRole(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role)) return null;
+
+        return role.Trim().ToLowerInvariant() switch
+        {
+            "superadmin" => "SuperAdmin",
+            "platformadmin" => "SuperAdmin",
+            "tenantadmin" => "TenantAdmin",
+            "tenatadmin" => "TenantAdmin",
+            "tester" => "Tester",
+            "viewer" => "Viewer",
+            _ => role.Trim(),
+        };
+    }
+
     private static RoleDisplay GetUserRoleDisplay(ClaimsPrincipal user)
     {
         var orderedKnownRoles = new[] { "SuperAdmin", "TenantAdmin", "Tester", "Viewer" };
@@ -206,21 +228,28 @@
 
         foreach (var claim in user.FindAll(ClaimTypes.Role))
         {
-            if (!string.IsNullOrWhiteSpace(claim.Value))
-                roleSet.Add(claim.Value);
+            var normalized = NormalizeRole(claim.Value);
+            if (!string.IsNullOrWhiteSpace(normalized))
+                roleSet.Add(normalized);
         }
 
         foreach (var claim in user.FindAll("roles"))
         {
-            if (!string.IsNullOrWhiteSpace(claim.Value))
-                roleSet.Add(claim.Value);
+            var normalized = NormalizeRole(claim.Value);
+            if (!string.IsNullOrWhiteSpace(normalized))
+                roleSet.Add(normalized);
         }
 
         foreach (var claim in user.FindAll("mate:role"))
         {
-            if (!string.IsNullOrWhiteSpace(claim.Value))
-                roleSet.Add(claim.Value);
+            var normalized = NormalizeRole(claim.Value);
+            if (!string.IsNullOrWhiteSpace(normalized))
+                roleSet.Add(normalized);
         }
+
+        // Viewer is implicit when higher privileges are present; suppress it in the role badge list.
+        if (roleSet.Contains("SuperAdmin") || roleSet.Contains("TenantAdmin") || roleSet.Contains("Tester"))
+            roleSet.Remove("Viewer");
 
         var result = orderedKnownRoles.Where(roleSet.Contains).ToList();
         var unknown = roleSet.Where(r => !orderedKnownRoles.Contains(r, StringComparer.Ordinal))

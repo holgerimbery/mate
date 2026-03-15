@@ -21,16 +21,16 @@ Always use this workflow as the default habit:
 Always do the following after implementing each item (unless the user explicitly opts out):
 
 1. Verify the app compiles successfully.
-2. Start all required local dependencies/services.
-3. Start the application in container mode (not bare-metal) using a clean cycle with `debug-container.ps1 -Stop` followed by `debug-container.ps1 -Source build -Rebuild`.
-4. Share the exact URL(s) and minimal test steps so the user only needs to open the browser and verify.
-5. If startup fails, fix the startup/runtime issue before handing over verification steps.
+2. Do NOT run `debug-container.ps1` or any container start/stop commands automatically. Always provide the exact commands and ask the user to run them.
+3. After implementation, present the exact rebuild commands and ask the user to execute them.
+4. Share the exact URL(s) and minimal test steps so the user only needs to run the commands and open the browser.
+5. Wait for the user to confirm successful startup before proceeding.
 
 Container-first testing notes:
 
-1. Use `./debug-container.ps1 -Stop` followed by `./debug-container.ps1 -Source build -Rebuild` as the default verification/startup sequence.
+1. The default rebuild sequence is `./debug-container.ps1 -Stop` followed by `./debug-container.ps1 -Source build -Rebuild` — but always ask the user to run it, never run it yourself.
 2. Do not hand over browser verification based on bare-metal `dotnet run` unless the user explicitly asks for bare-metal.
-3. Verify container health/readiness before claiming availability.
+3. Do not claim container health/readiness — ask the user to confirm it.
 
 ## 3. Mandatory Availability Validation Before Reporting
 
@@ -147,14 +147,14 @@ For commits related to `RedmondMode` / `mate-enterprise` integration:
 
 For local Docker verification when enterprise mode is in scope:
 
-1. Always restart and rebuild both local stacks during verification:
+1. Never run container commands automatically. Always present the exact commands and ask the user to run them:
 	- Core: `./debug-container.ps1 -Stop` then `./debug-container.ps1 -Source build -Rebuild`
 	- Enterprise: `./debug-container.ps1 -Mode enterprise -Stop` then `./debug-container.ps1 -Mode enterprise -Source build -Rebuild`
 2. Always provide verification instructions for both local URLs:
 	- Core WebUI: `http://localhost:5000`
 	- Enterprise WebUI: `http://localhost:5100`
-3. Always include explicit expected outcomes for both stacks (running containers, healthy status, and endpoint reachability).
-4. If one stack fails while the other succeeds, report both outcomes separately and continue fixing the failed stack before handover.
+3. Always include explicit expected outcomes for both stacks and ask the user to confirm (running containers, healthy status, and endpoint reachability).
+4. If the user reports one stack fails while the other succeeds, address both outcomes separately and continue fixing the failed stack before handover.
 5. Treat this as the default habit for Redmond-mode related work unless the user explicitly requests single-stack verification only.
 
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
