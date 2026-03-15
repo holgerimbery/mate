@@ -344,8 +344,11 @@ if ($Mode -eq 'enterprise') {
 }
 
 $running = docker compose -p $projectName -f $activeCompose ps --status running --services 2>$null
-if ($running -notcontains $serviceWebUI) {
-    Write-Host "Starting containers ..." -ForegroundColor Cyan
+$requiredServices = @($serviceWebUI, $serviceWorker)
+$missingServices = $requiredServices | Where-Object { $running -notcontains $_ }
+
+if ($missingServices.Count -gt 0) {
+    Write-Host "Starting containers (missing: $($missingServices -join ', ')) ..." -ForegroundColor Cyan
     docker compose -p $projectName -f $activeCompose up -d
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: docker compose up failed. Resolve container conflicts and retry." -ForegroundColor Red

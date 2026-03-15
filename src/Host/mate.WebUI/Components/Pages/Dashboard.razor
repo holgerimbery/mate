@@ -130,7 +130,7 @@ else
                             </a>
                         </td>
                         <td>@(run.Agent?.Name ?? "—")</td>
-                        <td>@run.StartedAt.ToString("MMM dd, HH:mm:ss")</td>
+                        <td>@TimeDisplay.Local(run.StartedAt).ToString("MMM dd, HH:mm:ss")</td>
                         <td style="text-align:center">
                             <span class="badge badge-pass">@run.PassedCount</span>
                         </td>

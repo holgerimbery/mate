@@ -11,6 +11,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Test suite cloning (E4-44)** — Test Suites now includes a one-click `Clone` action for suites. Cloned suites stay in the same tenant, copy suite metadata, duplicate all contained test cases with new IDs and fresh timestamps, use collision-safe copy names, and write an audit log entry.
 - **Agent cloning (E4-45)** — Agents now includes a one-click `Clone` action. Cloned agents stay in the same tenant, copy agent metadata and connector configs with new IDs, keep stored secret references (no resolved secret duplication), use collision-safe copy names, and write an audit log entry.
 - **Dashboard pass-rate sparkline (E4-25)** — Dashboard now shows a compact pass-rate trend sparkline in the `Avg Pass Rate` KPI card, based on recent completed runs, to highlight short-term quality direction at a glance.
+- **Local timezone display** — timestamps on Home, Dashboard, and Run Report pages now render in the container's local timezone (configurable via `MATE_TIMEZONE`, defaulting to `Europe/Berlin`) using a new `TimeDisplay.Local()` helper; `tzdata` added to the WebUI container image.
 
 ### Changed
 - **Responsive sidebar behavior (E4-18)** — WebUI layout now uses an off-canvas sidebar on mobile (hidden by default), a topbar menu trigger, backdrop tap-to-close, and auto-close on navigation; desktop expand/collapse behavior remains intact.

@@ -35,7 +35,7 @@ else
                 <span>Run Report</span>
             </nav>
             <h1>@(_run.Suite?.Name ?? "Test Suite") — Run Report</h1>
-            <p>Executed @_run.StartedAt.ToString("MMMM dd, yyyy \\a\\t HH:mm:ss")</p>
+            <p>Executed @TimeDisplay.Local(_run.StartedAt).ToString("MMMM dd, yyyy \\a\\t HH:mm:ss")</p>
         </div>
         <div class="d-flex gap-2 align-items-center" style="flex-shrink:0">
             <button class="btn btn-secondary" @onclick="ExportCsv">
@@ -137,7 +137,7 @@ else
             </div>
             <div>
                 <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Started</div>
-                <div style="font-weight:600">@_run.StartedAt.ToString("MMM dd, HH:mm:ss")</div>
+                <div style="font-weight:600">@TimeDisplay.Local(_run.StartedAt).ToString("MMM dd, HH:mm:ss")</div>
             </div>
             <div>
                 <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">Duration</div>

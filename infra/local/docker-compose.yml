@@ -54,6 +54,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
       - ASPNETCORE_URLS=http://+:8080
+      - TZ=${MATE_TIMEZONE:-Europe/Berlin}
       - Authentication__Scheme=${Authentication__Scheme:-Generic}
       - AzureAd__Instance=${AzureAd__Instance:-https://login.microsoftonline.com/}
       - AzureAd__TenantId=${AzureAd__TenantId:-}
@@ -102,6 +103,7 @@ services:
     container_name: mate-worker
     environment:
       - DOTNET_ENVIRONMENT=Development
+      - TZ=${MATE_TIMEZONE:-Europe/Berlin}
       - Infrastructure__Provider=${Infrastructure__Provider:-Container}
       - RedmondMode=false
       - ConnectionStrings__Default=Host=postgres;Database=mate;Username=mate;Password=mate_local_pw
