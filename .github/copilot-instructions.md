@@ -143,4 +143,18 @@ For commits related to `RedmondMode` / `mate-enterprise` integration:
 2. Keep the number increasing across subsequent Redmond-mode integration commits.
 3. In the `mate-enterprise` repository itself, use normal standard descriptive commit messages.
 
+## 14. Mandatory Dual-Stack Local Verification
+
+For local Docker verification when enterprise mode is in scope:
+
+1. Always restart and rebuild both local stacks during verification:
+	- Core: `./debug-container.ps1 -Stop` then `./debug-container.ps1 -Source build -Rebuild`
+	- Enterprise: `./debug-container.ps1 -Mode enterprise -Stop` then `./debug-container.ps1 -Mode enterprise -Source build -Rebuild`
+2. Always provide verification instructions for both local URLs:
+	- Core WebUI: `http://localhost:5000`
+	- Enterprise WebUI: `http://localhost:5100`
+3. Always include explicit expected outcomes for both stacks (running containers, healthy status, and endpoint reachability).
+4. If one stack fails while the other succeeds, report both outcomes separately and continue fixing the failed stack before handover.
+5. Treat this as the default habit for Redmond-mode related work unless the user explicitly requests single-stack verification only.
+
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
