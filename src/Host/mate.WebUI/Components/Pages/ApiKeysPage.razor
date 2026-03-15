@@ -128,10 +128,10 @@
     <div class="section-card mt-3" style="font-size:13px">
         <i class="bi bi-info-circle me-1"></i>
         Pass the key in all REST API requests via the <code>X-Api-Key</code> header.<br />
-        Role <strong>Viewer</strong> — read-only access.
-        Role <strong>Tester</strong> — can trigger runs.
-        Role <strong>TenantAdmin</strong> — full tenant-level management.
-        Role <strong>SuperAdmin</strong> — full global access.
+        @if (AllowedRolesForCaller().Contains("Viewer")) { <span>Role <strong>Viewer</strong> — read-only access. </span> }
+        @if (AllowedRolesForCaller().Contains("Tester")) { <span>Role <strong>Tester</strong> — can trigger runs. </span> }
+        @if (AllowedRolesForCaller().Contains("TenantAdmin")) { <span>Role <strong>TenantAdmin</strong> — full tenant-level management. </span> }
+        @if (AllowedRolesForCaller().Contains("SuperAdmin")) { <span>Role <strong>SuperAdmin</strong> — full global access. </span> }
     </div>
 
     </div>
@@ -152,10 +152,22 @@ else
             <div class="form-group">
                 <label class="form-label">Role</label>
                 <select class="form-control" @bind="_newKeyRole">
-                    <option value="Viewer">Viewer — read-only access</option>
-                    <option value="Tester">Tester — can trigger test runs</option>
-                    <option value="TenantAdmin">TenantAdmin — full tenant-level management</option>
-                    <option value="SuperAdmin">SuperAdmin — full global access</option>
+                    @if (AllowedRolesForCaller().Contains("Viewer"))
+                    {
+                        <option value="Viewer">Viewer — read-only access</option>
+                    }
+                    @if (AllowedRolesForCaller().Contains("Tester"))
+                    {
+                        <option value="Tester">Tester — can trigger test runs</option>
+                    }
+                    @if (AllowedRolesForCaller().Contains("TenantAdmin"))
+                    {
+                        <option value="TenantAdmin">TenantAdmin — full tenant-level management</option>
+                    }
+                    @if (AllowedRolesForCaller().Contains("SuperAdmin"))
+                    {
+                        <option value="SuperAdmin">SuperAdmin — full global access</option>
+                    }
                 </select>
                 <small class="text-muted">Controls what the key is authorised to do. Use the least privilege required.</small>
             </div>
@@ -185,6 +197,7 @@ else
     private bool _loading = true;
     private string _error = string.Empty;
     private string _userId = string.Empty;
+    private string _callerRole = string.Empty;
 
     // Create form
     private bool _showCreateForm;
@@ -195,6 +208,17 @@ else
     [
         "SuperAdmin", "TenantAdmin", "Tester", "Viewer"
     ];
+
+    // Roles the current caller is permitted to assign to a new key (least-privilege).
+    // A user may never create a key with more privilege than they hold.
+    private IReadOnlyList<string> AllowedRolesForCaller() => _callerRole switch
+    {
+        "SuperAdmin"  => ["SuperAdmin", "TenantAdmin", "Tester", "Viewer"],
+        "TenantAdmin" => ["TenantAdmin", "Tester", "Viewer"],
+        "Tester"      => ["Tester", "Viewer"],
+        _             => ["Viewer"]
+    };
+
     private string _createError = string.Empty;
     private string? _newRawKey;
 
@@ -202,6 +226,25 @@ else
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         _userId = authState.User.Identity?.Name ?? string.Empty;
+
+        // Collect roles from all claim types used in this app, normalize, then pick highest privilege.
+        var roleOrder = new[] { "SuperAdmin", "TenantAdmin", "Tester", "Viewer" };
+        var allRoleValues = authState.User.FindAll(System.Security.Claims.ClaimTypes.Role)
+            .Concat(authState.User.FindAll("roles"))
+            .Concat(authState.User.FindAll("mate:role"))
+            .Select(c => c.Value.Trim().ToLowerInvariant() switch
+            {
+                "superadmin"    => "SuperAdmin",
+                "platformadmin" => "SuperAdmin",
+                "tenantadmin"   => "TenantAdmin",
+                "tenatadmin"    => "TenantAdmin",
+                "tester"        => "Tester",
+                "viewer"        => "Viewer",
+                _               => c.Value.Trim()
+            })
+            .ToHashSet(StringComparer.Ordinal);
+        _callerRole = roleOrder.FirstOrDefault(allRoleValues.Contains) ?? string.Empty;
+
         await LoadKeysAsync();
     }
 
@@ -244,7 +287,8 @@ else
     {
         _createError = string.Empty;
         if (string.IsNullOrWhiteSpace(_newKeyName)) { _createError = "Name is required."; return; }
-        if (!AllowedKeyRoles.Contains(_newKeyRole)) { _createError = "Role must be one of: SuperAdmin, TenantAdmin, Tester, Viewer."; return; }
+        if (!AllowedKeyRoles.Contains(_newKeyRole)) { _createError = "Invalid role."; return; }
+        if (!AllowedRolesForCaller().Contains(_newKeyRole)) { _createError = "You are not permitted to create a key with that role."; return; }
 
         _creating = true;
         try

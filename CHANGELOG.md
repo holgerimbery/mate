@@ -22,6 +22,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **BREAKING: strict role model without aliasing** — authorization now accepts only `SuperAdmin`, `TenantAdmin`, `Tester`, and `Viewer`. Legacy role names (`Admin`, `PlatformAdmin`) and alias mappings are no longer accepted. API key creation and role-based access docs are updated to the new role model.
 
 ### Fixed
+- **API key role escalation prevention** — `ApiKeysPage` now resolves the caller's highest effective role from all supported role claim types and enforces least-privilege assignment both in the role dropdown and in `GenerateKey()` server-side validation, preventing lower-privilege users from minting higher-privilege API keys.
 - **Sign-out blocked by backdrop z-index** — topbar stacking context was below the popup-close backdrop (z-index 900 vs 1999), causing the backdrop to swallow all clicks inside the user popup; raised `mate-topbar` z-index to 2000 so the popup and Sign Out link are fully interactive.
 - **Role display normalization in user popup** — added `NormalizeRole()` mapping to canonicalize legacy/typo Entra role aliases (`platformadmin` → `SuperAdmin`, `tenatadmin` → `TenantAdmin`) and suppress implicit `Viewer` when higher roles are present in the token.
 - **WebUI startup 500 with Authentication:Scheme=None** — normalized runtime auth resolution to use the registered Generic handler for `None`, fixing `No default challenge scheme` failures on `/`.
