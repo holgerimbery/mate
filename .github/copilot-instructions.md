@@ -157,4 +157,14 @@ For local Docker verification when enterprise mode is in scope:
 4. If the user reports one stack fails while the other succeeds, address both outcomes separately and continue fixing the failed stack before handover.
 5. Treat this as the default habit for Redmond-mode related work unless the user explicitly requests single-stack verification only.
 
+## 15. Mandatory Enterprise Documentation Parity
+
+For all enterprise feature work in `mate-enterprise`:
+
+1. Maintain `BACKLOG.md` and `CHANGELOG.md` inside `enterprise/mate-enterprise` with the same depth and structure quality as core `BACKLOG.md` and `CHANGELOG.md`.
+2. Keep enterprise roadmap epics and issue-level tracking synchronized with the enterprise GitHub Project board and issues, mirroring the governance discipline used in core.
+3. Record enterprise release notes and unreleased changes in enterprise `CHANGELOG.md` only; do not duplicate enterprise release details in core changelog/wiki.
+4. Keep enterprise strategic backlog intent in enterprise `BACKLOG.md` only; do not duplicate enterprise strategic backlog details in core backlog/wiki.
+5. During handover, explicitly report which enterprise docs were updated and why, matching the same evidence-first style used for core updates.
+
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
