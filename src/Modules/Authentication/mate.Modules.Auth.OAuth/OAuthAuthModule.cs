@@ -50,9 +50,9 @@ public sealed class OAuthAuthModule : IAuthModule
             .RequireAuthenticatedUser()
             .Build();
 
-        options.AddPolicy("AdminOnly",     p => p.RequireRole("Admin", "PlatformAdmin"));
-        options.AddPolicy("TesterOrAbove", p => p.RequireRole("Admin", "PlatformAdmin", "Tester"));
-        options.AddPolicy("ViewerOrAbove", p => p.RequireRole("Admin", "PlatformAdmin", "Tester", "Viewer"));
+        options.AddPolicy("AdminOnly",     p => p.RequireRole("SuperAdmin", "TenantAdmin"));
+        options.AddPolicy("TesterOrAbove", p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester"));
+        options.AddPolicy("ViewerOrAbove", p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester", "Viewer"));
     }
 
     public Task<ClaimsPrincipal> TransformClaimsAsync(ClaimsPrincipal external)
@@ -72,6 +72,7 @@ public sealed class OAuthAuthModule : IAuthModule
         if (!string.IsNullOrEmpty(uid))
             claims.Add(new Claim("mate:userId", uid));
 
+        claims.Add(new Claim(ClaimTypes.Role, role));
         claims.Add(new Claim("mate:role", role));
 
         var identity = new ClaimsIdentity(claims, external.Identity?.AuthenticationType ?? "OAuth");

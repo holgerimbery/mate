@@ -85,10 +85,14 @@
                                     @if (!string.IsNullOrEmpty(email)) { <p class="user-popup-email">@email</p> }
                                 </div>
                             </div>
-                            @{ var role = GetUserRole(authCtx.User); }
-                            @if (!string.IsNullOrEmpty(role))
+                            @{ var roleDisplay = GetUserRoleDisplay(authCtx.User); }
+                            @if (!string.IsNullOrEmpty(roleDisplay.PrimaryRole))
                             {
-                                <span class="user-popup-role-badge @(IsDevScheme() ? "dev" : "")">@role</span>
+                                <span class="user-popup-role-badge @(IsDevScheme() ? "dev" : "")">@roleDisplay.PrimaryRole</span>
+                                @if (roleDisplay.AllRoles.Count > 1)
+                                {
+                                    <p class="user-popup-email mt-1 mb-0">Roles: @string.Join(", ", roleDisplay.AllRoles)</p>
+                                }
                             }
                             <span class="user-popup-scheme-badge">@_authScheme</span>
                             <hr class="user-popup-divider" />
@@ -101,7 +105,7 @@
                             else
                             {
                                 <div class="user-popup-devnote">
-                                    <i class="bi bi-info-circle me-1"></i>Development mode — all requests are authenticated as Admin.
+                                    <i class="bi bi-info-circle me-1"></i>Development mode — all requests are authenticated as SuperAdmin.
                                 </div>
                             }
                         </div>
@@ -193,12 +197,41 @@
             : (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
     }
 
-    private static string GetUserRole(ClaimsPrincipal user)
+    private sealed record RoleDisplay(string PrimaryRole, IReadOnlyList<string> AllRoles);
+
+    private static RoleDisplay GetUserRoleDisplay(ClaimsPrincipal user)
     {
-        return user.FindFirst(ClaimTypes.Role)?.Value
-            ?? user.FindFirst("roles")?.Value
-            ?? user.FindFirst("mate:role")?.Value
-            ?? "";
+        var orderedKnownRoles = new[] { "SuperAdmin", "TenantAdmin", "Tester", "Viewer" };
+        var roleSet = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var claim in user.FindAll(ClaimTypes.Role))
+        {
+            if (!string.IsNullOrWhiteSpace(claim.Value))
+                roleSet.Add(claim.Value);
+        }
+
+        foreach (var claim in user.FindAll("roles"))
+        {
+            if (!string.IsNullOrWhiteSpace(claim.Value))
+                roleSet.Add(claim.Value);
+        }
+
+        foreach (var claim in user.FindAll("mate:role"))
+        {
+            if (!string.IsNullOrWhiteSpace(claim.Value))
+                roleSet.Add(claim.Value);
+        }
+
+        var result = orderedKnownRoles.Where(roleSet.Contains).ToList();
+        var unknown = roleSet.Where(r => !orderedKnownRoles.Contains(r, StringComparer.Ordinal))
+            .OrderBy(r => r, StringComparer.Ordinal)
+            .ToList();
+        result.AddRange(unknown);
+
+        if (result.Count == 0)
+            return new RoleDisplay("", Array.Empty<string>());
+
+        return new RoleDisplay(result[0], result);
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)

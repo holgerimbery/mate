@@ -89,9 +89,9 @@ public sealed class EntraIdAuthModule : IAuthModule, IClaimsTransformation
     {
         // No FallbackPolicy — each page declares [Authorize] individually.
         options.AddPolicy("AnyAuthenticated", p => p.RequireAuthenticatedUser());
-        options.AddPolicy("AdminOnly",        p => p.RequireRole("Admin", "PlatformAdmin"));
-        options.AddPolicy("TesterOrAbove",    p => p.RequireRole("Admin", "PlatformAdmin", "Tester"));
-        options.AddPolicy("ViewerOrAbove",    p => p.RequireRole("Admin", "PlatformAdmin", "Tester", "Viewer"));
+        options.AddPolicy("AdminOnly",        p => p.RequireRole("SuperAdmin", "TenantAdmin"));
+        options.AddPolicy("TesterOrAbove",    p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester"));
+        options.AddPolicy("ViewerOrAbove",    p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester", "Viewer"));
     }
 
     // ── IClaimsTransformation ──────────────────────────────────────────────────
@@ -117,9 +117,26 @@ public sealed class EntraIdAuthModule : IAuthModule, IClaimsTransformation
         if (!string.IsNullOrEmpty(oid))
             claims.Add(new Claim("mate:userId", oid));
 
-        // mate:role — from app role or default to Viewer
-        var role = external.FindAll("roles").FirstOrDefault()?.Value ?? "Viewer";
-        claims.Add(new Claim("mate:role", role));
+        // mate:role(s) — include all assigned app roles (no aliasing).
+        // If no app role is assigned, default to Viewer.
+        var allowedRoles = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "SuperAdmin", "TenantAdmin", "Tester", "Viewer"
+        };
+        var roles = external.FindAll("roles")
+            .Select(c => c.Value)
+            .Where(v => !string.IsNullOrWhiteSpace(v) && allowedRoles.Contains(v))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (roles.Count == 0)
+            roles.Add("Viewer");
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+            claims.Add(new Claim("mate:role", role));
+        }
 
         var identity = new ClaimsIdentity(claims, external.Identity?.AuthenticationType ?? "EntraId",
             nameType: "name", roleType: ClaimTypes.Role);

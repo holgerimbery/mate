@@ -4,7 +4,7 @@
 namespace mate.Domain.Entities;
 
 /// <summary>
-/// A user belonging to a tenant. Platform-level users (operators) carry the PlatformAdmin role.
+/// A user belonging to a tenant.
 /// </summary>
 public class TenantUser
 {
@@ -17,7 +17,7 @@ public class TenantUser
     public string Email { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
 
-    /// <summary>Admin | Tester | Viewer | PlatformAdmin</summary>
+    /// <summary>SuperAdmin | TenantAdmin | Tester | Viewer</summary>
     public string Role { get; set; } = "Viewer";
 
     public bool IsActive { get; set; } = true;

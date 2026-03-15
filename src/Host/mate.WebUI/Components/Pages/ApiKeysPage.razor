@@ -130,7 +130,8 @@
         Pass the key in all REST API requests via the <code>X-Api-Key</code> header.<br />
         Role <strong>Viewer</strong> — read-only access.
         Role <strong>Tester</strong> — can trigger runs.
-        Role <strong>Admin</strong> — full access equivalent to an authenticated admin user.
+        Role <strong>TenantAdmin</strong> — full tenant-level management.
+        Role <strong>SuperAdmin</strong> — full global access.
     </div>
 
     </div>
@@ -153,7 +154,8 @@ else
                 <select class="form-control" @bind="_newKeyRole">
                     <option value="Viewer">Viewer — read-only access</option>
                     <option value="Tester">Tester — can trigger test runs</option>
-                    <option value="Admin">Admin — full access</option>
+                    <option value="TenantAdmin">TenantAdmin — full tenant-level management</option>
+                    <option value="SuperAdmin">SuperAdmin — full global access</option>
                 </select>
                 <small class="text-muted">Controls what the key is authorised to do. Use the least privilege required.</small>
             </div>
@@ -189,6 +191,10 @@ else
     private bool _creating;
     private string _newKeyName = string.Empty;
     private string _newKeyRole = "Tester";
+    private static readonly HashSet<string> AllowedKeyRoles =
+    [
+        "SuperAdmin", "TenantAdmin", "Tester", "Viewer"
+    ];
     private string _createError = string.Empty;
     private string? _newRawKey;
 
@@ -238,6 +244,7 @@ else
     {
         _createError = string.Empty;
         if (string.IsNullOrWhiteSpace(_newKeyName)) { _createError = "Name is required."; return; }
+        if (!AllowedKeyRoles.Contains(_newKeyRole)) { _createError = "Role must be one of: SuperAdmin, TenantAdmin, Tester, Viewer."; return; }
 
         _creating = true;
         try

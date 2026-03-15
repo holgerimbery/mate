@@ -168,9 +168,15 @@ try
     builder.Services.AddmateGenericRedTeaming();
 
     // ── Authentication ───────────────────────────────────────────────────────
+    var redmondMode = config.GetValue<bool>("RedmondMode", false);
     var authScheme = config["Authentication:Scheme"] ?? "EntraId";
     // "None" is treated as development bypass auth and should use the Generic handler.
     var resolvedAuthScheme = authScheme is "None" ? "Generic" : authScheme;
+
+    if (redmondMode && !string.Equals(resolvedAuthScheme, "EntraId", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("RedmondMode requires Authentication:Scheme=EntraId.");
+    }
 
     IAuthModule authModule = resolvedAuthScheme switch
     {
@@ -951,8 +957,15 @@ try
 
     api.MapPost("/admin/api-keys", async (CreateApiKeyRequest req, mateDbContext db, ITenantContext tenant, ClaimsPrincipal user) =>
     {
+        var allowedRoles = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "SuperAdmin", "TenantAdmin", "Tester", "Viewer"
+        };
+
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.BadRequest("Name is required.");
+        if (!allowedRoles.Contains(req.Role))
+            return Results.BadRequest("Role must be one of: SuperAdmin, TenantAdmin, Tester, Viewer.");
         var rawKey = $"{BrandInfo.ApiKeyPrefix}{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
         var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
         var prefix = rawKey[..12];
@@ -974,7 +987,7 @@ try
         return Results.Created($"/api/admin/api-keys/{apiKey.Id}", new { apiKey.Id, apiKey.Name, apiKey.Prefix, RawKey = rawKey });
     }).WithName("CreateApiKey").WithTags("Admin")
         .WithSummary("Create an API key")
-        .WithDescription("Generates a new API key for the given name and role. **The raw key value (`rawKey`) is returned only once in this response — store it securely.** Role must be `admin` or `user`.");
+        .WithDescription("Generates a new API key for the given name and role. **The raw key value (`rawKey`) is returned only once in this response — store it securely.** Role must be one of: `SuperAdmin`, `TenantAdmin`, `Tester`, `Viewer`.");
 
     api.MapDelete("/admin/api-keys/{id:guid}", async (Guid id, mateDbContext db) =>
     {
