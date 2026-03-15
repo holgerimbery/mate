@@ -45,6 +45,15 @@ else
         <div class="kpi-card">
             <div class="kpi-value">@($"{_avgLatency:N0} ms")</div>
             <div class="kpi-label">Avg Latency</div>
+            @if (_p95LatencyTrend.Any())
+            {
+                <div class="sparkline-wrap" role="img" aria-label="P95 latency trend over recent runs">
+                    <svg class="sparkline" viewBox="0 0 120 32" preserveAspectRatio="none">
+                        <polyline class="sparkline-line" points="@_p95LatencySparklinePoints"></polyline>
+                    </svg>
+                    <div class="sparkline-caption">P95 &middot; last @_p95LatencyTrend.Count runs</div>
+                </div>
+            }
         </div>
     </div>
 
@@ -184,6 +193,8 @@ else
     private double _passRate;
     private List<double> _passRateTrend = [];
     private string _passRateSparklinePoints = string.Empty;
+    private List<double> _p95LatencyTrend = [];
+    private string _p95LatencySparklinePoints = string.Empty;
     private int _totalSuites;
     private int _totalAgents;
     private double _avgLatency;
@@ -232,6 +243,23 @@ else
             .Select(r => (double)r.PassedCount / r.TotalTestCases)
             .ToList();
         _passRateSparklinePoints = BuildSparklinePoints(_passRateTrend);
+
+        _p95LatencyTrend = completed
+            .OrderByDescending(r => r.StartedAt)
+            .Take(10)
+            .OrderBy(r => r.StartedAt)
+            .Select(r => r.P95LatencyMs)
+            .ToList();
+        if (_p95LatencyTrend.Count > 0)
+        {
+            var minVal = _p95LatencyTrend.Min();
+            var maxVal = _p95LatencyTrend.Max();
+            var range = maxVal - minVal;
+            var normalizedP95 = range > 0
+                ? _p95LatencyTrend.Select(v => (v - minVal) / range).ToList()
+                : _p95LatencyTrend.Select(_ => 0.5).ToList();
+            _p95LatencySparklinePoints = BuildSparklinePoints(normalizedP95);
+        }
 
         _recentRuns = await Db.Runs
             .Include(r => r.Suite)
