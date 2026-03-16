@@ -107,6 +107,13 @@
                                         <div class="section-header" style="margin-top:12px;margin-bottom:8px">
                                             <strong>Test Cases</strong>
                                             <div class="d-flex gap-2 flex-wrap align-items-center">
+                                                <input class="form-control form-control-sm" style="width:180px" placeholder="Search cases…"
+                                                       @bind="_caseSearchKeyword" @bind:event="oninput" title="Search by name, description, input, criteria, tags" />
+                                                <select class="form-select form-select-sm" style="width:120px" @bind="_caseStatusFilter">
+                                                    <option value="all">All</option>
+                                                    <option value="active">Active</option>
+                                                    <option value="inactive">Inactive</option>
+                                                </select>
                                                 <button class="btn btn-sm btn-secondary"
                                                         disabled="@(SelectedCaseIdsInSuite(suite).Count == 0)"
                                                         @onclick="() => BulkSetCaseActive(suite, true)">
@@ -148,7 +155,7 @@
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
+                                                    @foreach (var tc in FilteredCases(suite))
                                                     {
                                                         <tr>
                                                             <td style="text-align:center">
@@ -645,6 +652,32 @@ else if (_showSuiteForm)
     private readonly HashSet<Guid> _selectedCaseIds = [];
     private string _bulkCaseMessage = string.Empty;
     private bool _bulkCaseError;
+
+    // --- E4-34: Test case search/filter state ---
+    private string _caseSearchKeyword = string.Empty;
+    private string _caseStatusFilter = "all";
+
+    // Returns filtered test cases for a suite based on search/filter controls
+    private IEnumerable<TestCase> FilteredCases(TestSuite suite)
+    {
+        var cases = suite.TestCases.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(_caseSearchKeyword))
+        {
+            var kw = _caseSearchKeyword.Trim().ToLowerInvariant();
+            cases = cases.Where(tc =>
+                (tc.Name?.ToLowerInvariant().Contains(kw) ?? false)
+                || (tc.Description?.ToLowerInvariant().Contains(kw) ?? false)
+                || (tc.AcceptanceCriteria?.ToLowerInvariant().Contains(kw) ?? false)
+                || (tc.UserInput.Any(ui => ui?.ToLowerInvariant().Contains(kw) ?? false))
+                || (tc.Tags.Any(t => t?.ToLowerInvariant().Contains(kw) ?? false))
+            );
+        }
+        if (_caseStatusFilter == "active")
+            cases = cases.Where(tc => tc.IsActive);
+        else if (_caseStatusFilter == "inactive")
+            cases = cases.Where(tc => !tc.IsActive);
+        return cases.OrderBy(tc => tc.SortOrder);
+    }
 
     private sealed record SuiteExportDto(
         string Name,
