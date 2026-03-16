@@ -7,6 +7,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Generate test cases from document (E4-41)** — Documents now provides a per-row `Generate` action that creates a new test suite from selected document chunks via the question-generation provider. Users can choose generation count (`5`, `10`, `15`) before triggering generation, and the UI navigates directly to the created suite.
 - **HTTP/HTTPS URL import hardening (E4-40)** — Documents URL import now validates public endpoints with SSRF protection (blocks loopback/private/link-local ranges and non-HTTP(S) redirects), enforces a 30-second timeout, follows safe redirect checks, and keeps the same chunking pipeline used for uploaded files.
 - **Selective rerun from Run Report (E4-35)** — Run Report now supports selective rerun actions for failed and skipped test cases. Users can choose `Re-run Failed` or `Re-run Skipped`, each creating a new run containing only the selected verdict set, with inline submission feedback before navigation.
 - **Test case search/filter controls (E4-34)** — Expanded suite tables now include a search box and status dropdown for filtering test cases by keyword (name, description, user input, acceptance criteria, tags) and status (All, Active, Inactive). Filtering applies only to test case rows, works in both light/dark mode and desktop/mobile, and bulk actions respect the current filter.

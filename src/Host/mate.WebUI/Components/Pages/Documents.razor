@@ -3,6 +3,8 @@
 @using mate.Core.DocumentProcessing
 @using mate.Data
 @using mate.Domain.Entities
+@using mate.Domain.Contracts.Infrastructure
+@using mate.Domain.Contracts.Modules
 @using Microsoft.EntityFrameworkCore
 @using System.Net
 @using System.Security.Cryptography
@@ -11,6 +13,9 @@
 @inject DocumentChunker Chunker
 @inject IHttpClientFactory HttpClientFactory
 @inject ITenantContext TenantCtx
+@inject mate.Core.mateModuleRegistry Registry
+@inject ISecretService SecretSvc
+@inject NavigationManager Nav
 
 <PageTitle>Documents — @BrandInfo.BrandName</PageTitle>
 
@@ -68,6 +73,14 @@
     <div class="section-card">
         <div class="section-header">
             <span class="section-title">Uploaded Documents</span>
+            <div class="d-flex align-items-center gap-2">
+                <label for="doc-qgen-count" style="font-size:12px;color:var(--text-secondary);margin:0">Questions</label>
+                <select id="doc-qgen-count" class="filter-select" style="width:90px" @bind="_generateQuestionCount" disabled="@(_generatingDoc is not null)">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                </select>
+            </div>
         </div>
         @if (_loading)
         {
@@ -101,6 +114,21 @@
                             <td>@doc.UploadedBy</td>
                             <td class="d-flex gap-1">
                                 <a href="/documents/@doc.Id" class="btn btn-sm btn-secondary"><i class="bi bi-eye me-1"></i>View</a>
+                                <select class="form-control" style="width:72px;font-size:12px;padding:2px 6px" @bind="_generateQuestionCount" disabled="@(_generatingDoc is not null)">
+                                    <option value="5">5</option>
+                                    <option value="10">10</option>
+                                    <option value="15">15</option>
+                                </select>
+                                <button class="btn btn-sm btn-primary" @onclick="() => GenerateTestCasesFromDocument(doc)" disabled="@(_generatingDoc is not null)">
+                                    @if (_generatingDoc?.Id == doc.Id)
+                                    {
+                                        <span class="spinner me-1"></span><span>Generating…</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-stars me-1"></i><span>Generate</span>
+                                    }
+                                </button>
                                 <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
                             </td>
                         </tr>
@@ -134,6 +162,8 @@
     private bool _uploading;
     private List<Document> _documents = [];
     private Document? _deleteDoc;
+    private Document? _generatingDoc;
+    private int _generateQuestionCount = 5;
     private string _uploadError = string.Empty;
     private string _uploadSuccess = string.Empty;
     private string _importUrl = string.Empty;
@@ -407,5 +437,127 @@
         if (bytes < 1024L) return $"{bytes} B";
         if (bytes < 1024L * 1024L) return $"{bytes / 1024.0:F1} KB";
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private async Task GenerateTestCasesFromDocument(Document doc)
+    {
+        _generatingDoc = doc;
+        StateHasChanged();
+
+        try
+        {
+            var providers = Registry.GetAllQuestionProviders();
+            if (providers.Count == 0)
+            {
+                _uploadError = "No question generation provider registered. Make sure the ModelQGen module is loaded.";
+                return;
+            }
+
+            var qgenSetting = await Db.GlobalQuestionGenerationSettings.FirstOrDefaultAsync();
+            if (qgenSetting is null)
+            {
+                _uploadError = "Configure question generation settings first (Settings → Question Generation).";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(qgenSetting.Endpoint))
+            {
+                _uploadError = "The question generation endpoint is not configured (Settings → Question Generation).";
+                return;
+            }
+
+            // Load document chunks
+            var chunks = await Db.Chunks
+                .Where(c => c.DocumentId == doc.Id && c.TenantId == TenantCtx.TenantId)
+                .OrderBy(c => c.ChunkIndex)
+                .ToListAsync();
+
+            if (chunks.Count == 0)
+            {
+                _uploadError = "No chunks found for this document.";
+                return;
+            }
+
+            var sourceContent = string.Join("\n\n", chunks.Select(c => c.Text));
+
+            // Resolve API key
+            string apiKey;
+            if (string.IsNullOrWhiteSpace(qgenSetting.ApiKeyRef))
+            {
+                apiKey = string.Empty;
+            }
+            else
+            {
+                try { apiKey = await SecretSvc.GetSecretAsync(qgenSetting.ApiKeyRef) ?? string.Empty; }
+                catch { apiKey = qgenSetting.ApiKeyRef; }
+            }
+
+            var request = new QuestionGenerationRequest
+            {
+                DocumentContent      = sourceContent,
+                NumberOfQuestions    = _generateQuestionCount,
+                SystemPromptOverride = null, // Use default from settings
+                ExistingQuestions    = [],
+                ResolvedEndpoint     = qgenSetting.Endpoint,
+                ResolvedApiKey       = apiKey,
+                Model                = qgenSetting.Model,
+            };
+
+            var generated = await providers[0].GenerateAsync(request);
+
+            if (generated.Count == 0)
+            {
+                _uploadError = "The LLM returned no questions. Check the document content and endpoint settings.";
+                return;
+            }
+
+            // Create new TestSuite with generated test cases
+            var suiteId = Guid.NewGuid();
+            var suite = new TestSuite
+            {
+                Id                = suiteId,
+                TenantId          = TenantCtx.TenantId,
+                Name              = $"Generated from: {doc.FileName}",
+                Description       = $"Test suite generated from document AI analysis.",
+                IsActive          = true,
+                CreatedAt         = DateTime.UtcNow,
+                UpdatedAt         = DateTime.UtcNow,
+                CreatedBy         = "generate-from-doc",
+                TestCases         = generated.Select((q, idx) => new TestCase
+                {
+                    Id                 = Guid.NewGuid(),
+                    SuiteId            = suiteId,
+                    TenantId           = TenantCtx.TenantId,
+                    Name               = q.Question.Length > 80 ? q.Question[..77] + "…" : q.Question,
+                    Description        = q.Rationale ?? string.Empty,
+                    UserInput          = [q.Question],
+                    AcceptanceCriteria = q.ExpectedAnswer,
+                    ExpectedIntent     = q.ExpectedIntent,
+                    ExpectedEntities   = q.ExpectedEntities,
+                    ReferenceAnswer    = q.ExpectedAnswer,
+                    SortOrder          = idx + 1,
+                    IsActive           = true,
+                    CreatedAt          = DateTime.UtcNow,
+                    UpdatedAt          = DateTime.UtcNow,
+                }).ToList()
+            };
+
+            Db.TestSuites.Add(suite);
+            await Db.SaveChangesAsync();
+
+            _uploadSuccess = $"✓ Generated test suite '{suite.Name}' with {generated.Count} test case{(generated.Count == 1 ? "" : "s")} from '{doc.FileName}'.";
+            await LoadAsync();
+            StateHasChanged();
+            await Task.Delay(700);
+            Nav.NavigateTo($"/test-suites/{suiteId}");
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Generation failed: {ex.Message}";
+        }
+        finally
+        {
+            _generatingDoc = null;
+        }
     }
 }
