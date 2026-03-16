@@ -6,7 +6,11 @@
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.Json
+@using System.Text.Json.Serialization
 @inject mateDbContext Db
+@inject IJSRuntime JS
 @inject IMessageQueue Queue
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
@@ -23,9 +27,22 @@
         <div class="section-card">
             <div class="section-header">
                 <span class="section-title">All Test Suites</span>
-                <button class="btn btn-primary btn-sm" @onclick="OpenCreateSuite">
-                    <i class="bi bi-plus-lg"></i> New Suite
-                </button>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-secondary btn-sm" @onclick="DownloadImportTemplate">
+                        <i class="bi bi-file-earmark-arrow-down me-1"></i>Template
+                    </button>
+                    <label class="btn btn-secondary btn-sm mb-0" style="cursor:pointer">
+                        <i class="bi bi-upload me-1"></i>Import
+                        <InputFile OnChange="ImportSuiteFromJson" accept=".json" style="display:none" />
+                    </label>
+                    @if (!string.IsNullOrEmpty(_importMessage))
+                    {
+                        <span style="font-size:12px;align-self:center;color:@(_importError ? "var(--danger)" : "var(--success)")">@_importMessage</span>
+                    }
+                    <button class="btn btn-primary btn-sm" @onclick="OpenCreateSuite">
+                        <i class="bi bi-plus-lg"></i> New Suite
+                    </button>
+                </div>
             </div>
             @if (_loading)
             {
@@ -70,6 +87,7 @@
                                         </button>
                                         <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)"><i class="bi bi-play-fill"></i> Run</button>
                                         <button class="btn btn-sm btn-secondary" @onclick="() => CloneSuite(suite)">Clone</button>
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => ExportSuite(suite)"><i class="bi bi-download"></i> Export</button>
                                         <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
                                         <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
                                     </div>
@@ -583,6 +601,29 @@ else if (_showSuiteForm)
     private bool _runInProgress;
     private string _runStatus = string.Empty;
     private string _runError = string.Empty;
+    private string _importMessage = string.Empty;
+    private bool _importError;
+
+    private sealed record SuiteExportDto(
+        string Name,
+        string Description,
+        double PassThreshold,
+        int DelayBetweenTestsMs,
+        bool IsActive,
+        string[] Tags,
+        List<CaseExportDto> TestCases);
+
+    private sealed record CaseExportDto(
+        string Name,
+        string Description,
+        string[] UserInput,
+        string AcceptanceCriteria,
+        string? ExpectedIntent,
+        string[] ExpectedEntities,
+        string? ReferenceAnswer,
+        bool IsActive,
+        int SortOrder,
+        string[] Tags);
 
     private class SuiteFormModel
     {
@@ -954,6 +995,154 @@ else if (_showSuiteForm)
 
         await Db.SaveChangesAsync();
         await LoadAsync();
+    }
+
+    // ── Export ──────────────────────────────────────────────────────────────
+    private async Task ExportSuite(TestSuite suite)
+    {
+        var dto = new SuiteExportDto(
+            suite.Name,
+            suite.Description,
+            suite.PassThreshold,
+            suite.DelayBetweenTestsMs,
+            suite.IsActive,
+            suite.Tags.ToArray(),
+            suite.TestCases.OrderBy(tc => tc.SortOrder).Select(tc => new CaseExportDto(
+                tc.Name,
+                tc.Description,
+                tc.UserInput.ToArray(),
+                tc.AcceptanceCriteria,
+                tc.ExpectedIntent,
+                tc.ExpectedEntities.ToArray(),
+                tc.ReferenceAnswer,
+                tc.IsActive,
+                tc.SortOrder,
+                tc.Tags.ToArray())).ToList());
+
+        var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
+        var fileName = $"suite-{suite.Name.Replace(' ', '-').ToLowerInvariant()}.json";
+        await JS.InvokeVoidAsync("downloadTextFile", json, fileName, "application/json");
+    }
+
+    // ── Import ───────────────────────────────────────────────────────────────
+    private async Task ImportSuiteFromJson(InputFileChangeEventArgs e)
+    {
+        _importMessage = string.Empty;
+        _importError = false;
+
+        var file = e.File;
+        if (!file.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            _importMessage = "Only .json files are supported.";
+            _importError = true;
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 1 * 1024 * 1024); // 1 MB cap
+            var dto = await JsonSerializer.DeserializeAsync<SuiteExportDto>(
+                stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (dto is null)
+            {
+                _importMessage = "Could not parse the JSON file.";
+                _importError = true;
+                return;
+            }
+
+            var importedName = GetClonedSuiteName(dto.Name);
+            var newSuite = new TestSuite
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantCtx.TenantId,
+                Name = importedName,
+                Description = dto.Description,
+                PassThreshold = Math.Clamp(dto.PassThreshold, 0.0, 1.0),
+                DelayBetweenTestsMs = Math.Max(0, dto.DelayBetweenTestsMs),
+                IsActive = dto.IsActive,
+                Tags = dto.Tags ?? [],
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                CreatedBy = _userId
+            };
+            Db.TestSuites.Add(newSuite);
+
+            var sortOrder = 1;
+            foreach (var tc in dto.TestCases ?? [])
+            {
+                Db.TestCases.Add(new TestCase
+                {
+                    Id = Guid.NewGuid(),
+                    SuiteId = newSuite.Id,
+                    TenantId = TenantCtx.TenantId,
+                    Name = tc.Name,
+                    Description = tc.Description,
+                    UserInput = tc.UserInput ?? [],
+                    AcceptanceCriteria = tc.AcceptanceCriteria,
+                    ExpectedIntent = tc.ExpectedIntent,
+                    ExpectedEntities = tc.ExpectedEntities ?? [],
+                    ReferenceAnswer = tc.ReferenceAnswer,
+                    IsActive = tc.IsActive,
+                    SortOrder = sortOrder++,
+                    Tags = tc.Tags ?? [],
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+
+            AuditHelper.Log(Db, TenantCtx.TenantId, "Imported", "TestSuite", newSuite.Id, _userId,
+                $"Imported from file: {file.Name} → {newSuite.Name} with {dto.TestCases?.Count ?? 0} test case(s)");
+
+            await Db.SaveChangesAsync();
+            await LoadAsync();
+
+            _importMessage = $"Imported \"{newSuite.Name}\" with {dto.TestCases?.Count ?? 0} test case(s).";;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            _importMessage = "Invalid JSON format. Download the template to see the expected structure.";
+            _importError = true;
+        }
+    }
+
+    // ── Download Template ────────────────────────────────────────────────────
+    private async Task DownloadImportTemplate()
+    {
+        var template = new SuiteExportDto(
+            "My Test Suite",
+            "A brief description of what this suite tests.",
+            0.8,
+            0,
+            true,
+            ["tag1", "tag2"],
+            [
+                new CaseExportDto(
+                    "Greeting test",
+                    "Verify the agent responds to a greeting.",
+                    ["Hello!", "Hi there"],
+                    "Response should include a greeting and offer help.",
+                    "Greeting",
+                    ["intent:greeting"],
+                    "Hello! How can I help you today?",
+                    true,
+                    1,
+                    ["smoke"]),
+                new CaseExportDto(
+                    "Out of scope test",
+                    "Verify the agent handles out-of-scope requests gracefully.",
+                    ["Tell me the weather"],
+                    "Response should politely indicate the topic is out of scope.",
+                    "OutOfScope",
+                    [],
+                    null,
+                    true,
+                    2,
+                    [])
+            ]);
+
+        var json = JsonSerializer.Serialize(template, new JsonSerializerOptions { WriteIndented = true });
+        await JS.InvokeVoidAsync("downloadTextFile", json, "suite-import-template.json", "application/json");
     }
 
     private string GetClonedSuiteName(string sourceName)
