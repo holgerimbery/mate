@@ -11,6 +11,9 @@ using Microsoft.Extensions.Logging;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Presentation;
+using DocumentFormat.OpenXml.Spreadsheet;
+using A = DocumentFormat.OpenXml.Drawing;
 
 namespace mate.Core.DocumentProcessing;
 
@@ -63,9 +66,9 @@ public sealed class DocumentIngestor
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
 
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        if (extension is not ".pdf" and not ".docx")
+        if (extension is not ".pdf" and not ".docx" and not ".txt" and not ".md" and not ".pptx" and not ".xlsx")
             throw new InvalidOperationException(
-                $"Unsupported file type '{extension}'. Only .pdf and .docx are accepted.");
+                $"Unsupported file type '{extension}'. Only .pdf, .docx, .txt, .md, .pptx, and .xlsx are accepted.");
 
         // Read into memory buffer so we can compute hash and pass to blob storage
         using var buffer = new MemoryStream();
@@ -89,17 +92,29 @@ public sealed class DocumentIngestor
 
         // Upload to blob storage
         var blobName = $"{tenantId}/{Guid.NewGuid()}{extension}";
-        var contentType = extension == ".pdf" ? "application/pdf"
-            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        var contentType = extension switch
+        {
+            ".pdf"  => "application/pdf",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".md"   => "text/markdown",
+            _       => "text/plain",
+        };
 
         buffer.Position = 0;
         var blobReference = await _blobStorage.UploadAsync(BlobContainer, blobName, buffer, contentType, ct);
 
         // Extract text
         buffer.Position = 0;
-        var text = extension == ".pdf"
-            ? ExtractPdfText(buffer)
-            : ExtractDocxText(buffer);
+        var text = extension switch
+        {
+            ".pdf"  => ExtractPdfText(buffer),
+            ".docx" => ExtractDocxText(buffer),
+            ".pptx" => ExtractPptxText(buffer),
+            ".xlsx" => ExtractXlsxText(buffer),
+            _       => ExtractPlainText(buffer),
+        };
 
         // Create the document entity
         var document = new Document
@@ -148,7 +163,7 @@ public sealed class DocumentIngestor
     {
         var sb = new StringBuilder();
         using var pdf = PdfDocument.Open(stream);
-        foreach (Page page in pdf.GetPages())
+        foreach (UglyToad.PdfPig.Content.Page page in pdf.GetPages())
         {
             sb.AppendLine(page.Text);
         }
@@ -165,6 +180,58 @@ public sealed class DocumentIngestor
         foreach (var para in body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>())
         {
             sb.AppendLine(para.InnerText);
+        }
+        return sb.ToString();
+    }
+
+    private static string ExtractPlainText(Stream stream)
+    {
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        return reader.ReadToEnd();
+    }
+
+    private static string ExtractPptxText(Stream stream)
+    {
+        var sb = new StringBuilder();
+        using var prs = PresentationDocument.Open(stream, isEditable: false);
+        var slideParts = prs.PresentationPart?.SlideParts;
+        if (slideParts is null) return string.Empty;
+        foreach (var slide in slideParts)
+        {
+            foreach (var text in slide.Slide.Descendants<A.Text>())
+            {
+                if (!string.IsNullOrWhiteSpace(text.Text))
+                    sb.AppendLine(text.Text);
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static string ExtractXlsxText(Stream stream)
+    {
+        var sb = new StringBuilder();
+        using var wb = SpreadsheetDocument.Open(stream, isEditable: false);
+        var workbookPart = wb.WorkbookPart;
+        if (workbookPart is null) return string.Empty;
+
+        var sharedStrings = workbookPart.SharedStringTablePart?.SharedStringTable;
+        foreach (var sheet in workbookPart.WorksheetParts)
+        {
+            foreach (var row in sheet.Worksheet.Descendants<Row>())
+            {
+                var cells = row.Descendants<Cell>().Select(c =>
+                {
+                    if (c.DataType?.Value == CellValues.SharedString && sharedStrings is not null)
+                    {
+                        if (int.TryParse(c.CellValue?.Text, out var idx))
+                            return sharedStrings.ElementAt(idx).InnerText;
+                    }
+                    return c.CellValue?.Text ?? string.Empty;
+                });
+                var line = string.Join("\t", cells.Where(v => !string.IsNullOrWhiteSpace(v)));
+                if (!string.IsNullOrWhiteSpace(line))
+                    sb.AppendLine(line);
+            }
         }
         return sb.ToString();
     }

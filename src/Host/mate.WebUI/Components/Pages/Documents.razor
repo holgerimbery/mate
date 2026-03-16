@@ -24,8 +24,8 @@
 
     <div class="section-card">
         <h2 class="section-title mb-3">Upload Document</h2>
-        <p class="text-muted mb-3">Supported formats: <strong>PDF</strong>, <strong>DOCX</strong>. Files are chunked and used for AI-powered test question generation.</p>
-        <InputFile OnChange="HandleFileSelected" accept=".pdf,.docx" />
+        <p class="text-muted mb-3">Supported formats: <strong>PDF</strong>, <strong>DOCX</strong>, <strong>PPTX</strong>, <strong>XLSX</strong>, <strong>TXT</strong>, <strong>MD</strong>. Files are chunked and used for AI-powered test question generation.</p>
+        <InputFile OnChange="HandleFileSelected" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md" />
         @if (_uploading)
         {
             <div class="d-flex align-items-center gap-2 mt-3"><span class="spinner"></span><span>Uploading and processing…</span></div>
@@ -88,57 +88,56 @@
         }
         else
         {
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>File Name</th>
-                        <th>Type</th>
-                        <th>Size</th>
-                        <th>Pages</th>
-                        <th>Chunks</th>
-                        <th>Uploaded</th>
-                        <th>By</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var doc in _documents)
-                    {
+            <div class="data-table-wrapper">
+                <table class="data-table">
+                    <thead>
                         <tr>
-                            <td>@doc.FileName</td>
-                            <td>@doc.ContentType</td>
-                            <td>@FormatSize(doc.FileSizeBytes)</td>
-                            <td>@doc.PageCount</td>
-                            <td>@doc.ChunkCount</td>
-                            <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                            <td>@doc.UploadedBy</td>
-                            <td class="d-flex gap-1">
-                                <a href="/documents/@doc.Id" class="btn btn-sm btn-secondary"><i class="bi bi-eye me-1"></i>View</a>
-                                <select class="form-control" style="width:72px;font-size:12px;padding:2px 6px" @bind="_generateQuestionCount" disabled="@(_generatingDoc is not null)">
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                    <option value="15">15</option>
-                                </select>
-                                <button class="btn btn-sm btn-primary" @onclick="() => GenerateTestCasesFromDocument(doc)" disabled="@(_generatingDoc is not null)">
-                                    @if (_generatingDoc?.Id == doc.Id)
-                                    {
-                                        <span class="spinner me-1"></span><span>Generating…</span>
-                                    }
-                                    else
-                                    {
-                                        <i class="bi bi-stars me-1"></i><span>Generate</span>
-                                    }
-                                </button>
-                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
-                            </td>
+                            <th>File Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Pages</th>
+                            <th>Chunks</th>
+                            <th>Uploaded</th>
+                            <th>By</th>
+                            <th></th>
                         </tr>
-                    }
-                    @if (!_documents.Any())
-                    {
-                        <tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var doc in _documents)
+                        {
+                            <tr>
+                                <td>@doc.FileName</td>
+                                <td>@doc.ContentType</td>
+                                <td>@FormatSize(doc.FileSizeBytes)</td>
+                                <td>@doc.PageCount</td>
+                                <td>@doc.ChunkCount</td>
+                                <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@doc.UploadedBy</td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-wrap justify-content-end">
+                                        <a href="/documents/@doc.Id" class="btn btn-sm btn-secondary"><i class="bi bi-eye me-1"></i>View</a>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => GenerateTestCasesFromDocument(doc)" disabled="@(_generatingDoc is not null)">
+                                            @if (_generatingDoc?.Id == doc.Id)
+                                            {
+                                                <span class="spinner me-1"></span><span>Generating…</span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-stars me-1"></i><span>Generate</span>
+                                            }
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!_documents.Any())
+                        {
+                            <tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </div>
 </div>
@@ -187,9 +186,9 @@
         _uploadSuccess = string.Empty;
         var file = e.File;
         var ext = Path.GetExtension(file.Name).ToLowerInvariant();
-        if (ext is not ".pdf" and not ".docx")
+        if (ext is not ".pdf" and not ".docx" and not ".pptx" and not ".xlsx" and not ".txt" and not ".md")
         {
-            _uploadError = "Only .pdf and .docx files are supported.";
+            _uploadError = "Only .pdf, .docx, .pptx, .xlsx, .txt, and .md files are supported.";
             return;
         }
         _uploading = true;

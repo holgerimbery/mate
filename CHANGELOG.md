@@ -7,6 +7,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Expanded document upload formats (E4-46)** — Documents upload now supports `PPTX`, `XLSX`, `TXT`, and `MD` in addition to `PDF` and `DOCX`, with matching client/server validation, extraction pipeline support, and aligned user-facing format guidance.
 - **Swagger/OpenAPI shortcuts on API Keys page (E9-06)** — API Keys now includes an `API Explorer` section with direct links to interactive Scalar UI (`/scalar/v1`) and one-click OpenAPI JSON download (`/openapi/v1.json`).
 - **Run history pruning improvements (E4-42)** — Settings now supports retention-based run pruning with explicit day threshold and `Prune Now` action. Pruning targets only completed/failed runs older than the threshold, preserves pending/running runs, and reports deleted run/result/transcript counts in the outcome message.
 - **Generate test cases from document (E4-41)** — Documents now provides a per-row `Generate` action that creates a new test suite from selected document chunks via the question-generation provider. Users can choose generation count (`5`, `10`, `15`) before triggering generation, and the UI navigates directly to the created suite.
