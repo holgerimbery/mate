@@ -92,6 +92,16 @@ else
                 <input class="filter-input" placeholder="Filter by agent…" @bind="_filterAgent" @bind:event="oninput" />
             </div>
             <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Environment</label>
+                <select class="filter-select" @bind="_filterEnvironment">
+                    <option value="">Any</option>
+                    <option value="development">Development</option>
+                    <option value="test">Test</option>
+                    <option value="staging">Staging</option>
+                    <option value="production">Production</option>
+                </select>
+            </div>
+            <div>
                 <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Status</label>
                 <select class="filter-select" @bind="_filterStatus">
                     <option value="">Any</option>
@@ -267,6 +277,7 @@ else
 
     private string _filterSuite       = string.Empty;
     private string _filterAgent       = string.Empty;
+    private string _filterEnvironment = string.Empty;
     private string _filterStatus      = string.Empty;
     private DateTime? _filterDateFrom;
     private DateTime? _filterDateTo;
@@ -278,6 +289,7 @@ else
     {
         if (!string.IsNullOrWhiteSpace(_filterSuite) && !(r.Suite?.Name.Contains(_filterSuite, StringComparison.OrdinalIgnoreCase) ?? false)) return false;
         if (!string.IsNullOrWhiteSpace(_filterAgent) && !(r.Agent?.Name.Contains(_filterAgent, StringComparison.OrdinalIgnoreCase) ?? false)) return false;
+        if (!string.IsNullOrWhiteSpace(_filterEnvironment) && !string.Equals(r.Agent?.Environment, _filterEnvironment, StringComparison.OrdinalIgnoreCase)) return false;
         if (!string.IsNullOrWhiteSpace(_filterStatus) && r.Status != _filterStatus) return false;
         if (_filterDateFrom.HasValue && r.StartedAt.Date < _filterDateFrom.Value.Date) return false;
         if (_filterDateTo.HasValue   && r.StartedAt.Date > _filterDateTo.Value.Date)   return false;
@@ -408,9 +420,10 @@ else
 
     private void ClearFilters()
     {
-        _filterSuite      = string.Empty;
-        _filterAgent      = string.Empty;
-        _filterStatus     = string.Empty;
+        _filterSuite        = string.Empty;
+        _filterAgent        = string.Empty;
+        _filterEnvironment  = string.Empty;
+        _filterStatus       = string.Empty;
         _filterDateFrom   = null;
         _filterDateTo     = null;
         _filterPassRateOp = string.Empty;
