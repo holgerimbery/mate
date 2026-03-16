@@ -69,7 +69,11 @@ public record UpdateTestCaseRequest(
 
 // ── Runs ─────────────────────────────────────────────────────────────────────
 
-public record StartRunRequest(Guid SuiteId, Guid AgentId, string RequestedBy);
+public record StartRunRequest(
+    Guid SuiteId,
+    Guid AgentId,
+    string RequestedBy,
+    IEnumerable<Guid>? TestCaseIds = null);
 
 // ── Results / Human Verdict ──────────────────────────────────────────────────
 

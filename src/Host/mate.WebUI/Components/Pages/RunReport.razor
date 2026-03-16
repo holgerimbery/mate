@@ -6,6 +6,7 @@
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using System.Text
+@using System.Net.Http.Json
 @using Markdig
 @inject mateDbContext Db
 @inject NavigationManager Nav
@@ -13,6 +14,7 @@
 @inject IHttpClientFactory HttpFactory
 @inject ISecretService Secrets
 @inject ITenantContext TenantCtx
+@inject IMessageQueue Queue
 
 <PageTitle>Run Report — @BrandInfo.BrandName</PageTitle>
 
@@ -41,6 +43,30 @@ else
             <button class="btn btn-secondary" @onclick="ExportCsv">
                 <i class="bi bi-download me-1"></i>Export CSV
             </button>
+            @if (FailedCaseIds.Count > 0 && _run.AgentId.HasValue)
+            {
+                    <button class="btn btn-secondary" disabled="@_reRunInProgress" @onclick="() => ReRunCases(FailedCaseIds)">
+                        @if (_reRunInProgress)
+                    {
+                        <span class="spinner me-1"></span>
+                    }
+                    <i class="bi bi-arrow-repeat me-1"></i>Re-run Failed (@FailedCaseIds.Count)
+                </button>
+            }
+                @if (SkippedCaseIds.Count > 0 && _run.AgentId.HasValue)
+                {
+                    <button class="btn btn-secondary" disabled="@_reRunInProgress" @onclick="() => ReRunCases(SkippedCaseIds)">
+                        @if (_reRunInProgress)
+                        {
+                            <span class="spinner me-1"></span>
+                        }
+                        <i class="bi bi-arrow-repeat me-1"></i>Re-run Skipped (@SkippedCaseIds.Count)
+                    </button>
+                }
+                 @if (!string.IsNullOrWhiteSpace(_reRunMessage))
+            {
+                    <span style="font-size:12px;color:@(_reRunError ? "var(--danger)" : "var(--success)")">@_reRunMessage</span>
+            }
             @if (_disagreements.Count > 0)
             {
                 <button class="btn btn-secondary" @onclick="OpenRefineRubric">
@@ -689,6 +715,24 @@ else
     // Auto-poll
     private bool _disposed;
 
+    // Re-run failed cases
+    // Re-run cases
+    private bool _reRunInProgress;
+    private bool _reRunError;
+    private string _reRunMessage = string.Empty;
+
+    private List<Guid> FailedCaseIds => _results
+        .Where(r => (r.HumanVerdict ?? r.Verdict) == "fail")
+        .Select(r => r.TestCaseId)
+        .Distinct()
+        .ToList();
+
+    private List<Guid> SkippedCaseIds => _results
+        .Where(r => (r.HumanVerdict ?? r.Verdict) == "skipped")
+        .Select(r => r.TestCaseId)
+        .Distinct()
+        .ToList();
+
     private static readonly MarkdownPipeline _mdPipeline =
         new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
 
@@ -1139,6 +1183,91 @@ else
         var idx = _results.FindIndex(r => r.Id == result.Id);
         if (idx >= 0) _results[idx] = result;
         CloseVerdict();
+    }
+
+        private async Task ReRunCases(List<Guid> caseIds)
+    {
+        if (_run is null)
+        {
+                _reRunMessage = "Run context is missing.";
+                _reRunError = true;
+            return;
+        }
+        if (!_run.AgentId.HasValue)
+        {
+                _reRunMessage = "Run has no associated agent.";
+                _reRunError = true;
+            return;
+        }
+
+            if (caseIds.Count == 0)
+        {
+                _reRunMessage = "No cases to re-run.";
+                _reRunError = true;
+            return;
+        }
+
+            _reRunInProgress = true;
+            _reRunMessage = string.Empty;
+            _reRunError = false;
+
+        try
+        {
+            var selectedCases = await Db.TestCases
+                .Where(tc => tc.SuiteId == _run.SuiteId && caseIds.Contains(tc.Id))
+                .Select(tc => tc.Id)
+                .ToListAsync();
+
+            if (selectedCases.Count == 0)
+            {
+                _reRunMessage = "No eligible test cases found for re-run.";
+                _reRunError = true;
+                return;
+            }
+
+            var run = new Run
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantCtx.TenantId,
+                SuiteId = _run.SuiteId,
+                AgentId = _run.AgentId.Value,
+                Status = "pending",
+                TotalTestCases = selectedCases.Count,
+                RequestedBy = "web-ui-rerun",
+                StartedAt = DateTime.UtcNow,
+                ErrorMessage = $"selected-testcases:{string.Join(',', selectedCases)}"
+            };
+
+            Db.Runs.Add(run);
+            AuditHelper.Log(Db, TenantCtx.TenantId, "RunStarted", "Run", run.Id, "web-ui", $"Suite: {_run.Suite?.Name ?? _run.SuiteId.ToString()} (selective rerun)");
+            await Db.SaveChangesAsync();
+
+            var job = new TestRunJob(
+                JobId: Guid.NewGuid(),
+                TenantId: TenantCtx.TenantId,
+                RunId: run.Id,
+                SuiteId: run.SuiteId,
+                AgentId: run.AgentId.Value,
+                RequestedBy: run.RequestedBy,
+                TestCaseIds: selectedCases);
+            await Queue.EnqueueAsync("test-runs", job);
+
+            var newRunId = run.Id;
+            _reRunMessage = $"Re-run submitted ({selectedCases.Count} case(s)). Opening run report...";
+            _reRunError = false;
+            StateHasChanged();
+            await Task.Delay(700);
+            Nav.NavigateTo($"/runs/{newRunId}");
+        }
+        catch (Exception ex)
+        {
+                _reRunMessage = $"Failed to start re-run: {ex.Message}";
+                _reRunError = true;
+        }
+        finally
+        {
+                _reRunInProgress = false;
+        }
     }
 
     private async Task ExportCsv()

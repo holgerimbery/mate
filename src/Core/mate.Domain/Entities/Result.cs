@@ -15,7 +15,7 @@ public class Result
     public Guid RunId { get; set; }
     public Guid TestCaseId { get; set; }
 
-    /// <summary>pass | fail | skip | error</summary>
+    /// <summary>pass | fail | skipped | error</summary>
     public string Verdict { get; set; } = "pending";
 
     // Scoring dimensions (0–1 each)

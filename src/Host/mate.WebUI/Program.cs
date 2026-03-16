@@ -704,6 +704,18 @@ try
         var agent = await db.Agents.Include(a => a.ConnectorConfigs).FirstOrDefaultAsync(a => a.Id == req.AgentId);
         if (agent is null) return Results.NotFound("Agent not found.");
 
+        var requestedCaseIds = req.TestCaseIds?.Distinct().ToList() ?? [];
+        var selectedCases = requestedCaseIds.Count > 0
+            ? suite.TestCases.Where(tc => requestedCaseIds.Contains(tc.Id)).ToList()
+            : suite.TestCases.Where(tc => tc.IsActive).ToList();
+
+        if (selectedCases.Count == 0)
+            return Results.BadRequest("No eligible test cases found for this run.");
+
+        var selectedCaseMetadata = requestedCaseIds.Count > 0
+            ? $"selected-testcases:{string.Join(',', selectedCases.Select(tc => tc.Id))}"
+            : null;
+
         var run = new Run
         {
             Id = Guid.NewGuid(),
@@ -711,9 +723,10 @@ try
             SuiteId = req.SuiteId,
             AgentId = req.AgentId,
             Status = "pending",
-            TotalTestCases = suite.TestCases.Count(tc => tc.IsActive),
+            TotalTestCases = selectedCases.Count,
             RequestedBy = req.RequestedBy.Length > 0 ? req.RequestedBy : (user.Identity?.Name ?? "api"),
-            StartedAt = DateTime.UtcNow
+            StartedAt = DateTime.UtcNow,
+            ErrorMessage = selectedCaseMetadata
         };
         db.Runs.Add(run);
         AuditHelper.Log(db, tenant.TenantId, "RunStarted", "Run", run.Id, user.Identity?.Name, $"Suite: {suite.Name}");
@@ -725,7 +738,7 @@ try
             SuiteId: req.SuiteId,
             AgentId: req.AgentId,
             RequestedBy: run.RequestedBy,
-            TestCaseIds: null);
+            TestCaseIds: requestedCaseIds.Count > 0 ? selectedCases.Select(tc => tc.Id).ToList() : null);
         await queue.EnqueueAsync("test-runs", job);
 
         return Results.Created($"/api/runs/{run.Id}", new { run.Id });
