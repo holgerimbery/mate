@@ -134,6 +134,25 @@
         @if (AllowedRolesForCaller().Contains("SuperAdmin")) { <span>Role <strong>SuperAdmin</strong> — full global access. </span> }
     </div>
 
+    @* API explorer shortcuts ───────────────────────────────────────────────── *@
+    <div class="section-card mt-3" style="font-size:13px">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <i class="bi bi-braces me-1"></i>
+                <strong>API Explorer</strong>
+                <span class="text-muted ms-2">Download OpenAPI spec or open the interactive reference.</span>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <a href="/scalar/v1" target="_blank" class="btn btn-sm btn-secondary">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Scalar UI
+                </a>
+                <a href="/openapi/v1.json" download="mate-openapi.json" class="btn btn-sm btn-secondary">
+                    <i class="bi bi-download me-1"></i>OpenAPI JSON
+                </a>
+            </div>
+        </div>
+    </div>
+
     </div>
 }
 else
