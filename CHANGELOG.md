@@ -7,6 +7,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **HTTP/HTTPS URL import hardening (E4-40)** — Documents URL import now validates public endpoints with SSRF protection (blocks loopback/private/link-local ranges and non-HTTP(S) redirects), enforces a 30-second timeout, follows safe redirect checks, and keeps the same chunking pipeline used for uploaded files.
 - **Selective rerun from Run Report (E4-35)** — Run Report now supports selective rerun actions for failed and skipped test cases. Users can choose `Re-run Failed` or `Re-run Skipped`, each creating a new run containing only the selected verdict set, with inline submission feedback before navigation.
 - **Test case search/filter controls (E4-34)** — Expanded suite tables now include a search box and status dropdown for filtering test cases by keyword (name, description, user input, acceptance criteria, tags) and status (All, Active, Inactive). Filtering applies only to test case rows, works in both light/dark mode and desktop/mobile, and bulk actions respect the current filter.
 - **Bulk test case operations (E4-32)** — Expanded suite tables now support multi-select test case checkboxes with select-all and suite-scoped bulk actions: `Activate Selected`, `Deactivate Selected`, and `Delete Selected` (with confirmation), including audit log entries and post-action status messages.

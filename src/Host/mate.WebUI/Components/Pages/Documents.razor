@@ -4,6 +4,7 @@
 @using mate.Data
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
+@using System.Net
 @using System.Security.Cryptography
 @inject mateDbContext Db
 @inject DocumentIngestor Ingestor
@@ -202,13 +203,6 @@
             return;
         }
 
-        var host = uri.Host.ToLowerInvariant();
-        if (host is "localhost" or "127.0.0.1" or "::1")
-        {
-            _importError = "Local addresses are not allowed.";
-            return;
-        }
-
         _importingUrl = true;
         _importError = string.Empty;
         _importSuccess = string.Empty;
@@ -216,19 +210,81 @@
         try
         {
             using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var client = HttpClientFactory.CreateClient();
-            var response = await client.GetAsync(_importUrl.Trim(), cts.Token);
-            response.EnsureSuccessStatusCode();
+            var validationError = await ValidatePublicHttpUriAsync(uri, cts.Token);
+            if (!string.IsNullOrEmpty(validationError))
+            {
+                _importError = validationError;
+                return;
+            }
 
-            var content = await response.Content.ReadAsStringAsync(cts.Token);
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var client = new HttpClient(handler);
+
+            var currentUri = uri;
+            string content = string.Empty;
+            for (var redirectCount = 0; redirectCount <= 5; redirectCount++)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+
+                if ((int)response.StatusCode is >= 300 and < 400)
+                {
+                    var location = response.Headers.Location;
+                    if (location is null)
+                    {
+                        _importError = "URL redirect is missing a destination.";
+                        return;
+                    }
+
+                    var nextUri = location.IsAbsoluteUri ? location : new Uri(currentUri, location);
+                    if (nextUri.Scheme is not "http" and not "https")
+                    {
+                        _importError = "Redirect target must use HTTP or HTTPS.";
+                        return;
+                    }
+
+                    var redirectValidation = await ValidatePublicHttpUriAsync(nextUri, cts.Token);
+                    if (!string.IsNullOrEmpty(redirectValidation))
+                    {
+                        _importError = redirectValidation;
+                        return;
+                    }
+
+                    currentUri = nextUri;
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+                content = await response.Content.ReadAsStringAsync(cts.Token);
+                break;
+            }
+
             if (string.IsNullOrWhiteSpace(content))
             {
                 _importError = "The URL returned empty content.";
                 return;
             }
 
-            var fileName = System.IO.Path.GetFileName(uri.LocalPath.TrimEnd('/'));
-            if (string.IsNullOrWhiteSpace(fileName)) fileName = uri.Host + ".txt";
+            if (content.Length > 10_000_000)
+            {
+                _importError = "The URL content is too large (max 10 MB text).";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _importError = "The URL returned empty content.";
+                return;
+            }
+
+            var fileName = System.IO.Path.GetFileName(currentUri.LocalPath.TrimEnd('/'));
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = currentUri.Host + ".txt";
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _importError = "The URL returned empty content.";
+                return;
+            }
 
             var bytes = System.Text.Encoding.UTF8.GetBytes(content);
             var contentHash = Convert.ToHexString(SHA256.HashData(bytes));
@@ -284,6 +340,66 @@
         {
             _importingUrl = false;
         }
+    }
+
+    private static async Task<string?> ValidatePublicHttpUriAsync(Uri uri, CancellationToken token)
+    {
+        var host = uri.Host.ToLowerInvariant();
+        if (host is "localhost" or "127.0.0.1" or "::1")
+            return "Local addresses are not allowed.";
+
+        try
+        {
+            var addresses = await Dns.GetHostAddressesAsync(uri.Host, token);
+            if (addresses.Length == 0)
+                return "Could not resolve URL host address.";
+
+            if (addresses.Any(IsPrivateOrLocalAddress))
+                return "Private, loopback, or link-local addresses are not allowed.";
+        }
+        catch (Exception ex)
+        {
+            return $"Host validation failed: {ex.Message}";
+        }
+
+        return null;
+    }
+
+    private static bool IsPrivateOrLocalAddress(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address))
+            return true;
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            if (address.IsIPv6LinkLocal || address.IsIPv6Multicast || address.IsIPv6SiteLocal)
+                return true;
+
+            var bytes = address.GetAddressBytes();
+            // Unique local addresses: fc00::/7
+            if ((bytes[0] & 0xFE) == 0xFC)
+                return true;
+            return false;
+        }
+
+        var v4 = address.GetAddressBytes();
+        // 10.0.0.0/8
+        if (v4[0] == 10)
+            return true;
+        // 172.16.0.0/12
+        if (v4[0] == 172 && v4[1] >= 16 && v4[1] <= 31)
+            return true;
+        // 192.168.0.0/16
+        if (v4[0] == 192 && v4[1] == 168)
+            return true;
+        // 169.254.0.0/16 (link-local)
+        if (v4[0] == 169 && v4[1] == 254)
+            return true;
+        // 100.64.0.0/10 (carrier-grade NAT)
+        if (v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127)
+            return true;
+
+        return false;
     }
 
     private static string FormatSize(long bytes)
