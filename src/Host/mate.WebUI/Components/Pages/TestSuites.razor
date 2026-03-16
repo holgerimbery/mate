@@ -106,14 +106,40 @@
                                     <td colspan="5" class="suite-expanded-cell" style="padding:0 1rem 1rem;background:var(--surface-2);color:var(--text-primary)">
                                         <div class="section-header" style="margin-top:12px;margin-bottom:8px">
                                             <strong>Test Cases</strong>
-                                            <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">
-                                                <i class="bi bi-plus-lg"></i> Add Case
-                                            </button>
+                                            <div class="d-flex gap-2 flex-wrap align-items-center">
+                                                <button class="btn btn-sm btn-secondary"
+                                                        disabled="@(SelectedCaseIdsInSuite(suite).Count == 0)"
+                                                        @onclick="() => BulkSetCaseActive(suite, true)">
+                                                    Activate Selected
+                                                </button>
+                                                <button class="btn btn-sm btn-secondary"
+                                                        disabled="@(SelectedCaseIdsInSuite(suite).Count == 0)"
+                                                        @onclick="() => BulkSetCaseActive(suite, false)">
+                                                    Deactivate Selected
+                                                </button>
+                                                <button class="btn btn-sm btn-danger"
+                                                        disabled="@(SelectedCaseIdsInSuite(suite).Count == 0)"
+                                                        @onclick="() => BulkDeleteCases(suite)">
+                                                    Delete Selected
+                                                </button>
+                                                <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">
+                                                    <i class="bi bi-plus-lg"></i> Add Case
+                                                </button>
+                                            </div>
                                         </div>
+                                        @if (!string.IsNullOrWhiteSpace(_bulkCaseMessage))
+                                        {
+                                            <div class="mb-2" style="font-size:12px;color:@(_bulkCaseError ? "var(--danger)" : "var(--success)")">@_bulkCaseMessage</div>
+                                        }
                                         <div class="data-table-wrapper">
                                             <table class="data-table sub-table">
                                                 <thead>
                                                     <tr>
+                                                        <th style="width:32px;text-align:center">
+                                                            <input type="checkbox"
+                                                                   checked="@AreAllCasesSelected(suite)"
+                                                                   @onchange="(e) => ToggleSelectAllCases(suite, e.Value is bool b && b)" />
+                                                        </th>
                                                         <th>#</th>
                                                         <th>Name</th>
                                                         <th>Input(s)</th>
@@ -125,6 +151,11 @@
                                                     @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
                                                     {
                                                         <tr>
+                                                            <td style="text-align:center">
+                                                                <input type="checkbox"
+                                                                       checked="@_selectedCaseIds.Contains(tc.Id)"
+                                                                       @onchange="(e) => ToggleCaseSelection(tc.Id, e.Value is bool b && b)" />
+                                                            </td>
                                                             <td>@tc.SortOrder</td>
                                                             <td>
                                                                 @tc.Name<br /><small>@tc.Description</small>
@@ -151,7 +182,7 @@
                                                     }
                                                     @if (!suite.TestCases.Any())
                                                     {
-                                                        <tr><td colspan="5" class="empty-row">No test cases yet.</td></tr>
+                                                        <tr><td colspan="6" class="empty-row">No test cases yet.</td></tr>
                                                     }
                                                 </tbody>
                                             </table>
@@ -611,6 +642,9 @@ else if (_showSuiteForm)
     private string _importMessage = string.Empty;
     private bool _importError;
     private string _transferFormat = "json";
+    private readonly HashSet<Guid> _selectedCaseIds = [];
+    private string _bulkCaseMessage = string.Empty;
+    private bool _bulkCaseError;
 
     private sealed record SuiteExportDto(
         string Name,
@@ -673,6 +707,10 @@ else if (_showSuiteForm)
             .Include(s => s.TestCases)
             .OrderBy(s => s.Name)
             .ToListAsync();
+        // Keep only selections that still exist after reload.
+        var validIds = _suites.SelectMany(s => s.TestCases).Select(tc => tc.Id).ToHashSet();
+        _selectedCaseIds.RemoveWhere(id => !validIds.Contains(id));
+
         _agents = await Db.Agents.Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync();
         _judgeSettings = await Db.JudgeSettings.OrderBy(j => j.Name).ToListAsync();
         _qgenSetting = await Db.GlobalQuestionGenerationSettings.FirstOrDefaultAsync();
@@ -1535,6 +1573,97 @@ else if (_showSuiteForm)
         }
 
         return $"{sourceName} (Copy {suffix})";
+    }
+
+    private List<Guid> SelectedCaseIdsInSuite(TestSuite suite)
+    {
+        return suite.TestCases
+            .Where(tc => _selectedCaseIds.Contains(tc.Id))
+            .Select(tc => tc.Id)
+            .ToList();
+    }
+
+    private bool AreAllCasesSelected(TestSuite suite)
+    {
+        var caseIds = suite.TestCases.Select(tc => tc.Id).ToList();
+        return caseIds.Count > 0 && caseIds.All(id => _selectedCaseIds.Contains(id));
+    }
+
+    private void ToggleCaseSelection(Guid caseId, bool selected)
+    {
+        _bulkCaseMessage = string.Empty;
+        _bulkCaseError = false;
+        if (selected) _selectedCaseIds.Add(caseId);
+        else _selectedCaseIds.Remove(caseId);
+    }
+
+    private void ToggleSelectAllCases(TestSuite suite, bool selected)
+    {
+        _bulkCaseMessage = string.Empty;
+        _bulkCaseError = false;
+        foreach (var id in suite.TestCases.Select(tc => tc.Id))
+        {
+            if (selected) _selectedCaseIds.Add(id);
+            else _selectedCaseIds.Remove(id);
+        }
+    }
+
+    private async Task BulkSetCaseActive(TestSuite suite, bool isActive)
+    {
+        var ids = SelectedCaseIdsInSuite(suite);
+        if (ids.Count == 0) return;
+
+        var cases = await Db.TestCases
+            .Where(tc => tc.SuiteId == suite.Id && ids.Contains(tc.Id))
+            .ToListAsync();
+
+        foreach (var tc in cases)
+        {
+            tc.IsActive = isActive;
+            tc.UpdatedAt = DateTime.UtcNow;
+            AuditHelper.Log(
+                Db,
+                tc.TenantId,
+                isActive ? "Activated" : "Deactivated",
+                "TestCase",
+                tc.Id,
+                _userId,
+                tc.Name);
+        }
+
+        await Db.SaveChangesAsync();
+        _bulkCaseMessage = $"{(isActive ? "Activated" : "Deactivated")} {cases.Count} test case(s).";
+        _bulkCaseError = false;
+        _selectedCaseIds.RemoveWhere(ids.Contains);
+        await LoadAsync();
+    }
+
+    private async Task BulkDeleteCases(TestSuite suite)
+    {
+        var ids = SelectedCaseIdsInSuite(suite);
+        if (ids.Count == 0) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete {ids.Count} selected test case(s) from '{suite.Name}'? This cannot be undone.");
+        if (!confirmed) return;
+
+        var cases = await Db.TestCases
+            .Where(tc => tc.SuiteId == suite.Id && ids.Contains(tc.Id))
+            .ToListAsync();
+
+        foreach (var tc in cases)
+        {
+            AuditHelper.Log(Db, tc.TenantId, "Deleted", "TestCase", tc.Id, _userId, tc.Name);
+        }
+
+        Db.TestCases.RemoveRange(cases);
+        await Db.SaveChangesAsync();
+
+        _bulkCaseMessage = $"Deleted {cases.Count} test case(s).";
+        _bulkCaseError = false;
+        _selectedCaseIds.RemoveWhere(ids.Contains);
+        await LoadAsync();
     }
 
     private async Task SaveCase()
