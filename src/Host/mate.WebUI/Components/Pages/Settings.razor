@@ -1778,7 +1778,7 @@ OAuth__Audience=your-api-audience</pre>
         {
             var cutoff   = DateTime.UtcNow.AddDays(-_pruningDays);
             var toDelete = await Db.Runs
-                .Where(r => r.StartedAt < cutoff && r.Status != "running")
+                .Where(r => r.StartedAt < cutoff && (r.Status == "completed" || r.Status == "failed"))
                 .ToListAsync();
             if (toDelete.Count == 0)
             {
@@ -1786,9 +1786,15 @@ OAuth__Audience=your-api-audience</pre>
             }
             else
             {
+                var runIds = toDelete.Select(r => r.Id).ToList();
+                var resultCount = await Db.Results.CountAsync(r => runIds.Contains(r.RunId));
+                var transcriptCount = await Db.TranscriptMessages
+                    .Join(Db.Results, t => t.ResultId, r => r.Id, (t, r) => new { t, r.RunId })
+                    .CountAsync(x => runIds.Contains(x.RunId));
+
                 Db.Runs.RemoveRange(toDelete);
                 await Db.SaveChangesAsync();
-                _pruneResult = $"\u2713 Deleted {toDelete.Count} run(s) older than {_pruningDays} days.";
+                _pruneResult = $"\u2713 Deleted {toDelete.Count} run(s), {resultCount} result(s), and {transcriptCount} transcript message(s) older than {_pruningDays} days.";
             }
         }
         catch (Exception ex)

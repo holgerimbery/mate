@@ -7,6 +7,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Run history pruning improvements (E4-42)** — Settings now supports retention-based run pruning with explicit day threshold and `Prune Now` action. Pruning targets only completed/failed runs older than the threshold, preserves pending/running runs, and reports deleted run/result/transcript counts in the outcome message.
 - **Generate test cases from document (E4-41)** — Documents now provides a per-row `Generate` action that creates a new test suite from selected document chunks via the question-generation provider. Users can choose generation count (`5`, `10`, `15`) before triggering generation, and the UI navigates directly to the created suite.
 - **HTTP/HTTPS URL import hardening (E4-40)** — Documents URL import now validates public endpoints with SSRF protection (blocks loopback/private/link-local ranges and non-HTTP(S) redirects), enforces a 30-second timeout, follows safe redirect checks, and keeps the same chunking pipeline used for uploaded files.
 - **Selective rerun from Run Report (E4-35)** — Run Report now supports selective rerun actions for failed and skipped test cases. Users can choose `Re-run Failed` or `Re-run Skipped`, each creating a new run containing only the selected verdict set, with inline submission feedback before navigation.
