@@ -2,8 +2,10 @@
 @page "/dashboard"
 @using mate.Data
 @using mate.Domain.Entities
+@using mate.Core
 @using Microsoft.EntityFrameworkCore
 @inject mateDbContext Db
+@inject mateModuleRegistry Registry
 
 <PageTitle>Dashboard — @BrandInfo.BrandName</PageTitle>
 
@@ -52,6 +54,23 @@ else
                         <polyline class="sparkline-line" points="@_p95LatencySparklinePoints"></polyline>
                     </svg>
                     <div class="sparkline-caption">P95 &middot; last @_p95LatencyTrend.Count runs</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="section-card mt-4">
+        <div class="section-header">
+            <h2 class="section-title">System Status</h2>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            @foreach (var badge in _systemStatusBadges)
+            {
+                <div class="d-flex align-items-center gap-2" style="padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)">
+                    <span style="font-weight:700">@badge.Label</span>
+                    <span class="badge badge-@badge.CssState">@badge.DisplayState</span>
+                    <span style="font-size:12px;color:var(--text-secondary)">@badge.Detail</span>
                 </div>
             }
         </div>
@@ -230,6 +249,7 @@ else
 
 @code {
     private sealed record FailingCaseWidgetItem(int Rank, string TestCaseName, string SuiteName, int FailureCount);
+    private sealed record StatusBadgeItem(string Label, string DisplayState, string CssState, string Detail);
 
     private bool _loading = true;
     private int _totalRuns;
@@ -239,6 +259,7 @@ else
     private List<double> _p95LatencyTrend = [];
     private string _p95LatencySparklinePoints = string.Empty;
     private List<FailingCaseWidgetItem> _topFailingCases = [];
+    private List<StatusBadgeItem> _systemStatusBadges = [];
     private int _totalSuites;
     private int _totalAgents;
     private double _avgLatency;
@@ -271,6 +292,10 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var dbHealthy = await Db.Database.CanConnectAsync();
+        var connectorModules = Registry.GetAllConnectors();
+        var judgeProviders = Registry.GetAllJudgeProviders();
+
         _totalRuns   = await Db.Runs.CountAsync();
         _totalSuites = await Db.TestSuites.CountAsync();
         _totalAgents = await Db.Agents.CountAsync(a => a.IsActive);
@@ -340,6 +365,36 @@ else
                     item.FailureCount);
             })
             .ToList();
+
+        var hasDirectLineModule = connectorModules.Any(c => string.Equals(c.ConnectorType, "CopilotStudio", StringComparison.OrdinalIgnoreCase));
+        var hasActiveDirectLineConfig = await Db.AgentConnectorConfigs
+            .Include(c => c.Agent)
+            .AnyAsync(c => c.IsActive
+                && c.Agent != null
+                && c.Agent.IsActive
+                && c.ConnectorType == "CopilotStudio");
+
+        var hasJudgeProvider = judgeProviders.Any();
+        var hasJudgeSetting = await Db.JudgeSettings.AnyAsync();
+
+        _systemStatusBadges =
+        [
+            new StatusBadgeItem(
+                "DB",
+                dbHealthy ? "Healthy" : "Down",
+                dbHealthy ? "healthy" : "unhealthy",
+                dbHealthy ? "Database reachable" : "Connection failed"),
+            new StatusBadgeItem(
+                "DirectLine",
+                hasActiveDirectLineConfig ? "Healthy" : hasDirectLineModule ? "Pending" : "Down",
+                hasActiveDirectLineConfig ? "healthy" : hasDirectLineModule ? "pending" : "unhealthy",
+                hasActiveDirectLineConfig ? "Active CopilotStudio connector configured" : hasDirectLineModule ? "Module installed, no active config" : "Connector module unavailable"),
+            new StatusBadgeItem(
+                "AI Judge",
+                hasJudgeProvider && hasJudgeSetting ? "Healthy" : hasJudgeProvider ? "Pending" : "Down",
+                hasJudgeProvider && hasJudgeSetting ? "healthy" : hasJudgeProvider ? "pending" : "unhealthy",
+                hasJudgeProvider && hasJudgeSetting ? "Judge provider and settings available" : hasJudgeProvider ? "Provider available, no settings configured" : "No judge provider registered")
+        ];
 
         _recentRuns = await Db.Runs
             .Include(r => r.Suite)
