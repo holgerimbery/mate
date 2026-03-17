@@ -31,6 +31,7 @@ public sealed class mateDbContext : DbContext
     public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
     public DbSet<TenantUser> TenantUsers => Set<TenantUser>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<TenantRoleAssignment> TenantRoleAssignments => Set<TenantRoleAssignment>();
 
     // ── Agent configuration ──────────────────────────────────────────────────
     public DbSet<Agent> Agents => Set<Agent>();
@@ -89,5 +90,6 @@ public sealed class mateDbContext : DbContext
         modelBuilder.Entity<ApiKey>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
         modelBuilder.Entity<TenantUser>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
         modelBuilder.Entity<TenantSubscription>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<TenantRoleAssignment>().HasQueryFilter(e => _tenantContext == null || e.TenantId == _tenantContext.TenantId);
     }
 }
