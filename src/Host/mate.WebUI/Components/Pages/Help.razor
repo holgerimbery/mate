@@ -96,6 +96,17 @@
                     }
                 </div>
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                    <span class="text-muted"><i class="bi bi-key me-1"></i>Secrets Mode</span>
+                    @if (_keyVaultMode)
+                    {
+                        <span class="badge badge-pass"><i class="bi bi-shield-lock me-1"></i>Key Vault</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-info"><i class="bi bi-database me-1"></i>Database</span>
+                    }
+                </div>
+                <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-shield-lock me-1"></i>Authentication</span>
                     @if (_authEnabled)
                     {
@@ -212,6 +223,7 @@
     private bool   _redmondMode;
     private string _databaseMode   = "Unknown";
     private bool   _forwardedHeaders;
+    private bool   _keyVaultMode;
 
     protected override void OnInitialized()
     {
@@ -237,6 +249,10 @@
         _forwardedHeaders = string.Equals(
             Environment.GetEnvironmentVariable("ASPNETCORE_FORWARDEDHEADERS_ENABLED"), "true",
             StringComparison.OrdinalIgnoreCase);
+
+        var useKeyVaultForSecrets = Configuration.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false);
+        var keyVaultUri = Configuration["AzureInfrastructure:KeyVaultUri"];
+        _keyVaultMode = useKeyVaultForSecrets && !string.IsNullOrWhiteSpace(keyVaultUri);
     }
 
     private static string NormalizeVersion(string? version)

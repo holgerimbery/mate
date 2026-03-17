@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **Tenant role assignment foundation (E25-Item-1)** - Added `TenantRoleAssignment` entity, EF mapping, and migration (`AddTenantRoleAssignment`) with `mateDbContext` integration (DbSet + tenant query filter) as the persistence base for upcoming tenant-scoped authorization.
 - **Tenant authorization service (E25-Item-2)** - Added `ITenantAuthorizationService` interface and `TenantAuthorizationService` implementation for platform-level role resolution from `TenantRoleAssignments`. Uses null-tenantContext pattern to bypass global query filter. Registered as `Scoped` in `CoreServiceExtensions`. Returns safe empty defaults in standard deployments.
+- **Azure Key Vault secret service foundation (E25-Item-3)** - Added `AzureKeyVaultSecretService` and opt-in Azure infrastructure routing for `ISecretService` (`AzureInfrastructure:UseKeyVaultForSecrets` + `AzureInfrastructure:KeyVaultUri`) while preserving database-backed secret behavior as default fallback.
+- **Help page secrets mode badge (E25-Item-3)** - Added `Secrets Mode` runtime badge on `/help` to indicate whether the app is running in `Key Vault` mode or `Database` mode.
 
 ### Changed
 - **WebUI EF tooling dependency (E25-Item-1)** - Added `Microsoft.EntityFrameworkCore.Design` package reference to `mate.WebUI` to enable startup-project-backed migration generation.

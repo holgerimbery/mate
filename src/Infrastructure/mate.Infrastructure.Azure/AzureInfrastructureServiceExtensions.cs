@@ -1,10 +1,13 @@
 // Copyright (c) Holger Imbery. All rights reserved.
 // Licensed under the mate Custom License. See LICENSE in the project root.
 // Commercial use of this file, in whole or in part, is prohibited without prior written permission.
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 using mate.Domain.Contracts.Infrastructure;
 using mate.Infrastructure.Local;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace mate.Infrastructure.Azure;
 
@@ -31,8 +34,20 @@ public static class AzureInfrastructureServiceExtensions
         // Blob: Azure Blob Storage or Azurite (same code, different connection string)
         services.AddScoped<IBlobStorageService, AzureBlobStorageService>();
 
-        // Secrets: still DB-backed (Key Vault provider is backlog E1-08)
-        services.AddScoped<ISecretService, DatabaseSecretService>();
+        // Secrets: route to Azure Key Vault when explicitly enabled; otherwise DB-backed.
+        services.AddScoped<DatabaseSecretService>();
+        services.AddScoped<AzureKeyVaultSecretService>();
+        services.AddScoped<ISecretService>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<AzureInfrastructureOptions>>().Value;
+
+            if (!options.UseKeyVaultForSecrets || string.IsNullOrWhiteSpace(options.KeyVaultUri))
+                return sp.GetRequiredService<DatabaseSecretService>();
+
+            var client = new SecretClient(new Uri(options.KeyVaultUri), new DefaultAzureCredential());
+            var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AzureKeyVaultSecretService>>();
+            return new AzureKeyVaultSecretService(client, logger);
+        });
 
         // Message queue: still in-process (Service Bus is backlog E1-13)
         services.AddSingleton<IMessageQueue, InProcessMessageQueue>();
