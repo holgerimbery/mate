@@ -52,3 +52,4 @@ infra/azure/scripts/.pg-password
 infra/azure/scripts/.credentials
 .github/project-roadmap
 .github/project-roadmap/README.md
+infra/azure/scripts/run-order.md
