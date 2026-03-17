@@ -58,6 +58,9 @@ param(
     [ValidateSet('build', 'ghcr')]
     [string]$Source = '',     # intentionally empty — triggers interactive dialog when no args given
 
+    [ValidateSet('core', 'enterprise')]
+    [string]$Mode = 'core',
+
     [string]$Tag       = '',
     [string]$GhcrUser  = '',
     [string]$GhcrToken = '',
@@ -75,10 +78,34 @@ $ghcrWebUI     = "ghcr.io/holgerimbery/mate-webui"
 $ghcrWorker    = "ghcr.io/holgerimbery/mate-worker"
 $composeFile   = Join-Path $PSScriptRoot "infra\local\docker-compose.yml"
 $quickstartCompose = Join-Path $PSScriptRoot "quickstart\docker-compose.yml"
+$enterpriseCompose = Join-Path $PSScriptRoot "enterprise\mate-enterprise\infra\local\docker-compose.enterprise.yml"
+$coreLocalEnvFile = Join-Path $PSScriptRoot "infra\local\.env"
+$enterpriseEnvFile = Join-Path $PSScriptRoot "enterprise\mate-enterprise\infra\local\.env"
+
+function Remove-ConflictingNamedContainer {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ContainerName,
+        [Parameter(Mandatory=$true)]
+        [string]$ExpectedProject
+    )
+
+    docker container inspect $ContainerName 1>$null 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return
+    }
+
+    $projectLabel = docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' $ContainerName 2>$null
+    if ([string]::IsNullOrWhiteSpace($projectLabel) -or ($projectLabel.Trim() -ne $ExpectedProject)) {
+        Write-Host "Removing conflicting container '$ContainerName' (project='$projectLabel')." -ForegroundColor Yellow
+        docker rm -f $ContainerName 1>$null 2>$null
+    }
+}
 
 # ─── Interactive dialog (no arguments supplied) ────────────────────────────────
 $noArgsGiven = (-not $Source) -and (-not $Watch) -and (-not $Rebuild) -and
-               (-not $Logs)   -and (-not $DB)    -and (-not $Stop)
+               (-not $Logs)   -and (-not $DB)    -and (-not $Stop) -and
+               ($Mode -eq 'core')
 
 if ($noArgsGiven) {
     $versionFile  = Join-Path $PSScriptRoot "VERSION"
@@ -146,14 +173,94 @@ if ($noArgsGiven) {
 # ─── Stop ──────────────────────────────────────────────────────────────────────
 if ($Stop) {
     Write-Host "Stopping containers..." -ForegroundColor Yellow
-    docker compose -f $composeFile down 2>$null
-    docker compose -f $quickstartCompose down 2>$null
+    if ($Mode -eq 'enterprise') {
+        if (Test-Path $enterpriseCompose) {
+            docker compose -p mate-enterprise-local -f $enterpriseCompose down 2>$null
+        }
+        foreach ($name in @('mate-enterprise-webui','mate-enterprise-worker','mate-enterprise-postgres','mate-enterprise-azurite')) {
+            docker rm -f $name 1>$null 2>$null
+        }
+    } else {
+        docker compose -p mate-local -f $composeFile down 2>$null
+        docker compose -p mate-quickstart -f $quickstartCompose down 2>$null
+        foreach ($name in @('mate-webui','mate-worker','mate-postgres','mate-azurite')) {
+            docker rm -f $name 1>$null 2>$null
+        }
+    }
     exit 0
 }
 
 # ─── Resolve active compose file and Docker images ────────────────────────────
-if ($Source -eq 'ghcr') {
+if ($Mode -eq 'enterprise') {
+    if (-not (Test-Path $enterpriseCompose)) {
+        Write-Host "ERROR: Enterprise local compose file not found at '$enterpriseCompose'." -ForegroundColor Red
+        exit 1
+    }
+
+    if (-not (Test-Path $enterpriseEnvFile) -and (Test-Path $coreLocalEnvFile)) {
+        Copy-Item -Path $coreLocalEnvFile -Destination $enterpriseEnvFile -Force
+        Write-Host "Created enterprise local .env from core local .env." -ForegroundColor Cyan
+    }
+
+    if (-not $Source) {
+        $Source = 'build'
+    }
+
+    if ($Source -eq 'ghcr') {
+        Write-Host "ERROR: Enterprise local mode currently supports only '-Source build'." -ForegroundColor Red
+        exit 1
+    }
+
+    if (-not (Test-Path $enterpriseEnvFile)) {
+        Write-Host "ERROR: Enterprise local mode requires '$enterpriseEnvFile'." -ForegroundColor Red
+        Write-Host "Create it manually or create '$coreLocalEnvFile' first and rerun the command." -ForegroundColor Yellow
+        exit 1
+    }
+
+    $enterpriseEnvContent = Get-Content $enterpriseEnvFile -ErrorAction Stop
+    $requiredEnterpriseEnvVars = @('AzureAd__TenantId', 'AzureAd__ClientId', 'AzureAd__ClientSecret')
+    $missingEnterpriseEnvVars = foreach ($key in $requiredEnterpriseEnvVars) {
+        $match = $enterpriseEnvContent | Where-Object { $_ -match "^$([regex]::Escape($key))=(.+)$" } | Select-Object -First 1
+        if ($null -eq $match) {
+            $key
+            continue
+        }
+
+        $value = ($match -split '=', 2)[1].Trim()
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            $key
+        }
+    }
+
+    if ($missingEnterpriseEnvVars.Count -gt 0) {
+        Write-Host "ERROR: Enterprise local mode requires Entra configuration in '$enterpriseEnvFile'." -ForegroundColor Red
+        Write-Host "Missing: $($missingEnterpriseEnvVars -join ', ')" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $activeCompose = $enterpriseCompose
+    $projectName = 'mate-enterprise-local'
+    $localUrl = 'http://localhost:5100'
+    $env:IMAGE_TAG = ''
+
+    Write-Host "Enterprise local mode selected." -ForegroundColor Cyan
+    Write-Host "  Compose: $enterpriseCompose" -ForegroundColor DarkGray
+    Write-Host "  Env file: $enterpriseEnvFile" -ForegroundColor DarkGray
+    Write-Host "  URL: $localUrl" -ForegroundColor DarkGray
+
+    if ($Rebuild) {
+        Write-Host "Rebuilding enterprise images from source (--no-cache) ..." -ForegroundColor Cyan
+        docker compose -p $projectName -f $activeCompose build --no-cache
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: enterprise docker compose build failed." -ForegroundColor Red
+            exit 1
+        }
+    }
+}
+elseif ($Source -eq 'ghcr') {
     $activeCompose = $quickstartCompose
+    $projectName = 'mate-quickstart'
+    $localUrl = 'http://localhost:5000'
 
     if (-not $Tag) {
         $versionFile = Join-Path $PSScriptRoot "VERSION"
@@ -211,11 +318,13 @@ if ($Source -eq 'ghcr') {
 } else {
     # build mode
     $activeCompose = $composeFile
+    $projectName = 'mate-local'
+    $localUrl = 'http://localhost:5000'
     $env:IMAGE_TAG  = ''
 
     if ($Rebuild) {
         Write-Host "Rebuilding images from source (--no-cache) ..." -ForegroundColor Cyan
-        docker compose -f $activeCompose build --no-cache
+        docker compose -p $projectName -f $activeCompose build --no-cache
         if ($LASTEXITCODE -ne 0) {
             Write-Host "ERROR: docker compose build failed." -ForegroundColor Red
             exit 1
@@ -224,48 +333,65 @@ if ($Source -eq 'ghcr') {
 }
 
 # ─── Start containers if not already running ──────────────────────────────────
-$running = docker compose -f $activeCompose ps --status running --services 2>$null
-if ($running -notcontains $serviceWebUI) {
-    Write-Host "Starting containers ..." -ForegroundColor Cyan
-    docker compose -f $activeCompose up -d
+if ($Mode -eq 'enterprise') {
+    foreach ($name in @('mate-enterprise-webui','mate-enterprise-worker','mate-enterprise-postgres','mate-enterprise-azurite')) {
+        Remove-ConflictingNamedContainer -ContainerName $name -ExpectedProject $projectName
+    }
+} else {
+    foreach ($name in @('mate-webui','mate-worker','mate-postgres','mate-azurite')) {
+        Remove-ConflictingNamedContainer -ContainerName $name -ExpectedProject $projectName
+    }
+}
+
+$running = docker compose -p $projectName -f $activeCompose ps --status running --services 2>$null
+$requiredServices = @($serviceWebUI, $serviceWorker)
+$missingServices = $requiredServices | Where-Object { $running -notcontains $_ }
+
+if ($missingServices.Count -gt 0) {
+    Write-Host "Starting containers (missing: $($missingServices -join ', ')) ..." -ForegroundColor Cyan
+    docker compose -p $projectName -f $activeCompose up -d
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: docker compose up failed. Resolve container conflicts and retry." -ForegroundColor Red
+        exit 1
+    }
     Write-Host "Waiting for WebUI health check..."
     $tries = 0
     do {
         Start-Sleep 3
         $tries++
-        $id     = docker compose -f $activeCompose ps -q $serviceWebUI
+        $id     = docker compose -p $projectName -f $activeCompose ps -q $serviceWebUI
         $health = docker inspect --format '{{.State.Health.Status}}' $id 2>$null
     } while ($health -ne "healthy" -and $tries -lt 20)
 
     if ($health -eq "healthy") {
-        Write-Host "WebUI is healthy → http://localhost:5000" -ForegroundColor Green
+        Write-Host "WebUI is healthy → $localUrl" -ForegroundColor Green
     } else {
         Write-Host "WebUI health: $health (may still be starting)" -ForegroundColor Yellow
     }
 } else {
-    Write-Host "Containers already running → http://localhost:5000" -ForegroundColor Green
+    Write-Host "Containers already running → $localUrl" -ForegroundColor Green
 }
 
 # ─── Sub-commands ─────────────────────────────────────────────────────────────
 if ($DB) {
     Write-Host "`n=== Recent Runs (PostgreSQL) ===" -ForegroundColor Cyan
-    docker compose -f $activeCompose exec postgres psql -U mate -d mate -c `
+    docker compose -p $projectName -f $activeCompose exec postgres psql -U mate -d mate -c `
         'SELECT LEFT("Id"::text,8), "Status", "StartedAt", "TotalTestCases", "PassedCount", "FailedCount", "SkippedCount" FROM "Runs" ORDER BY "StartedAt" DESC LIMIT 5;'
     Write-Host "`n=== Last 10 Results (PostgreSQL) ===" -ForegroundColor Cyan
-    docker compose -f $activeCompose exec postgres psql -U mate -d mate -c `
+    docker compose -p $projectName -f $activeCompose exec postgres psql -U mate -d mate -c `
         'SELECT LEFT("RunId"::text,8), "Verdict", LEFT(COALESCE("ErrorMessage",\'\'),80) FROM "Results" ORDER BY "ExecutedAt" DESC LIMIT 10;'
     exit 0
 }
 
 if ($Logs) {
     Write-Host "Tailing raw container logs (Ctrl+C to stop)..." -ForegroundColor Cyan
-    docker compose -f $activeCompose logs -f
+    docker compose -p $projectName -f $activeCompose logs -f
     exit 0
 }
 
 if ($Watch) {
     Write-Host "Watching execution events (Ctrl+C to stop)..." -ForegroundColor Cyan
-    docker compose -f $activeCompose logs -f $serviceWebUI $serviceWorker | Select-String "Starting execution|Test case|Rate limit|Suite execution|Verdict=|Error|listening"
+    docker compose -p $projectName -f $activeCompose logs -f $serviceWebUI $serviceWorker | Select-String "Starting execution|Test case|Rate limit|Suite execution|Verdict=|Error|listening"
     exit 0
 }
 
@@ -273,4 +399,4 @@ if ($Watch) {
 Write-Host "`nStreaming /app/logs from container (Ctrl+C to stop)..." -ForegroundColor Cyan
 Write-Host "Tips: -Watch (filtered events)  -DB (query results)  -Logs (raw output)" -ForegroundColor DarkGray
 Write-Host "      -Source ghcr (GHCR image)  -Source ghcr -Tag v0.3.2 (specific release)" -ForegroundColor DarkGray
-docker compose -f $activeCompose exec $serviceWebUI sh -c "tail -f /app/logs/webui-`$(date +%Y%m%d).log 2>/dev/null || tail -f /app/logs/*.log 2>/dev/null || (echo 'No log files yet — waiting...'; sleep 5; tail -f /app/logs/*.log)"
+docker compose -p $projectName -f $activeCompose exec $serviceWebUI sh -c "tail -f /app/logs/webui-`$(date +%Y%m%d).log 2>/dev/null || tail -f /app/logs/*.log 2>/dev/null || (echo 'No log files yet — waiting...'; sleep 5; tail -f /app/logs/*.log)"

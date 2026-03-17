@@ -50,6 +50,23 @@ window.downloadTextFile = function (text, fileName, mimeType) {
     URL.revokeObjectURL(a.href);
 };
 
+window.downloadFileFromBase64 = function (base64, fileName, mimeType) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+
+    const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+};
+
 window.copyToClipboard = function (text) {
     return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
 };
@@ -61,6 +78,10 @@ window.scrollToTop = function () {
 window.focusElement = function (elementId) {
     const el = document.getElementById(elementId);
     if (el) el.focus();
+};
+
+window.mateIsMobile = function () {
+    return window.matchMedia('(max-width: 768px)').matches;
 };
 
 window.triggerUrlDownload = function (url) {

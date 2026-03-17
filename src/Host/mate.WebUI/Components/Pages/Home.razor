@@ -127,7 +127,7 @@ else
                             <div class="d-flex justify-content-between align-items-center py-1" style="border-bottom:1px solid var(--border)">
                                 <div>
                                     <div style="font-size:13px;font-weight:500">@(run.Suite?.Name ?? "—") / @(run.Agent?.Name ?? "—")</div>
-                                    <div style="font-size:11px;color:var(--text-secondary)">@run.StartedAt.ToString("MMM d, HH:mm") · @run.TotalTestCases cases</div>
+                                    <div style="font-size:11px;color:var(--text-secondary)">@TimeDisplay.Local(run.StartedAt).ToString("MMM d, HH:mm") · @run.TotalTestCases cases</div>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge badge-@run.Status">@run.Status</span>

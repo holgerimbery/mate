@@ -2,15 +2,14 @@
 @page "/dashboard"
 @using mate.Data
 @using mate.Domain.Entities
+@using mate.Core
 @using Microsoft.EntityFrameworkCore
 @inject mateDbContext Db
+@inject mateModuleRegistry Registry
 
 <PageTitle>Dashboard — @BrandInfo.BrandName</PageTitle>
 
-<div class="mate-header">
-    <h1>Dashboard</h1>
-    <p>AI agent quality testing overview — runs, pass rates, and latency at a glance.</p>
-</div>
+<PageHeader Title="Dashboard" Description="AI agent quality testing overview — runs, pass rates, and latency at a glance." />
 <div class="mate-page">
 
 @if (_loading)
@@ -27,6 +26,15 @@ else
         <div class="kpi-card">
             <div class="kpi-value">@(_passRate.ToString("P0"))</div>
             <div class="kpi-label">Avg Pass Rate</div>
+            @if (_passRateTrend.Any())
+            {
+                <div class="sparkline-wrap" role="img" aria-label="Pass rate trend over recent runs">
+                    <svg class="sparkline" viewBox="0 0 120 32" preserveAspectRatio="none">
+                        <polyline class="sparkline-line" points="@_passRateSparklinePoints"></polyline>
+                    </svg>
+                    <div class="sparkline-caption">Last @_passRateTrend.Count completed runs</div>
+                </div>
+            }
         </div>
         <div class="kpi-card">
             <div class="kpi-value">@_totalSuites</div>
@@ -39,6 +47,32 @@ else
         <div class="kpi-card">
             <div class="kpi-value">@($"{_avgLatency:N0} ms")</div>
             <div class="kpi-label">Avg Latency</div>
+            @if (_p95LatencyTrend.Any())
+            {
+                <div class="sparkline-wrap" role="img" aria-label="P95 latency trend over recent runs">
+                    <svg class="sparkline" viewBox="0 0 120 32" preserveAspectRatio="none">
+                        <polyline class="sparkline-line" points="@_p95LatencySparklinePoints"></polyline>
+                    </svg>
+                    <div class="sparkline-caption">P95 &middot; last @_p95LatencyTrend.Count runs</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="section-card mt-4">
+        <div class="section-header">
+            <h2 class="section-title">System Status</h2>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            @foreach (var badge in _systemStatusBadges)
+            {
+                <div class="d-flex align-items-center gap-2" style="padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)">
+                    <span style="font-weight:700">@badge.Label</span>
+                    <span class="badge badge-@badge.CssState">@badge.DisplayState</span>
+                    <span style="font-size:12px;color:var(--text-secondary)">@badge.Detail</span>
+                </div>
+            }
         </div>
     </div>
 
@@ -56,6 +90,16 @@ else
             <div>
                 <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Agent</label>
                 <input class="filter-input" placeholder="Filter by agent…" @bind="_filterAgent" @bind:event="oninput" />
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Environment</label>
+                <select class="filter-select" @bind="_filterEnvironment">
+                    <option value="">Any</option>
+                    <option value="development">Development</option>
+                    <option value="test">Test</option>
+                    <option value="staging">Staging</option>
+                    <option value="production">Production</option>
+                </select>
             </div>
             <div>
                 <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:3px">Status</label>
@@ -124,7 +168,7 @@ else
                             </a>
                         </td>
                         <td>@(run.Agent?.Name ?? "—")</td>
-                        <td>@run.StartedAt.ToString("MMM dd, HH:mm:ss")</td>
+                        <td>@TimeDisplay.Local(run.StartedAt).ToString("MMM dd, HH:mm:ss")</td>
                         <td style="text-align:center">
                             <span class="badge badge-pass">@run.PassedCount</span>
                         </td>
@@ -169,13 +213,63 @@ else
             </tbody>
         </table>
     </div>
+
+    <div class="section-card mt-4">
+        <div class="section-header">
+            <h2 class="section-title">Top Failing Test Cases</h2>
+        </div>
+
+        @if (_topFailingCases.Any())
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:56px;text-align:center">#</th>
+                        <th>Test Case</th>
+                        <th>Suite</th>
+                        <th style="width:120px;text-align:center">Failures</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var failingCase in _topFailingCases)
+                    {
+                        <tr>
+                            <td style="text-align:center;font-weight:700;color:var(--text-secondary)">@failingCase.Rank</td>
+                            <td style="font-weight:600">@failingCase.TestCaseName</td>
+                            <td>@failingCase.SuiteName</td>
+                            <td style="text-align:center">
+                                <span class="badge badge-fail">@failingCase.FailureCount</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="empty-state py-3">
+                <i class="bi bi-exclamation-triangle"></i>
+                <h3>No failing test cases yet</h3>
+                <p>This widget will populate after failed test results are recorded.</p>
+            </div>
+        }
+    </div>
 }
 </div>
 
 @code {
+    private sealed record FailingCaseWidgetItem(int Rank, string TestCaseName, string SuiteName, int FailureCount);
+    private sealed record StatusBadgeItem(string Label, string DisplayState, string CssState, string Detail);
+
     private bool _loading = true;
     private int _totalRuns;
     private double _passRate;
+    private List<double> _passRateTrend = [];
+    private string _passRateSparklinePoints = string.Empty;
+    private List<double> _p95LatencyTrend = [];
+    private string _p95LatencySparklinePoints = string.Empty;
+    private List<FailingCaseWidgetItem> _topFailingCases = [];
+    private List<StatusBadgeItem> _systemStatusBadges = [];
     private int _totalSuites;
     private int _totalAgents;
     private double _avgLatency;
@@ -183,6 +277,7 @@ else
 
     private string _filterSuite       = string.Empty;
     private string _filterAgent       = string.Empty;
+    private string _filterEnvironment = string.Empty;
     private string _filterStatus      = string.Empty;
     private DateTime? _filterDateFrom;
     private DateTime? _filterDateTo;
@@ -194,6 +289,7 @@ else
     {
         if (!string.IsNullOrWhiteSpace(_filterSuite) && !(r.Suite?.Name.Contains(_filterSuite, StringComparison.OrdinalIgnoreCase) ?? false)) return false;
         if (!string.IsNullOrWhiteSpace(_filterAgent) && !(r.Agent?.Name.Contains(_filterAgent, StringComparison.OrdinalIgnoreCase) ?? false)) return false;
+        if (!string.IsNullOrWhiteSpace(_filterEnvironment) && !string.Equals(r.Agent?.Environment, _filterEnvironment, StringComparison.OrdinalIgnoreCase)) return false;
         if (!string.IsNullOrWhiteSpace(_filterStatus) && r.Status != _filterStatus) return false;
         if (_filterDateFrom.HasValue && r.StartedAt.Date < _filterDateFrom.Value.Date) return false;
         if (_filterDateTo.HasValue   && r.StartedAt.Date > _filterDateTo.Value.Date)   return false;
@@ -208,6 +304,10 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var dbHealthy = await Db.Database.CanConnectAsync();
+        var connectorModules = Registry.GetAllConnectors();
+        var judgeProviders = Registry.GetAllJudgeProviders();
+
         _totalRuns   = await Db.Runs.CountAsync();
         _totalSuites = await Db.TestSuites.CountAsync();
         _totalAgents = await Db.Agents.CountAsync(a => a.IsActive);
@@ -215,6 +315,98 @@ else
         var completed = await Db.Runs.Where(r => r.Status == "completed").ToListAsync();
         _passRate   = completed.Count > 0 ? completed.Average(r => r.TotalTestCases > 0 ? (double)r.PassedCount / r.TotalTestCases : 0.0) : 0.0;
         _avgLatency = completed.Count > 0 ? completed.Average(r => r.AverageLatencyMs) : 0.0;
+
+        _passRateTrend = completed
+            .Where(r => r.TotalTestCases > 0)
+            .OrderByDescending(r => r.StartedAt)
+            .Take(18)
+            .OrderBy(r => r.StartedAt)
+            .Select(r => (double)r.PassedCount / r.TotalTestCases)
+            .ToList();
+        _passRateSparklinePoints = BuildSparklinePoints(_passRateTrend);
+
+        _p95LatencyTrend = completed
+            .OrderByDescending(r => r.StartedAt)
+            .Take(10)
+            .OrderBy(r => r.StartedAt)
+            .Select(r => r.P95LatencyMs)
+            .ToList();
+        if (_p95LatencyTrend.Count > 0)
+        {
+            var minVal = _p95LatencyTrend.Min();
+            var maxVal = _p95LatencyTrend.Max();
+            var range = maxVal - minVal;
+            var normalizedP95 = range > 0
+                ? _p95LatencyTrend.Select(v => (v - minVal) / range).ToList()
+                : _p95LatencyTrend.Select(_ => 0.5).ToList();
+            _p95LatencySparklinePoints = BuildSparklinePoints(normalizedP95);
+        }
+
+        var failingCaseCounts = await Db.Results
+            .Where(r => r.Verdict == "fail")
+            .GroupBy(r => r.TestCaseId)
+            .Select(g => new
+            {
+                TestCaseId = g.Key,
+                FailureCount = g.Count(),
+                LastFailedAt = g.Max(r => r.EvaluatedAt)
+            })
+            .OrderByDescending(x => x.FailureCount)
+            .ThenByDescending(x => x.LastFailedAt)
+            .Take(5)
+            .ToListAsync();
+
+        var failingCaseIds = failingCaseCounts.Select(x => x.TestCaseId).ToList();
+        var testCaseLookup = await Db.TestCases
+            .Include(tc => tc.Suite)
+            .Where(tc => failingCaseIds.Contains(tc.Id))
+            .ToDictionaryAsync(tc => tc.Id);
+
+        _topFailingCases = failingCaseCounts
+            .Select((item, index) =>
+            {
+                if (!testCaseLookup.TryGetValue(item.TestCaseId, out var testCase))
+                {
+                    return new FailingCaseWidgetItem(index + 1, "Unknown test case", "-", item.FailureCount);
+                }
+
+                return new FailingCaseWidgetItem(
+                    index + 1,
+                    string.IsNullOrWhiteSpace(testCase.Name) ? "Unnamed test case" : testCase.Name,
+                    testCase.Suite?.Name ?? "-",
+                    item.FailureCount);
+            })
+            .ToList();
+
+        var hasDirectLineModule = connectorModules.Any(c => string.Equals(c.ConnectorType, "CopilotStudio", StringComparison.OrdinalIgnoreCase));
+        var hasActiveDirectLineConfig = await Db.AgentConnectorConfigs
+            .Include(c => c.Agent)
+            .AnyAsync(c => c.IsActive
+                && c.Agent != null
+                && c.Agent.IsActive
+                && c.ConnectorType == "CopilotStudio");
+
+        var hasJudgeProvider = judgeProviders.Any();
+        var hasJudgeSetting = await Db.JudgeSettings.AnyAsync();
+
+        _systemStatusBadges =
+        [
+            new StatusBadgeItem(
+                "DB",
+                dbHealthy ? "Healthy" : "Down",
+                dbHealthy ? "healthy" : "unhealthy",
+                dbHealthy ? "Database reachable" : "Connection failed"),
+            new StatusBadgeItem(
+                "DirectLine",
+                hasActiveDirectLineConfig ? "Healthy" : hasDirectLineModule ? "Pending" : "Down",
+                hasActiveDirectLineConfig ? "healthy" : hasDirectLineModule ? "pending" : "unhealthy",
+                hasActiveDirectLineConfig ? "Active CopilotStudio connector configured" : hasDirectLineModule ? "Module installed, no active config" : "Connector module unavailable"),
+            new StatusBadgeItem(
+                "AI Judge",
+                hasJudgeProvider && hasJudgeSetting ? "Healthy" : hasJudgeProvider ? "Pending" : "Down",
+                hasJudgeProvider && hasJudgeSetting ? "healthy" : hasJudgeProvider ? "pending" : "unhealthy",
+                hasJudgeProvider && hasJudgeSetting ? "Judge provider and settings available" : hasJudgeProvider ? "Provider available, no settings configured" : "No judge provider registered")
+        ];
 
         _recentRuns = await Db.Runs
             .Include(r => r.Suite)
@@ -228,9 +420,10 @@ else
 
     private void ClearFilters()
     {
-        _filterSuite      = string.Empty;
-        _filterAgent      = string.Empty;
-        _filterStatus     = string.Empty;
+        _filterSuite        = string.Empty;
+        _filterAgent        = string.Empty;
+        _filterEnvironment  = string.Empty;
+        _filterStatus       = string.Empty;
         _filterDateFrom   = null;
         _filterDateTo     = null;
         _filterPassRateOp = string.Empty;
@@ -249,4 +442,35 @@ else
         }
         _confirmDeleteRunId = null;
     }
+
+    private static string BuildSparklinePoints(IReadOnlyList<double> values)
+    {
+        if (values.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        const double width = 120;
+        const double height = 32;
+        const double padding = 2;
+
+        if (values.Count == 1)
+        {
+            var singleY = padding + (1 - Clamp01(values[0])) * (height - 2 * padding);
+            return $"{width / 2:F1},{singleY:F1}";
+        }
+
+        var xStep = (width - 2 * padding) / (values.Count - 1);
+        var points = values
+            .Select((value, index) =>
+            {
+                var x = padding + index * xStep;
+                var y = padding + (1 - Clamp01(value)) * (height - 2 * padding);
+                return $"{x:F1},{y:F1}";
+            });
+
+        return string.Join(" ", points);
+    }
+
+    private static double Clamp01(double value) => Math.Max(0, Math.Min(1, value));
 }

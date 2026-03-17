@@ -16,10 +16,7 @@
 
 @if (!_showForm)
 {
-    <div class="mate-header">
-        <h1>Agents</h1>
-        <p>Manage AI agent connections and configurations.</p>
-    </div>
+    <PageHeader Title="Agents" Description="Manage AI agent connections and configurations." />
     <div class="mate-page">
         <div class="section-card">
             <div class="section-header">
@@ -34,48 +31,72 @@
             }
             else
             {
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Environment</th>
-                            <th>Connectors</th>
-                            <th>Active</th>
-                            <th>Created</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var agent in _agents)
-                        {
+                <div class="data-table-wrapper">
+                    <table class="data-table agents-table">
+                        <thead>
                             <tr>
-                                <td><strong>@agent.Name</strong><br /><small>@agent.Description</small></td>
-                                <td><span class="badge badge-@agent.Environment">@agent.Environment</span></td>
-                                <td>@string.Join(", ", agent.ConnectorConfigs.Select(c => c.ConnectorType))</td>
-                                <td>@(agent.IsActive ? "✓" : "✗")</td>
-                                <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
-                                <td>
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
-                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
-                                </td>
+                                <th>Name</th>
+                                <th>Environment</th>
+                                <th>Connectors</th>
+                                <th>Health</th>
+                                <th>Active</th>
+                                <th>Created</th>
+                                <th></th>
                             </tr>
-                        }
-                        @if (!_agents.Any())
-                        {
-                            <tr><td colspan="6" class="empty-row">No agents configured yet.</td></tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var agent in _agents)
+                            {
+                                <tr>
+                                    <td><strong>@agent.Name</strong><br /><small class="agent-description">@agent.Description</small></td>
+                                    <td><span class="badge badge-@agent.Environment">@agent.Environment</span></td>
+                                    <td>
+                                        @if (agent.ConnectorConfigs.Any())
+                                        {
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @foreach (var cfg in agent.ConnectorConfigs)
+                                                {
+                                                    <span class="connector-badge @GetConnectorBadgeClass(cfg.ConnectorType)">@cfg.ConnectorType</span>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-neutral">None</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetHealthBadgeClass(agent)">
+                                            <span class="health-dot @GetHealthDotClass(agent)"></span>@GetHealthLabel(agent)
+                                        </span>
+                                    </td>
+                                    <td>@(agent.IsActive ? "✓" : "✗")</td>
+                                    <td>@agent.CreatedAt.ToString("yyyy-MM-dd")</td>
+                                    <td class="agent-actions-cell">
+                                        <div class="agent-actions">
+                                            <button class="btn btn-sm btn-secondary" @onclick="() => CloneAgent(agent)">Clone</button>
+                                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEdit(agent)">Edit</button>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(agent)">Delete</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!_agents.Any())
+                            {
+                                <tr><td colspan="7" class="empty-row">No agents configured yet.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     </div>
 }
 else
 {
-    <div class="mate-header">
-        <h1>@(_editAgent is null ? "New Agent" : "Edit Agent — " + _editAgent.Name)</h1>
-        <p>@(_editAgent is null ? "Configure a new agent connection." : "Update agent details and connector configuration.")</p>
-    </div>
+    <PageHeader
+        Title="@(_editAgent is null ? "New Agent" : "Edit Agent — " + _editAgent.Name)"
+        Description="@(_editAgent is null ? "Configure a new agent connection." : "Update agent details and connector configuration.")" />
     <div class="mate-page">
 
         <!-- Basic Information -->
@@ -677,6 +698,41 @@ else
 
     private void ConfirmDelete(Agent a) => _deleteAgent = a;
 
+    private static string GetConnectorBadgeClass(string connectorType)
+        => connectorType.ToLowerInvariant() switch
+        {
+            "copilotstudio" => "copilot-studio",
+            "aifoundry" => "ai-foundry",
+            "parloa" => "parloa",
+            "generic" => "generic",
+            _ => "generic"
+        };
+
+    private static string GetHealthLabel(Agent agent)
+    {
+        if (!agent.IsActive || !agent.ConnectorConfigs.Any(c => c.IsActive))
+            return "Unhealthy";
+        if (agent.ConnectorConfigs.All(c => c.IsActive))
+            return "Healthy";
+        return "Unknown";
+    }
+
+    private static string GetHealthBadgeClass(Agent agent)
+        => GetHealthLabel(agent) switch
+        {
+            "Healthy" => "badge badge-healthy",
+            "Unhealthy" => "badge badge-unhealthy",
+            _ => "badge badge-pending"
+        };
+
+    private static string GetHealthDotClass(Agent agent)
+        => GetHealthLabel(agent) switch
+        {
+            "Healthy" => "healthy",
+            "Unhealthy" => "unhealthy",
+            _ => "unknown"
+        };
+
     private async Task DeleteAgent()
     {
         if (_deleteAgent is null) return;
@@ -685,6 +741,72 @@ else
         await Db.SaveChangesAsync();
         _deleteAgent = null;
         await LoadAsync();
+    }
+
+    private async Task CloneAgent(Agent source)
+    {
+        var clone = new Agent
+        {
+            Id = Guid.NewGuid(),
+            TenantId = source.TenantId,
+            Name = GetClonedAgentName(source.Name),
+            Description = source.Description,
+            Environment = source.Environment,
+            Tags = source.Tags.ToArray(),
+            IsActive = source.IsActive,
+            JudgeSettingId = source.JudgeSettingId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = _userId
+        };
+
+        foreach (var cfg in source.ConnectorConfigs)
+        {
+            clone.ConnectorConfigs.Add(new AgentConnectorConfig
+            {
+                Id = Guid.NewGuid(),
+                AgentId = clone.Id,
+                TenantId = source.TenantId,
+                ConnectorType = cfg.ConnectorType,
+                ConfigJson = cfg.ConfigJson,
+                IsActive = cfg.IsActive,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        Db.Agents.Add(clone);
+        AuditHelper.Log(
+            Db,
+            source.TenantId,
+            "Cloned",
+            "Agent",
+            clone.Id,
+            _userId,
+            $"{clone.Name} copied from {source.Name} with {source.ConnectorConfigs.Count} connector config(s)");
+
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    private string GetClonedAgentName(string sourceName)
+    {
+        var existingNames = _agents
+            .Select(a => a.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var copyName = $"{sourceName} (Copy)";
+        if (!existingNames.Contains(copyName))
+        {
+            return copyName;
+        }
+
+        var suffix = 2;
+        while (existingNames.Contains($"{sourceName} (Copy {suffix})"))
+        {
+            suffix++;
+        }
+
+        return $"{sourceName} (Copy {suffix})";
     }
 
     private async Task ToggleConnector(AgentConnectorConfig cfg)

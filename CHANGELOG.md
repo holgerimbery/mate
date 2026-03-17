@@ -6,6 +6,40 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.8.0] — 2026-03-16
+
+### Added
+- **Expanded document upload formats (E4-46)** — Documents upload now supports `PPTX`, `XLSX`, `TXT`, and `MD` in addition to `PDF` and `DOCX`, with matching client/server validation, extraction pipeline support, and aligned user-facing format guidance.
+- **Swagger/OpenAPI shortcuts on API Keys page (E9-06)** — API Keys now includes an `API Explorer` section with direct links to interactive Scalar UI (`/scalar/v1`) and one-click OpenAPI JSON download (`/openapi/v1.json`).
+- **Run history pruning improvements (E4-42)** — Settings now supports retention-based run pruning with explicit day threshold and `Prune Now` action. Pruning targets only completed/failed runs older than the threshold, preserves pending/running runs, and reports deleted run/result/transcript counts in the outcome message.
+- **Generate test cases from document (E4-41)** — Documents now provides a per-row `Generate` action that creates a new test suite from selected document chunks via the question-generation provider. Users can choose generation count (`5`, `10`, `15`) before triggering generation, and the UI navigates directly to the created suite.
+- **HTTP/HTTPS URL import hardening (E4-40)** — Documents URL import now validates public endpoints with SSRF protection (blocks loopback/private/link-local ranges and non-HTTP(S) redirects), enforces a 30-second timeout, follows safe redirect checks, and keeps the same chunking pipeline used for uploaded files.
+- **Selective rerun from Run Report (E4-35)** — Run Report now supports selective rerun actions for failed and skipped test cases. Users can choose `Re-run Failed` or `Re-run Skipped`, each creating a new run containing only the selected verdict set, with inline submission feedback before navigation.
+- **Test case search/filter controls (E4-34)** — Expanded suite tables now include a search box and status dropdown for filtering test cases by keyword (name, description, user input, acceptance criteria, tags) and status (All, Active, Inactive). Filtering applies only to test case rows, works in both light/dark mode and desktop/mobile, and bulk actions respect the current filter.
+- **Bulk test case operations (E4-32)** — Expanded suite tables now support multi-select test case checkboxes with select-all and suite-scoped bulk actions: `Activate Selected`, `Deactivate Selected`, and `Delete Selected` (with confirmation), including audit log entries and post-action status messages.
+- **Test case cloning (E4-33)** — Test Suites now includes a one-click `Clone` action for test cases. Cloned cases stay in the same suite, copy the original content and active state, receive a new ID, append a safe copy suffix to the name, and are inserted at the end of the suite with audit logging.
+- **Test suite cloning (E4-44)** — Test Suites now includes a one-click `Clone` action for suites. Cloned suites stay in the same tenant, copy suite metadata, duplicate all contained test cases with new IDs and fresh timestamps, use collision-safe copy names, and write an audit log entry.
+- **Agent cloning (E4-45)** — Agents now includes a one-click `Clone` action. Cloned agents stay in the same tenant, copy agent metadata and connector configs with new IDs, keep stored secret references (no resolved secret duplication), use collision-safe copy names, and write an audit log entry.
+- **Test suite JSON import/export (E4-30)** — Test Suites page now supports exporting any suite (with all test cases) to a JSON file via a per-row Export button, importing a JSON file to create a new suite via an Import button in the header, and downloading a ready-to-use template (`suite-import-template.json`) with two annotated sample test cases.
+- **Agent environment filter on run history (E4-29)** — Dashboard run history table now includes an `Environment` dropdown filter (Development / Test / Staging / Production / Any) that filters runs by the environment of the associated agent.
+- **System status badges (E4-28)** — Dashboard now shows a `System Status` section with at-a-glance health badges for DB (live `CanConnectAsync` check), DirectLine (active CopilotStudio connector config presence), and AI Judge (provider registration and settings presence); states are `Healthy`, `Pending`, or `Down`.
+- **Top-5 failing test cases widget (E4-27)** — Dashboard now shows a `Top Failing Test Cases` section that aggregates the five most frequently failing test cases across recorded results, ranked by fail count with suite context and an empty state when no failed results exist.
+- **Latency P95 sparkline trend (E4-26)** — Dashboard now shows a P95 latency trend sparkline in the `Avg Latency` KPI card, based on the last 10 completed runs, normalized to the observed min/max range; the caption reads "P95 · last N runs".
+- **Dashboard pass-rate sparkline (E4-25)** — Dashboard now shows a compact pass-rate trend sparkline in the `Avg Pass Rate` KPI card, based on recent completed runs, to highlight short-term quality direction at a glance.
+- **Local timezone display** — timestamps on Home, Dashboard, and Run Report pages now render in the container's local timezone (configurable via `MATE_TIMEZONE`, defaulting to `Europe/Berlin`) using a new `TimeDisplay.Local()` helper; `tzdata` added to the WebUI container image.
+
+### Changed
+- **Responsive sidebar behavior (E4-18)** — WebUI layout now uses an off-canvas sidebar on mobile (hidden by default), a topbar menu trigger, backdrop tap-to-close, and auto-close on navigation; desktop expand/collapse behavior remains intact.
+- **Page-level header pattern (E4-19)** — introduced reusable `PageHeader` component (title + description + optional actions layout) and applied it across core WebUI pages for a consistent page-entry experience in list/edit/run modes, with responsive behavior on mobile.
+- **Agents page parity completion (E4-06)** — completed agents CRUD experience with dynamic connector config forms, connector module-type badges in list rows, and agent health badges; also refined table containment/wrapping and mobile/desktop menu behavior to avoid overflow and desktop-only menu artifacts.
+- **BREAKING: strict role model without aliasing** — authorization now accepts only `SuperAdmin`, `TenantAdmin`, `Tester`, and `Viewer`. Legacy role names (`Admin`, `PlatformAdmin`) and alias mappings are no longer accepted. API key creation and role-based access docs are updated to the new role model.
+
+### Fixed
+- **API key role escalation prevention** — `ApiKeysPage` now resolves the caller's highest effective role from all supported role claim types and enforces least-privilege assignment both in the role dropdown and in `GenerateKey()` server-side validation, preventing lower-privilege users from minting higher-privilege API keys.
+- **Sign-out blocked by backdrop z-index** — topbar stacking context was below the popup-close backdrop (z-index 900 vs 1999), causing the backdrop to swallow all clicks inside the user popup; raised `mate-topbar` z-index to 2000 so the popup and Sign Out link are fully interactive.
+- **Role display normalization in user popup** — added `NormalizeRole()` mapping to canonicalize legacy/typo Entra role aliases (`platformadmin` → `SuperAdmin`, `tenatadmin` → `TenantAdmin`) and suppress implicit `Viewer` when higher roles are present in the token.
+- **WebUI startup 500 with Authentication:Scheme=None** — normalized runtime auth resolution to use the registered Generic handler for `None`, fixing `No default challenge scheme` failures on `/`.
+
 ---
 
 ## [v0.7.1] — 2026-03-12

@@ -6,7 +6,7 @@
 @implements IDisposable
 
 <!-- Sidebar -->
-<div class="mate-sidebar @(_expanded ? "expanded" : "collapsed")">
+<div class="mate-sidebar @(_expanded ? "expanded" : "collapsed") @(_isMobile ? "mobile" : "")">
 
     <!-- Toggle -->
     <div class="sidebar-toggle">
@@ -55,6 +55,13 @@
 
     <!-- Top bar -->
     <div class="mate-topbar">
+        @if (_isMobile)
+        {
+            <button class="topbar-menu-btn" @onclick="ToggleSidebar" title="Toggle menu" aria-label="Toggle menu">
+                <i class="bi-list"></i>
+            </button>
+        }
+
         <div class="mate-topbar-user">
             <AuthorizeView>
                 <Authorized Context="authCtx">
@@ -78,23 +85,27 @@
                                     @if (!string.IsNullOrEmpty(email)) { <p class="user-popup-email">@email</p> }
                                 </div>
                             </div>
-                            @{ var role = GetUserRole(authCtx.User); }
-                            @if (!string.IsNullOrEmpty(role))
+                            @{ var roleDisplay = GetUserRoleDisplay(authCtx.User); }
+                            @if (!string.IsNullOrEmpty(roleDisplay.PrimaryRole))
                             {
-                                <span class="user-popup-role-badge @(IsDevScheme() ? "dev" : "")">@role</span>
+                                <span class="user-popup-role-badge @(IsDevScheme() ? "dev" : "")">@roleDisplay.PrimaryRole</span>
+                                @if (roleDisplay.AllRoles.Count > 1)
+                                {
+                                    <p class="user-popup-email mt-1 mb-0">Roles: @string.Join(", ", roleDisplay.AllRoles)</p>
+                                }
                             }
                             <span class="user-popup-scheme-badge">@_authScheme</span>
                             <hr class="user-popup-divider" />
                             @if (IsEntraScheme())
                             {
-                                <a href="/MicrosoftIdentity/Account/SignOut" class="user-popup-logout">
+                                <a href="/MicrosoftIdentity/Account/SignOut" class="user-popup-logout" @onclick="SignOut" @onclick:preventDefault="true">
                                     <i class="bi bi-box-arrow-right me-1"></i>Sign out
                                 </a>
                             }
                             else
                             {
                                 <div class="user-popup-devnote">
-                                    <i class="bi bi-info-circle me-1"></i>Development mode — all requests are authenticated as Admin.
+                                    <i class="bi bi-info-circle me-1"></i>Development mode — all requests are authenticated as SuperAdmin.
                                 </div>
                             }
                         </div>
@@ -121,6 +132,11 @@
     <div class="sidebar-backdrop" @onclick="CloseUserPopup"></div>
 }
 
+@if (_isMobile && _expanded)
+{
+    <div class="sidebar-menu-backdrop" @onclick="ToggleSidebar"></div>
+}
+
 @code {
     private bool _expanded = true;
     private string _currentPage = "home";
@@ -128,6 +144,7 @@
     private bool _layoutFirstRender;
     private bool _userPopupOpen;
     private string _authScheme = "None";
+    private bool _isMobile;
 
     protected override void OnInitialized()
     {
@@ -144,6 +161,11 @@
             try
             {
                 _darkMode = await JS.InvokeAsync<bool>("mateInitDarkMode");
+                _isMobile = await JS.InvokeAsync<bool>("mateIsMobile");
+                if (_isMobile)
+                {
+                    _expanded = false;
+                }
             }
             catch (Exception)
             {
@@ -162,6 +184,12 @@
     private void ToggleUserPopup() => _userPopupOpen = !_userPopupOpen;
     private void CloseUserPopup()  => _userPopupOpen = false;
 
+    private void SignOut()
+    {
+        _userPopupOpen = false;
+        Navigation.NavigateTo("/MicrosoftIdentity/Account/SignOut", forceLoad: true);
+    }
+
     private bool IsEntraScheme() => string.Equals(_authScheme, "EntraId", StringComparison.OrdinalIgnoreCase);
     private bool IsDevScheme()   => string.Equals(_authScheme, "Generic", StringComparison.OrdinalIgnoreCase)
                                  || string.Equals(_authScheme, "None",    StringComparison.OrdinalIgnoreCase);
@@ -175,16 +203,77 @@
             : (parts[0][0].ToString() + parts[^1][0].ToString()).ToUpper();
     }
 
-    private static string GetUserRole(ClaimsPrincipal user)
+    private sealed record RoleDisplay(string PrimaryRole, IReadOnlyList<string> AllRoles);
+
+    private static string? NormalizeRole(string? role)
     {
-        return user.FindFirst(ClaimTypes.Role)?.Value
-            ?? user.FindFirst("roles")?.Value
-            ?? user.FindFirst("mate:role")?.Value
-            ?? "";
+        if (string.IsNullOrWhiteSpace(role)) return null;
+
+        return role.Trim().ToLowerInvariant() switch
+        {
+            "superadmin" => "SuperAdmin",
+            "platformadmin" => "SuperAdmin",
+            "tenantadmin" => "TenantAdmin",
+            "tenatadmin" => "TenantAdmin",
+            "tester" => "Tester",
+            "viewer" => "Viewer",
+            _ => role.Trim(),
+        };
+    }
+
+    private static RoleDisplay GetUserRoleDisplay(ClaimsPrincipal user)
+    {
+        var orderedKnownRoles = new[] { "SuperAdmin", "TenantAdmin", "Tester", "Viewer" };
+        var roleSet = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var claim in user.FindAll(ClaimTypes.Role))
+        {
+            var normalized = NormalizeRole(claim.Value);
+            if (!string.IsNullOrWhiteSpace(normalized))
+                roleSet.Add(normalized);
+        }
+
+        foreach (var claim in user.FindAll("roles"))
+        {
+            var normalized = NormalizeRole(claim.Value);
+            if (!string.IsNullOrWhiteSpace(normalized))
+                roleSet.Add(normalized);
+        }
+
+        foreach (var claim in user.FindAll("mate:role"))
+        {
+            var normalized = NormalizeRole(claim.Value);
+            if (!string.IsNullOrWhiteSpace(normalized))
+                roleSet.Add(normalized);
+        }
+
+        // Viewer is implicit when higher privileges are present; suppress it in the role badge list.
+        if (roleSet.Contains("SuperAdmin") || roleSet.Contains("TenantAdmin") || roleSet.Contains("Tester"))
+            roleSet.Remove("Viewer");
+
+        var result = orderedKnownRoles.Where(roleSet.Contains).ToList();
+        var unknown = roleSet.Where(r => !orderedKnownRoles.Contains(r, StringComparer.Ordinal))
+            .OrderBy(r => r, StringComparer.Ordinal)
+            .ToList();
+        result.AddRange(unknown);
+
+        if (result.Count == 0)
+            return new RoleDisplay("", Array.Empty<string>());
+
+        return new RoleDisplay(result[0], result);
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => InvokeAsync(() => { UpdateCurrentPage(e.Location); _userPopupOpen = false; StateHasChanged(); });
+        => InvokeAsync(() =>
+        {
+            UpdateCurrentPage(e.Location);
+            _userPopupOpen = false;
+            if (_isMobile)
+            {
+                _expanded = false;
+            }
+            StateHasChanged();
+        });
 
     private void UpdateCurrentPage(string uri)
     {

@@ -170,6 +170,10 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'Azure'
             }
             {
+              name: 'RedmondMode'
+              value: 'false'
+            }
+            {
               name: 'AzureInfrastructure__BlobContainerName'
               value: 'mate-blobs'
             }
@@ -233,6 +237,10 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'Infrastructure__Provider'
               value: 'Azure'
+            }
+            {
+              name: 'RedmondMode'
+              value: 'false'
             }
             {
               name: 'AzureInfrastructure__BlobContainerName'

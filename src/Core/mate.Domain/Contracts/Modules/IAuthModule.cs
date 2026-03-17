@@ -27,7 +27,7 @@ public interface IAuthModule
 
     /// <summary>
     /// Maps provider-specific claims to the internal mate claim set.
-    /// Must produce: ExternalTenantId, UserId, Role (Admin|Tester|Viewer|PlatformAdmin).
+    /// Must produce: ExternalTenantId, UserId, Role (SuperAdmin|TenantAdmin|Tester|Viewer).
     /// </summary>
     Task<ClaimsPrincipal> TransformClaimsAsync(ClaimsPrincipal external);
 }

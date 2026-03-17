@@ -16,7 +16,7 @@ namespace mate.Modules.Auth.Generic;
 /// <summary>
 /// Generic / development authentication module.
 ///
-/// Accepts any request as authenticated and injects a synthetic admin principal.
+/// Accepts any request as authenticated and injects a synthetic super-admin principal.
 /// USE ONLY IN DEVELOPMENT OR LOCAL TESTING — never register this in production.
 ///
 /// Set <c>Authentication:Scheme = "Generic"</c> in appsettings.Development.json.
@@ -66,7 +66,8 @@ internal sealed class DevelopmentAuthHandler : AuthenticationHandler<Authenticat
         {
             new Claim("mate:externalTenantId", DevTenantId.ToString()),
             new Claim("mate:userId",            DevUserId.ToString()),
-            new Claim("mate:role",              "Admin"),
+            new Claim("mate:role",              "SuperAdmin"),
+            new Claim(ClaimTypes.Role,           "SuperAdmin"),
             new Claim(ClaimTypes.Name,          "Development User"),
             new Claim(ClaimTypes.Email,         "dev@localhost"),
         };

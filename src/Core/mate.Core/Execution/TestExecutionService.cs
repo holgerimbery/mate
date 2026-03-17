@@ -81,7 +81,8 @@ public sealed class TestExecutionService
         var agentConfig = BuildConnectionConfig(connectorConfig, await ResolveConnectorSecretsAsync(connectorConfig, ct));
         var connector = connectorModule.CreateConnector(agentConfig);
 
-        var testCases = await LoadTestCasesAsync(suite.Id, ct);
+        var selectedCaseIds = ParseSelectedCaseIds(run.ErrorMessage);
+        var testCases = await LoadTestCasesAsync(suite.Id, selectedCaseIds, ct);
         int pass = 0, fail = 0, skip = 0, error = 0;
         var latencies = new List<long>(testCases.Count);
 
@@ -128,6 +129,11 @@ public sealed class TestExecutionService
         run.P95LatencyMs      = CalculatePercentile(latencies, 95);
         run.Status     = ct.IsCancellationRequested ? "failed" : "completed";
         run.CompletedAt = DateTime.UtcNow;
+        if (run.Status == "completed")
+        {
+            // Clear selected-testcase metadata once rerun completed successfully.
+            run.ErrorMessage = null;
+        }
 
         await _db.SaveChangesAsync(ct);
 
@@ -283,10 +289,30 @@ public sealed class TestExecutionService
             ?? throw new InvalidOperationException($"Run {runId} not found.");
     }
 
-    private async Task<List<TestCase>> LoadTestCasesAsync(Guid suiteId, CancellationToken ct)
+    private static IReadOnlyCollection<Guid>? ParseSelectedCaseIds(string? runErrorMessage)
     {
-        return await _db.TestCases
-            .Where(tc => tc.SuiteId == suiteId && tc.IsActive)
+        const string Prefix = "selected-testcases:";
+        if (string.IsNullOrWhiteSpace(runErrorMessage) || !runErrorMessage.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return runErrorMessage[Prefix.Length..]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => Guid.TryParse(value, out var id) ? id : Guid.Empty)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+    }
+
+    private async Task<List<TestCase>> LoadTestCasesAsync(Guid suiteId, IReadOnlyCollection<Guid>? selectedCaseIds, CancellationToken ct)
+    {
+        IQueryable<TestCase> query = _db.TestCases.Where(tc => tc.SuiteId == suiteId);
+
+        if (selectedCaseIds is { Count: > 0 })
+            query = query.Where(tc => selectedCaseIds.Contains(tc.Id));
+        else
+            query = query.Where(tc => tc.IsActive);
+
+        return await query
             .OrderBy(tc => tc.SortOrder)
             .ToListAsync(ct);
     }

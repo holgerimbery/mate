@@ -3,26 +3,29 @@
 @using mate.Core.DocumentProcessing
 @using mate.Data
 @using mate.Domain.Entities
+@using mate.Domain.Contracts.Infrastructure
+@using mate.Domain.Contracts.Modules
 @using Microsoft.EntityFrameworkCore
+@using System.Net
 @using System.Security.Cryptography
 @inject mateDbContext Db
 @inject DocumentIngestor Ingestor
 @inject DocumentChunker Chunker
 @inject IHttpClientFactory HttpClientFactory
 @inject ITenantContext TenantCtx
+@inject mate.Core.mateModuleRegistry Registry
+@inject ISecretService SecretSvc
+@inject NavigationManager Nav
 
 <PageTitle>Documents — @BrandInfo.BrandName</PageTitle>
 
-<div class="mate-header">
-    <h1>Documents</h1>
-    <p>Upload and manage documents for AI-powered test question generation.</p>
-</div>
+<PageHeader Title="Documents" Description="Upload and manage documents for AI-powered test question generation." />
 <div class="mate-page">
 
     <div class="section-card">
         <h2 class="section-title mb-3">Upload Document</h2>
-        <p class="text-muted mb-3">Supported formats: <strong>PDF</strong>, <strong>DOCX</strong>. Files are chunked and used for AI-powered test question generation.</p>
-        <InputFile OnChange="HandleFileSelected" accept=".pdf,.docx" />
+        <p class="text-muted mb-3">Supported formats: <strong>PDF</strong>, <strong>DOCX</strong>, <strong>PPTX</strong>, <strong>XLSX</strong>, <strong>TXT</strong>, <strong>MD</strong>. Files are chunked and used for AI-powered test question generation.</p>
+        <InputFile OnChange="HandleFileSelected" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md" />
         @if (_uploading)
         {
             <div class="d-flex align-items-center gap-2 mt-3"><span class="spinner"></span><span>Uploading and processing…</span></div>
@@ -70,6 +73,14 @@
     <div class="section-card">
         <div class="section-header">
             <span class="section-title">Uploaded Documents</span>
+            <div class="d-flex align-items-center gap-2">
+                <label for="doc-qgen-count" style="font-size:12px;color:var(--text-secondary);margin:0">Questions</label>
+                <select id="doc-qgen-count" class="filter-select" style="width:90px" @bind="_generateQuestionCount" disabled="@(_generatingDoc is not null)">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                </select>
+            </div>
         </div>
         @if (_loading)
         {
@@ -77,42 +88,56 @@
         }
         else
         {
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>File Name</th>
-                        <th>Type</th>
-                        <th>Size</th>
-                        <th>Pages</th>
-                        <th>Chunks</th>
-                        <th>Uploaded</th>
-                        <th>By</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var doc in _documents)
-                    {
+            <div class="data-table-wrapper">
+                <table class="data-table">
+                    <thead>
                         <tr>
-                            <td>@doc.FileName</td>
-                            <td>@doc.ContentType</td>
-                            <td>@FormatSize(doc.FileSizeBytes)</td>
-                            <td>@doc.PageCount</td>
-                            <td>@doc.ChunkCount</td>
-                            <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                            <td>@doc.UploadedBy</td>
-                            <td class="d-flex gap-1">
-                                <a href="/documents/@doc.Id" class="btn btn-sm btn-secondary"><i class="bi bi-eye me-1"></i>View</a>
-                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
-                            </td>
+                            <th>File Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Pages</th>
+                            <th>Chunks</th>
+                            <th>Uploaded</th>
+                            <th>By</th>
+                            <th></th>
                         </tr>
-                    }
-                    @if (!_documents.Any())
-                    {
-                        <tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var doc in _documents)
+                        {
+                            <tr>
+                                <td>@doc.FileName</td>
+                                <td>@doc.ContentType</td>
+                                <td>@FormatSize(doc.FileSizeBytes)</td>
+                                <td>@doc.PageCount</td>
+                                <td>@doc.ChunkCount</td>
+                                <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@doc.UploadedBy</td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-wrap justify-content-end">
+                                        <a href="/documents/@doc.Id" class="btn btn-sm btn-secondary"><i class="bi bi-eye me-1"></i>View</a>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => GenerateTestCasesFromDocument(doc)" disabled="@(_generatingDoc is not null)">
+                                            @if (_generatingDoc?.Id == doc.Id)
+                                            {
+                                                <span class="spinner me-1"></span><span>Generating…</span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-stars me-1"></i><span>Generate</span>
+                                            }
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(doc)">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!_documents.Any())
+                        {
+                            <tr><td colspan="8" class="empty-row">No documents uploaded yet.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     </div>
 </div>
@@ -136,6 +161,8 @@
     private bool _uploading;
     private List<Document> _documents = [];
     private Document? _deleteDoc;
+    private Document? _generatingDoc;
+    private int _generateQuestionCount = 5;
     private string _uploadError = string.Empty;
     private string _uploadSuccess = string.Empty;
     private string _importUrl = string.Empty;
@@ -159,9 +186,9 @@
         _uploadSuccess = string.Empty;
         var file = e.File;
         var ext = Path.GetExtension(file.Name).ToLowerInvariant();
-        if (ext is not ".pdf" and not ".docx")
+        if (ext is not ".pdf" and not ".docx" and not ".pptx" and not ".xlsx" and not ".txt" and not ".md")
         {
-            _uploadError = "Only .pdf and .docx files are supported.";
+            _uploadError = "Only .pdf, .docx, .pptx, .xlsx, .txt, and .md files are supported.";
             return;
         }
         _uploading = true;
@@ -205,13 +232,6 @@
             return;
         }
 
-        var host = uri.Host.ToLowerInvariant();
-        if (host is "localhost" or "127.0.0.1" or "::1")
-        {
-            _importError = "Local addresses are not allowed.";
-            return;
-        }
-
         _importingUrl = true;
         _importError = string.Empty;
         _importSuccess = string.Empty;
@@ -219,19 +239,81 @@
         try
         {
             using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var client = HttpClientFactory.CreateClient();
-            var response = await client.GetAsync(_importUrl.Trim(), cts.Token);
-            response.EnsureSuccessStatusCode();
+            var validationError = await ValidatePublicHttpUriAsync(uri, cts.Token);
+            if (!string.IsNullOrEmpty(validationError))
+            {
+                _importError = validationError;
+                return;
+            }
 
-            var content = await response.Content.ReadAsStringAsync(cts.Token);
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var client = new HttpClient(handler);
+
+            var currentUri = uri;
+            string content = string.Empty;
+            for (var redirectCount = 0; redirectCount <= 5; redirectCount++)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+
+                if ((int)response.StatusCode is >= 300 and < 400)
+                {
+                    var location = response.Headers.Location;
+                    if (location is null)
+                    {
+                        _importError = "URL redirect is missing a destination.";
+                        return;
+                    }
+
+                    var nextUri = location.IsAbsoluteUri ? location : new Uri(currentUri, location);
+                    if (nextUri.Scheme is not "http" and not "https")
+                    {
+                        _importError = "Redirect target must use HTTP or HTTPS.";
+                        return;
+                    }
+
+                    var redirectValidation = await ValidatePublicHttpUriAsync(nextUri, cts.Token);
+                    if (!string.IsNullOrEmpty(redirectValidation))
+                    {
+                        _importError = redirectValidation;
+                        return;
+                    }
+
+                    currentUri = nextUri;
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+                content = await response.Content.ReadAsStringAsync(cts.Token);
+                break;
+            }
+
             if (string.IsNullOrWhiteSpace(content))
             {
                 _importError = "The URL returned empty content.";
                 return;
             }
 
-            var fileName = System.IO.Path.GetFileName(uri.LocalPath.TrimEnd('/'));
-            if (string.IsNullOrWhiteSpace(fileName)) fileName = uri.Host + ".txt";
+            if (content.Length > 10_000_000)
+            {
+                _importError = "The URL content is too large (max 10 MB text).";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _importError = "The URL returned empty content.";
+                return;
+            }
+
+            var fileName = System.IO.Path.GetFileName(currentUri.LocalPath.TrimEnd('/'));
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = currentUri.Host + ".txt";
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _importError = "The URL returned empty content.";
+                return;
+            }
 
             var bytes = System.Text.Encoding.UTF8.GetBytes(content);
             var contentHash = Convert.ToHexString(SHA256.HashData(bytes));
@@ -289,10 +371,192 @@
         }
     }
 
+    private static async Task<string?> ValidatePublicHttpUriAsync(Uri uri, CancellationToken token)
+    {
+        var host = uri.Host.ToLowerInvariant();
+        if (host is "localhost" or "127.0.0.1" or "::1")
+            return "Local addresses are not allowed.";
+
+        try
+        {
+            var addresses = await Dns.GetHostAddressesAsync(uri.Host, token);
+            if (addresses.Length == 0)
+                return "Could not resolve URL host address.";
+
+            if (addresses.Any(IsPrivateOrLocalAddress))
+                return "Private, loopback, or link-local addresses are not allowed.";
+        }
+        catch (Exception ex)
+        {
+            return $"Host validation failed: {ex.Message}";
+        }
+
+        return null;
+    }
+
+    private static bool IsPrivateOrLocalAddress(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address))
+            return true;
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            if (address.IsIPv6LinkLocal || address.IsIPv6Multicast || address.IsIPv6SiteLocal)
+                return true;
+
+            var bytes = address.GetAddressBytes();
+            // Unique local addresses: fc00::/7
+            if ((bytes[0] & 0xFE) == 0xFC)
+                return true;
+            return false;
+        }
+
+        var v4 = address.GetAddressBytes();
+        // 10.0.0.0/8
+        if (v4[0] == 10)
+            return true;
+        // 172.16.0.0/12
+        if (v4[0] == 172 && v4[1] >= 16 && v4[1] <= 31)
+            return true;
+        // 192.168.0.0/16
+        if (v4[0] == 192 && v4[1] == 168)
+            return true;
+        // 169.254.0.0/16 (link-local)
+        if (v4[0] == 169 && v4[1] == 254)
+            return true;
+        // 100.64.0.0/10 (carrier-grade NAT)
+        if (v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127)
+            return true;
+
+        return false;
+    }
+
     private static string FormatSize(long bytes)
     {
         if (bytes < 1024L) return $"{bytes} B";
         if (bytes < 1024L * 1024L) return $"{bytes / 1024.0:F1} KB";
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private async Task GenerateTestCasesFromDocument(Document doc)
+    {
+        _generatingDoc = doc;
+        StateHasChanged();
+
+        try
+        {
+            var providers = Registry.GetAllQuestionProviders();
+            if (providers.Count == 0)
+            {
+                _uploadError = "No question generation provider registered. Make sure the ModelQGen module is loaded.";
+                return;
+            }
+
+            var qgenSetting = await Db.GlobalQuestionGenerationSettings.FirstOrDefaultAsync();
+            if (qgenSetting is null)
+            {
+                _uploadError = "Configure question generation settings first (Settings → Question Generation).";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(qgenSetting.Endpoint))
+            {
+                _uploadError = "The question generation endpoint is not configured (Settings → Question Generation).";
+                return;
+            }
+
+            // Load document chunks
+            var chunks = await Db.Chunks
+                .Where(c => c.DocumentId == doc.Id && c.TenantId == TenantCtx.TenantId)
+                .OrderBy(c => c.ChunkIndex)
+                .ToListAsync();
+
+            if (chunks.Count == 0)
+            {
+                _uploadError = "No chunks found for this document.";
+                return;
+            }
+
+            var sourceContent = string.Join("\n\n", chunks.Select(c => c.Text));
+
+            // Resolve API key
+            string apiKey;
+            if (string.IsNullOrWhiteSpace(qgenSetting.ApiKeyRef))
+            {
+                apiKey = string.Empty;
+            }
+            else
+            {
+                try { apiKey = await SecretSvc.GetSecretAsync(qgenSetting.ApiKeyRef) ?? string.Empty; }
+                catch { apiKey = qgenSetting.ApiKeyRef; }
+            }
+
+            var request = new QuestionGenerationRequest
+            {
+                DocumentContent      = sourceContent,
+                NumberOfQuestions    = _generateQuestionCount,
+                SystemPromptOverride = null, // Use default from settings
+                ExistingQuestions    = [],
+                ResolvedEndpoint     = qgenSetting.Endpoint,
+                ResolvedApiKey       = apiKey,
+                Model                = qgenSetting.Model,
+            };
+
+            var generated = await providers[0].GenerateAsync(request);
+
+            if (generated.Count == 0)
+            {
+                _uploadError = "The LLM returned no questions. Check the document content and endpoint settings.";
+                return;
+            }
+
+            // Create new TestSuite with generated test cases
+            var suiteId = Guid.NewGuid();
+            var suite = new TestSuite
+            {
+                Id                = suiteId,
+                TenantId          = TenantCtx.TenantId,
+                Name              = $"Generated from: {doc.FileName}",
+                Description       = $"Test suite generated from document AI analysis.",
+                IsActive          = true,
+                CreatedAt         = DateTime.UtcNow,
+                UpdatedAt         = DateTime.UtcNow,
+                CreatedBy         = "generate-from-doc",
+                TestCases         = generated.Select((q, idx) => new TestCase
+                {
+                    Id                 = Guid.NewGuid(),
+                    SuiteId            = suiteId,
+                    TenantId           = TenantCtx.TenantId,
+                    Name               = q.Question.Length > 80 ? q.Question[..77] + "…" : q.Question,
+                    Description        = q.Rationale ?? string.Empty,
+                    UserInput          = [q.Question],
+                    AcceptanceCriteria = q.ExpectedAnswer,
+                    ExpectedIntent     = q.ExpectedIntent,
+                    ExpectedEntities   = q.ExpectedEntities,
+                    ReferenceAnswer    = q.ExpectedAnswer,
+                    SortOrder          = idx + 1,
+                    IsActive           = true,
+                    CreatedAt          = DateTime.UtcNow,
+                    UpdatedAt          = DateTime.UtcNow,
+                }).ToList()
+            };
+
+            Db.TestSuites.Add(suite);
+            await Db.SaveChangesAsync();
+
+            _uploadSuccess = $"✓ Generated test suite '{suite.Name}' with {generated.Count} test case{(generated.Count == 1 ? "" : "s")} from '{doc.FileName}'.";
+            await LoadAsync();
+            StateHasChanged();
+            await Task.Delay(700);
+            Nav.NavigateTo($"/test-suites/{suiteId}");
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Generation failed: {ex.Message}";
+        }
+        finally
+        {
+            _generatingDoc = null;
+        }
     }
 }

@@ -6,7 +6,13 @@
 @using mate.Domain.Entities
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using ClosedXML.Excel
+@using System.Text
+@using System.Text.Json
+@using System.Text.Json.Serialization
 @inject mateDbContext Db
+@inject IJSRuntime JS
 @inject IMessageQueue Queue
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
@@ -18,17 +24,32 @@
 
 @if (!_showSuiteForm && _runSuite is null)
 {
-    <div class="mate-header">
-        <h1>Test Suites</h1>
-        <p>Manage test suites, test cases, and run evaluations against your agents.</p>
-    </div>
+    <PageHeader Title="Test Suites" Description="Manage test suites, test cases, and run evaluations against your agents." />
     <div class="mate-page">
         <div class="section-card">
             <div class="section-header">
                 <span class="section-title">All Test Suites</span>
-                <button class="btn btn-primary btn-sm" @onclick="OpenCreateSuite">
-                    <i class="bi bi-plus-lg"></i> New Suite
-                </button>
+                <div class="d-flex gap-2 flex-wrap">
+                    <select class="filter-select" style="width:120px" @bind="_transferFormat" title="Import/Export format">
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                        <option value="excel">Excel</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" @onclick="DownloadImportTemplate">
+                        <i class="bi bi-file-earmark-arrow-down me-1"></i>Template
+                    </button>
+                    <label class="btn btn-secondary btn-sm mb-0" style="cursor:pointer">
+                        <i class="bi bi-upload me-1"></i>Import
+                        <InputFile OnChange="ImportSuiteFromFile" accept=".json,.csv,.xlsx" style="display:none" />
+                    </label>
+                    @if (!string.IsNullOrEmpty(_importMessage))
+                    {
+                        <span style="font-size:12px;align-self:center;color:@(_importError ? "var(--danger)" : "var(--success)")">@_importMessage</span>
+                    }
+                    <button class="btn btn-primary btn-sm" @onclick="OpenCreateSuite">
+                        <i class="bi bi-plus-lg"></i> New Suite
+                    </button>
+                </div>
             </div>
             @if (_loading)
             {
@@ -36,7 +57,7 @@
             }
             else
             {
-                <table class="data-table">
+                <table class="data-table test-suites-table">
                     <thead>
                         <tr>
                             <th>Name</th>
@@ -66,66 +87,113 @@
                                 <td>@suite.TestCases.Count</td>
                                 <td>@suite.PassThreshold.ToString("P0")</td>
                                 <td>@(suite.IsActive ? "✓" : "✗")</td>
-                                <td>
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => ExpandSuite(suite)">
-                                        @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
-                                    </button>
-                                    <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)"><i class="bi bi-play-fill"></i> Run</button>
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
-                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
+                                <td class="suite-actions-cell">
+                                    <div class="suite-actions">
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => ExpandSuite(suite)">
+                                            @(_expandedSuiteId == suite.Id ? "▲ Hide Cases" : "▼ Show Cases")
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => OpenRun(suite)"><i class="bi bi-play-fill"></i> Run</button>
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => CloneSuite(suite)">Clone</button>
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => ExportSuite(suite)"><i class="bi bi-download"></i> Export</button>
+                                        <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditSuite(suite)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteSuite(suite)">Delete</button>
+                                    </div>
                                 </td>
                             </tr>
                             @if (_expandedSuiteId == suite.Id)
                             {
                                 <tr>
-                                    <td colspan="5" style="padding:0 1rem 1rem;background:var(--surface-2);color:var(--text-primary)">
+                                    <td colspan="5" class="suite-expanded-cell" style="padding:0 1rem 1rem;background:var(--surface-2);color:var(--text-primary)">
                                         <div class="section-header" style="margin-top:12px;margin-bottom:8px">
                                             <strong>Test Cases</strong>
-                                            <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">
-                                                <i class="bi bi-plus-lg"></i> Add Case
-                                            </button>
+                                            <div class="d-flex gap-2 flex-wrap align-items-center">
+                                                <input class="form-control form-control-sm" style="width:180px" placeholder="Search cases…"
+                                                       @bind="_caseSearchKeyword" @bind:event="oninput" title="Search by name, description, input, criteria, tags" />
+                                                <select class="form-select form-select-sm" style="width:120px" @bind="_caseStatusFilter">
+                                                    <option value="all">All</option>
+                                                    <option value="active">Active</option>
+                                                    <option value="inactive">Inactive</option>
+                                                </select>
+                                                <button class="btn btn-sm btn-secondary"
+                                                        disabled="@(SelectedCaseIdsInSuite(suite).Count == 0)"
+                                                        @onclick="() => BulkSetCaseActive(suite, true)">
+                                                    Activate Selected
+                                                </button>
+                                                <button class="btn btn-sm btn-secondary"
+                                                        disabled="@(SelectedCaseIdsInSuite(suite).Count == 0)"
+                                                        @onclick="() => BulkSetCaseActive(suite, false)">
+                                                    Deactivate Selected
+                                                </button>
+                                                <button class="btn btn-sm btn-danger"
+                                                        disabled="@(SelectedCaseIdsInSuite(suite).Count == 0)"
+                                                        @onclick="() => BulkDeleteCases(suite)">
+                                                    Delete Selected
+                                                </button>
+                                                <button class="btn btn-sm btn-primary" @onclick="() => OpenAddCase(suite)">
+                                                    <i class="bi bi-plus-lg"></i> Add Case
+                                                </button>
+                                            </div>
                                         </div>
-                                        <table class="data-table sub-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>Name</th>
-                                                    <th>Input(s)</th>
-                                                    <th>Active</th>
-                                                    <th></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
-                                                {
+                                        @if (!string.IsNullOrWhiteSpace(_bulkCaseMessage))
+                                        {
+                                            <div class="mb-2" style="font-size:12px;color:@(_bulkCaseError ? "var(--danger)" : "var(--success)")">@_bulkCaseMessage</div>
+                                        }
+                                        <div class="data-table-wrapper">
+                                            <table class="data-table sub-table">
+                                                <thead>
                                                     <tr>
-                                                        <td>@tc.SortOrder</td>
-                                                        <td>
-                                                            @tc.Name<br /><small>@tc.Description</small>
-                                                            @if (tc.Tags.Length > 0)
-                                                            {
-                                                                <div class="d-flex flex-wrap gap-1 mt-1">
-                                                                    @foreach (var t in tc.Tags)
-                                                                    {
-                                                                        <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px">@t</span>
-                                                                    }
-                                                                </div>
-                                                            }
-                                                        </td>
-                                                        <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
-                                                        <td>@(tc.IsActive ? "✓" : "✗")</td>
-                                                        <td>
-                                                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
-                                                        </td>
+                                                        <th style="width:32px;text-align:center">
+                                                            <input type="checkbox"
+                                                                   checked="@AreAllCasesSelected(suite)"
+                                                                   @onchange="(e) => ToggleSelectAllCases(suite, e.Value is bool b && b)" />
+                                                        </th>
+                                                        <th>#</th>
+                                                        <th>Name</th>
+                                                        <th>Input(s)</th>
+                                                        <th>Active</th>
+                                                        <th></th>
                                                     </tr>
-                                                }
-                                                @if (!suite.TestCases.Any())
-                                                {
-                                                    <tr><td colspan="5" class="empty-row">No test cases yet.</td></tr>
-                                                }
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var tc in FilteredCases(suite))
+                                                    {
+                                                        <tr>
+                                                            <td style="text-align:center">
+                                                                <input type="checkbox"
+                                                                       checked="@_selectedCaseIds.Contains(tc.Id)"
+                                                                       @onchange="(e) => ToggleCaseSelection(tc.Id, e.Value is bool b && b)" />
+                                                            </td>
+                                                            <td>@tc.SortOrder</td>
+                                                            <td>
+                                                                @tc.Name<br /><small>@tc.Description</small>
+                                                                @if (tc.Tags.Length > 0)
+                                                                {
+                                                                    <div class="d-flex flex-wrap gap-1 mt-1">
+                                                                        @foreach (var t in tc.Tags)
+                                                                        {
+                                                                            <span style="font-size:11px;background:var(--light-bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px">@t</span>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </td>
+                                                            <td><small>@string.Join(" → ", tc.UserInput.Take(2))@(tc.UserInput.Length > 2 ? "…" : "")</small></td>
+                                                            <td>@(tc.IsActive ? "✓" : "✗")</td>
+                                                            <td class="suite-case-actions-cell">
+                                                                <div class="suite-case-actions">
+                                                                    <button class="btn btn-sm btn-secondary" @onclick="() => CloneCase(suite, tc)">Clone</button>
+                                                                    <button class="btn btn-sm btn-secondary" @onclick="() => OpenEditCase(tc)">Edit</button>
+                                                                    <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDeleteCase(tc)">Delete</button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                    @if (!suite.TestCases.Any())
+                                                    {
+                                                        <tr><td colspan="6" class="empty-row">No test cases yet.</td></tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -142,10 +210,9 @@
 }
 else if (_showSuiteForm)
 {
-    <div class="mate-header">
-        <h1>@(_editSuite is null ? "New Test Suite" : "Edit Test Suite — " + _editSuite.Name)</h1>
-        <p>@(_editSuite is null ? "Create a new test suite to organise test cases." : "Update test suite details.")</p>
-    </div>
+    <PageHeader
+        Title="@(_editSuite is null ? "New Test Suite" : "Edit Test Suite — " + _editSuite.Name)"
+        Description="@(_editSuite is null ? "Create a new test suite to organise test cases." : "Update test suite details.")" />
     <div class="mate-page">
         <div class="section-card">
             <h2 class="section-title mb-4">Suite Details</h2>
@@ -419,10 +486,9 @@ else if (_showSuiteForm)
 @* ── Run view (in-page, no modal) ────────────────────────────────────────── *@
 @if (_runSuite is not null && !_showSuiteForm)
 {
-    <div class="mate-header">
-        <h1>Run — @_runSuite.Name</h1>
-        <p>Configure and start a test run for this suite.</p>
-    </div>
+    <PageHeader
+        Title="@($"Run — {_runSuite.Name}")"
+        Description="Configure and start a test run for this suite." />
     <div class="mate-page">
         <div class="section-card">
             <h2 class="section-title mb-4">Suite Details</h2>
@@ -580,6 +646,59 @@ else if (_showSuiteForm)
     private bool _runInProgress;
     private string _runStatus = string.Empty;
     private string _runError = string.Empty;
+    private string _importMessage = string.Empty;
+    private bool _importError;
+    private string _transferFormat = "json";
+    private readonly HashSet<Guid> _selectedCaseIds = [];
+    private string _bulkCaseMessage = string.Empty;
+    private bool _bulkCaseError;
+
+    // --- E4-34: Test case search/filter state ---
+    private string _caseSearchKeyword = string.Empty;
+    private string _caseStatusFilter = "all";
+
+    // Returns filtered test cases for a suite based on search/filter controls
+    private IEnumerable<TestCase> FilteredCases(TestSuite suite)
+    {
+        var cases = suite.TestCases.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(_caseSearchKeyword))
+        {
+            var kw = _caseSearchKeyword.Trim().ToLowerInvariant();
+            cases = cases.Where(tc =>
+                (tc.Name?.ToLowerInvariant().Contains(kw) ?? false)
+                || (tc.Description?.ToLowerInvariant().Contains(kw) ?? false)
+                || (tc.AcceptanceCriteria?.ToLowerInvariant().Contains(kw) ?? false)
+                || (tc.UserInput.Any(ui => ui?.ToLowerInvariant().Contains(kw) ?? false))
+                || (tc.Tags.Any(t => t?.ToLowerInvariant().Contains(kw) ?? false))
+            );
+        }
+        if (_caseStatusFilter == "active")
+            cases = cases.Where(tc => tc.IsActive);
+        else if (_caseStatusFilter == "inactive")
+            cases = cases.Where(tc => !tc.IsActive);
+        return cases.OrderBy(tc => tc.SortOrder);
+    }
+
+    private sealed record SuiteExportDto(
+        string Name,
+        string Description,
+        double PassThreshold,
+        int DelayBetweenTestsMs,
+        bool IsActive,
+        string[] Tags,
+        List<CaseExportDto> TestCases);
+
+    private sealed record CaseExportDto(
+        string Name,
+        string Description,
+        string[] UserInput,
+        string AcceptanceCriteria,
+        string? ExpectedIntent,
+        string[] ExpectedEntities,
+        string? ReferenceAnswer,
+        bool IsActive,
+        int SortOrder,
+        string[] Tags);
 
     private class SuiteFormModel
     {
@@ -621,6 +740,10 @@ else if (_showSuiteForm)
             .Include(s => s.TestCases)
             .OrderBy(s => s.Name)
             .ToListAsync();
+        // Keep only selections that still exist after reload.
+        var validIds = _suites.SelectMany(s => s.TestCases).Select(tc => tc.Id).ToHashSet();
+        _selectedCaseIds.RemoveWhere(id => !validIds.Contains(id));
+
         _agents = await Db.Agents.Where(a => a.IsActive).OrderBy(a => a.Name).ToListAsync();
         _judgeSettings = await Db.JudgeSettings.OrderBy(j => j.Name).ToListAsync();
         _qgenSetting = await Db.GlobalQuestionGenerationSettings.FirstOrDefaultAsync();
@@ -897,6 +1020,513 @@ else if (_showSuiteForm)
         await LoadAsync();
     }
 
+    private async Task CloneSuite(TestSuite source)
+    {
+        var cloneSuite = new TestSuite
+        {
+            Id = Guid.NewGuid(),
+            TenantId = source.TenantId,
+            Name = GetClonedSuiteName(source.Name),
+            Description = source.Description,
+            PassThreshold = source.PassThreshold,
+            JudgeSettingId = source.JudgeSettingId,
+            DelayBetweenTestsMs = source.DelayBetweenTestsMs,
+            Tags = source.Tags.ToArray(),
+            IsActive = source.IsActive,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = _userId
+        };
+
+        Db.TestSuites.Add(cloneSuite);
+
+        foreach (var tc in source.TestCases.OrderBy(tc => tc.SortOrder))
+        {
+            Db.TestCases.Add(new TestCase
+            {
+                Id = Guid.NewGuid(),
+                SuiteId = cloneSuite.Id,
+                TenantId = source.TenantId,
+                Name = tc.Name,
+                Description = tc.Description,
+                UserInput = tc.UserInput.ToArray(),
+                AcceptanceCriteria = tc.AcceptanceCriteria,
+                ExpectedIntent = tc.ExpectedIntent,
+                ExpectedEntities = tc.ExpectedEntities.ToArray(),
+                ReferenceAnswer = tc.ReferenceAnswer,
+                IsActive = tc.IsActive,
+                SortOrder = tc.SortOrder,
+                Tags = tc.Tags.ToArray(),
+                SourceDocumentId = tc.SourceDocumentId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+
+        AuditHelper.Log(
+            Db,
+            source.TenantId,
+            "Cloned",
+            "TestSuite",
+            cloneSuite.Id,
+            _userId,
+            $"{cloneSuite.Name} copied from {source.Name} with {source.TestCases.Count} test case(s)");
+
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    // ── Export ──────────────────────────────────────────────────────────────
+    private async Task ExportSuite(TestSuite suite)
+    {
+        var safeName = suite.Name.Replace(' ', '-').ToLowerInvariant();
+        if (_transferFormat == "csv")
+        {
+            var csv = BuildCsvForSuite(suite);
+            await JS.InvokeVoidAsync("downloadTextFile", csv, $"suite-{safeName}.csv", "text/csv");
+            return;
+        }
+
+        if (_transferFormat == "excel")
+        {
+            using var wb = BuildWorkbookForSuite(suite);
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                base64,
+                $"suite-{safeName}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            return;
+        }
+
+        var dto = BuildSuiteExportDto(suite);
+        var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
+        await JS.InvokeVoidAsync("downloadTextFile", json, $"suite-{safeName}.json", "application/json");
+    }
+
+    // ── Import ───────────────────────────────────────────────────────────────
+    private async Task ImportSuiteFromFile(InputFileChangeEventArgs e)
+    {
+        _importMessage = string.Empty;
+        _importError = false;
+
+        var file = e.File;
+        var expectedExt = _transferFormat switch
+        {
+            "csv" => ".csv",
+            "excel" => ".xlsx",
+            _ => ".json"
+        };
+
+        if (!file.Name.EndsWith(expectedExt, StringComparison.OrdinalIgnoreCase))
+        {
+            _importMessage = $"Selected format {_transferFormat.ToUpperInvariant()} expects a {expectedExt} file.";
+            _importError = true;
+            return;
+        }
+
+        try
+        {
+            if (_transferFormat == "csv")
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                var csv = await reader.ReadToEndAsync();
+                var rows = ParseCsvRows(csv);
+                await ImportQuestionRowsAsSuite(file.Name, rows);
+                return;
+            }
+
+            if (_transferFormat == "excel")
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+                var rows = ParseExcelRows(stream);
+                await ImportQuestionRowsAsSuite(file.Name, rows);
+                return;
+            }
+
+            using var jsonStream = file.OpenReadStream(maxAllowedSize: 1 * 1024 * 1024);
+            var dto = await JsonSerializer.DeserializeAsync<SuiteExportDto>(
+                jsonStream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (dto is null)
+            {
+                _importMessage = "Could not parse the JSON file.";
+                _importError = true;
+                return;
+            }
+
+            await ImportSuiteDto(file.Name, dto);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            _importMessage = "Invalid import format. Download the matching template and retry.";
+            _importError = true;
+        }
+    }
+
+    // ── Download Template ────────────────────────────────────────────────────
+    private async Task DownloadImportTemplate()
+    {
+        if (_transferFormat == "csv")
+        {
+            var csv = "question,expectedAnswer,tags\n\"Hello\",\"Hello! How can I help?\",\"smoke;greeting\"\n\"Tell me the weather\",\"Politely explain this is out of scope.\",\"negative\"\n";
+            await JS.InvokeVoidAsync("downloadTextFile", csv, "suite-import-template.csv", "text/csv");
+            return;
+        }
+
+        if (_transferFormat == "excel")
+        {
+            using var wb = BuildWorkbookForRows([
+                ("Hello", "Hello! How can I help?", "smoke;greeting"),
+                ("Tell me the weather", "Politely explain this is out of scope.", "negative")
+            ]);
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                base64,
+                "suite-import-template.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            return;
+        }
+
+        var template = new SuiteExportDto(
+            "My Test Suite",
+            "A brief description of what this suite tests.",
+            0.8,
+            0,
+            true,
+            ["tag1", "tag2"],
+            [
+                new CaseExportDto(
+                    "Greeting test",
+                    "Verify the agent responds to a greeting.",
+                    ["Hello!", "Hi there"],
+                    "Response should include a greeting and offer help.",
+                    "Greeting",
+                    ["intent:greeting"],
+                    "Hello! How can I help you today?",
+                    true,
+                    1,
+                    ["smoke"]),
+                new CaseExportDto(
+                    "Out of scope test",
+                    "Verify the agent handles out-of-scope requests gracefully.",
+                    ["Tell me the weather"],
+                    "Response should politely indicate the topic is out of scope.",
+                    "OutOfScope",
+                    [],
+                    null,
+                    true,
+                    2,
+                    [])
+            ]);
+
+        var json = JsonSerializer.Serialize(template, new JsonSerializerOptions { WriteIndented = true });
+        await JS.InvokeVoidAsync("downloadTextFile", json, "suite-import-template.json", "application/json");
+    }
+
+    private SuiteExportDto BuildSuiteExportDto(TestSuite suite)
+    {
+        return new SuiteExportDto(
+            suite.Name,
+            suite.Description,
+            suite.PassThreshold,
+            suite.DelayBetweenTestsMs,
+            suite.IsActive,
+            suite.Tags.ToArray(),
+            suite.TestCases.OrderBy(tc => tc.SortOrder).Select(tc => new CaseExportDto(
+                tc.Name,
+                tc.Description,
+                tc.UserInput.ToArray(),
+                tc.AcceptanceCriteria,
+                tc.ExpectedIntent,
+                tc.ExpectedEntities.ToArray(),
+                tc.ReferenceAnswer,
+                tc.IsActive,
+                tc.SortOrder,
+                tc.Tags.ToArray())).ToList());
+    }
+
+    private static string BuildCsvForSuite(TestSuite suite)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("question,expectedAnswer,tags");
+
+        foreach (var tc in suite.TestCases.OrderBy(t => t.SortOrder))
+        {
+            var question = tc.UserInput.FirstOrDefault() ?? tc.Name;
+            var expected = tc.ReferenceAnswer ?? tc.AcceptanceCriteria;
+            var tags = string.Join(';', tc.Tags ?? []);
+            sb.AppendLine($"{EscapeCsv(question)},{EscapeCsv(expected)},{EscapeCsv(tags)}");
+        }
+
+        return sb.ToString();
+    }
+
+    private static XLWorkbook BuildWorkbookForSuite(TestSuite suite)
+    {
+        var rows = suite.TestCases.OrderBy(t => t.SortOrder)
+            .Select(tc => (
+                tc.UserInput.FirstOrDefault() ?? tc.Name,
+                tc.ReferenceAnswer ?? tc.AcceptanceCriteria,
+                string.Join(';', tc.Tags ?? [])))
+            .ToList();
+
+        return BuildWorkbookForRows(rows);
+    }
+
+    private static XLWorkbook BuildWorkbookForRows(IEnumerable<(string Question, string ExpectedAnswer, string Tags)> rows)
+    {
+        var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("TestCases");
+        ws.Cell(1, 1).Value = "question";
+        ws.Cell(1, 2).Value = "expectedAnswer";
+        ws.Cell(1, 3).Value = "tags";
+
+        var row = 2;
+        foreach (var item in rows)
+        {
+            ws.Cell(row, 1).Value = item.Question;
+            ws.Cell(row, 2).Value = item.ExpectedAnswer;
+            ws.Cell(row, 3).Value = item.Tags;
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+        return wb;
+    }
+
+    private async Task ImportSuiteDto(string fileName, SuiteExportDto dto)
+    {
+        var importedName = GetClonedSuiteName(dto.Name);
+        var newSuite = new TestSuite
+        {
+            Id = Guid.NewGuid(),
+            TenantId = TenantCtx.TenantId,
+            Name = importedName,
+            Description = dto.Description,
+            PassThreshold = Math.Clamp(dto.PassThreshold, 0.0, 1.0),
+            DelayBetweenTestsMs = Math.Max(0, dto.DelayBetweenTestsMs),
+            IsActive = dto.IsActive,
+            Tags = dto.Tags ?? [],
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = _userId
+        };
+        Db.TestSuites.Add(newSuite);
+
+        var sortOrder = 1;
+        foreach (var tc in dto.TestCases ?? [])
+        {
+            Db.TestCases.Add(new TestCase
+            {
+                Id = Guid.NewGuid(),
+                SuiteId = newSuite.Id,
+                TenantId = TenantCtx.TenantId,
+                Name = tc.Name,
+                Description = tc.Description,
+                UserInput = tc.UserInput ?? [],
+                AcceptanceCriteria = tc.AcceptanceCriteria,
+                ExpectedIntent = tc.ExpectedIntent,
+                ExpectedEntities = tc.ExpectedEntities ?? [],
+                ReferenceAnswer = tc.ReferenceAnswer,
+                IsActive = tc.IsActive,
+                SortOrder = sortOrder++,
+                Tags = tc.Tags ?? [],
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+
+        AuditHelper.Log(Db, TenantCtx.TenantId, "Imported", "TestSuite", newSuite.Id, _userId,
+            $"Imported from file: {fileName} -> {newSuite.Name} with {dto.TestCases?.Count ?? 0} test case(s)");
+
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+
+        _importMessage = $"Imported \"{newSuite.Name}\" with {dto.TestCases?.Count ?? 0} test case(s).";
+    }
+
+    private async Task ImportQuestionRowsAsSuite(string fileName, List<(string Question, string ExpectedAnswer, string Tags)> rows)
+    {
+        if (rows.Count == 0)
+        {
+            _importMessage = "No rows found in import file.";
+            _importError = true;
+            return;
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        var newSuite = new TestSuite
+        {
+            Id = Guid.NewGuid(),
+            TenantId = TenantCtx.TenantId,
+            Name = GetClonedSuiteName(string.IsNullOrWhiteSpace(baseName) ? "Imported Suite" : baseName),
+            Description = $"Imported from {fileName} ({_transferFormat.ToUpperInvariant()})",
+            PassThreshold = 0.7,
+            DelayBetweenTestsMs = 0,
+            IsActive = true,
+            Tags = ["imported", _transferFormat],
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            CreatedBy = _userId
+        };
+
+        Db.TestSuites.Add(newSuite);
+
+        var sortOrder = 1;
+        foreach (var row in rows)
+        {
+            var tags = row.Tags.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var name = row.Question.Length > 60 ? row.Question[..60] + "..." : row.Question;
+
+            Db.TestCases.Add(new TestCase
+            {
+                Id = Guid.NewGuid(),
+                SuiteId = newSuite.Id,
+                TenantId = TenantCtx.TenantId,
+                Name = string.IsNullOrWhiteSpace(name) ? $"Imported Case {sortOrder}" : name,
+                Description = "Imported question/answer case",
+                UserInput = [row.Question],
+                AcceptanceCriteria = string.IsNullOrWhiteSpace(row.ExpectedAnswer)
+                    ? "Response should address the question appropriately."
+                    : row.ExpectedAnswer,
+                ReferenceAnswer = string.IsNullOrWhiteSpace(row.ExpectedAnswer) ? null : row.ExpectedAnswer,
+                ExpectedEntities = [],
+                IsActive = true,
+                SortOrder = sortOrder++,
+                Tags = tags,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+
+        AuditHelper.Log(Db, TenantCtx.TenantId, "Imported", "TestSuite", newSuite.Id, _userId,
+            $"Imported from file: {fileName} -> {newSuite.Name} with {rows.Count} test case(s)");
+
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+
+        _importMessage = $"Imported \"{newSuite.Name}\" with {rows.Count} test case(s).";
+    }
+
+    private static List<(string Question, string ExpectedAnswer, string Tags)> ParseCsvRows(string csv)
+    {
+        var result = new List<(string Question, string ExpectedAnswer, string Tags)>();
+        using var reader = new StringReader(csv);
+
+        _ = reader.ReadLine(); // header
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var cols = ParseCsvLine(line);
+            if (cols.Count == 0 || string.IsNullOrWhiteSpace(cols[0])) continue;
+            var expected = cols.Count > 1 ? cols[1] : string.Empty;
+            var tags = cols.Count > 2 ? cols[2] : string.Empty;
+            result.Add((cols[0], expected, tags));
+        }
+
+        return result;
+    }
+
+    private static List<(string Question, string ExpectedAnswer, string Tags)> ParseExcelRows(Stream stream)
+    {
+        using var wb = new XLWorkbook(stream);
+        var ws = wb.Worksheets.First();
+
+        var result = new List<(string Question, string ExpectedAnswer, string Tags)>();
+        var row = 2;
+        while (true)
+        {
+            var question = ws.Cell(row, 1).GetString();
+            var expected = ws.Cell(row, 2).GetString();
+            var tags = ws.Cell(row, 3).GetString();
+            if (string.IsNullOrWhiteSpace(question) && string.IsNullOrWhiteSpace(expected) && string.IsNullOrWhiteSpace(tags))
+            {
+                break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(question))
+            {
+                result.Add((question, expected, tags));
+            }
+
+            row++;
+        }
+
+        return result;
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        var escaped = value.Replace("\"", "\"\"");
+        return $"\"{escaped}\"";
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (ch == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (ch == ',' && !inQuotes)
+            {
+                result.Add(current.ToString());
+                current.Clear();
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        result.Add(current.ToString());
+        return result;
+    }
+
+    private string GetClonedSuiteName(string sourceName)
+    {
+        var existingNames = _suites
+            .Select(s => s.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var copyName = $"{sourceName} (Copy)";
+        if (!existingNames.Contains(copyName))
+        {
+            return copyName;
+        }
+
+        var suffix = 2;
+        while (existingNames.Contains($"{sourceName} (Copy {suffix})"))
+        {
+            suffix++;
+        }
+
+        return $"{sourceName} (Copy {suffix})";
+    }
+
     // ── TestCase CRUD ─────────────────────────────────────────────────────────
 
     private void OpenAddCase(TestSuite parent)
@@ -927,6 +1557,146 @@ else if (_showSuiteForm)
         };
         _caseFormError = string.Empty;
         _showCaseForm = true;
+    }
+
+    private async Task CloneCase(TestSuite suite, TestCase source)
+    {
+        var clone = new TestCase
+        {
+            Id = Guid.NewGuid(),
+            SuiteId = suite.Id,
+            TenantId = suite.TenantId,
+            Name = GetClonedCaseName(suite, source.Name),
+            Description = source.Description,
+            UserInput = source.UserInput.ToArray(),
+            AcceptanceCriteria = source.AcceptanceCriteria,
+            ExpectedIntent = source.ExpectedIntent,
+            ExpectedEntities = source.ExpectedEntities.ToArray(),
+            ReferenceAnswer = source.ReferenceAnswer,
+            IsActive = source.IsActive,
+            SortOrder = suite.TestCases.Count == 0 ? 1 : suite.TestCases.Max(tc => tc.SortOrder) + 1,
+            Tags = source.Tags.ToArray(),
+            SourceDocumentId = source.SourceDocumentId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        Db.TestCases.Add(clone);
+        AuditHelper.Log(Db, suite.TenantId, "Cloned", "TestCase", clone.Id, _userId, $"{clone.Name} copied from {source.Name}");
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    private static string GetClonedCaseName(TestSuite suite, string sourceName)
+    {
+        var existingNames = suite.TestCases
+            .Select(tc => tc.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var copyName = $"{sourceName} (Copy)";
+        if (!existingNames.Contains(copyName))
+        {
+            return copyName;
+        }
+
+        var suffix = 2;
+        while (existingNames.Contains($"{sourceName} (Copy {suffix})"))
+        {
+            suffix++;
+        }
+
+        return $"{sourceName} (Copy {suffix})";
+    }
+
+    private List<Guid> SelectedCaseIdsInSuite(TestSuite suite)
+    {
+        return suite.TestCases
+            .Where(tc => _selectedCaseIds.Contains(tc.Id))
+            .Select(tc => tc.Id)
+            .ToList();
+    }
+
+    private bool AreAllCasesSelected(TestSuite suite)
+    {
+        var caseIds = suite.TestCases.Select(tc => tc.Id).ToList();
+        return caseIds.Count > 0 && caseIds.All(id => _selectedCaseIds.Contains(id));
+    }
+
+    private void ToggleCaseSelection(Guid caseId, bool selected)
+    {
+        _bulkCaseMessage = string.Empty;
+        _bulkCaseError = false;
+        if (selected) _selectedCaseIds.Add(caseId);
+        else _selectedCaseIds.Remove(caseId);
+    }
+
+    private void ToggleSelectAllCases(TestSuite suite, bool selected)
+    {
+        _bulkCaseMessage = string.Empty;
+        _bulkCaseError = false;
+        foreach (var id in suite.TestCases.Select(tc => tc.Id))
+        {
+            if (selected) _selectedCaseIds.Add(id);
+            else _selectedCaseIds.Remove(id);
+        }
+    }
+
+    private async Task BulkSetCaseActive(TestSuite suite, bool isActive)
+    {
+        var ids = SelectedCaseIdsInSuite(suite);
+        if (ids.Count == 0) return;
+
+        var cases = await Db.TestCases
+            .Where(tc => tc.SuiteId == suite.Id && ids.Contains(tc.Id))
+            .ToListAsync();
+
+        foreach (var tc in cases)
+        {
+            tc.IsActive = isActive;
+            tc.UpdatedAt = DateTime.UtcNow;
+            AuditHelper.Log(
+                Db,
+                tc.TenantId,
+                isActive ? "Activated" : "Deactivated",
+                "TestCase",
+                tc.Id,
+                _userId,
+                tc.Name);
+        }
+
+        await Db.SaveChangesAsync();
+        _bulkCaseMessage = $"{(isActive ? "Activated" : "Deactivated")} {cases.Count} test case(s).";
+        _bulkCaseError = false;
+        _selectedCaseIds.RemoveWhere(ids.Contains);
+        await LoadAsync();
+    }
+
+    private async Task BulkDeleteCases(TestSuite suite)
+    {
+        var ids = SelectedCaseIdsInSuite(suite);
+        if (ids.Count == 0) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete {ids.Count} selected test case(s) from '{suite.Name}'? This cannot be undone.");
+        if (!confirmed) return;
+
+        var cases = await Db.TestCases
+            .Where(tc => tc.SuiteId == suite.Id && ids.Contains(tc.Id))
+            .ToListAsync();
+
+        foreach (var tc in cases)
+        {
+            AuditHelper.Log(Db, tc.TenantId, "Deleted", "TestCase", tc.Id, _userId, tc.Name);
+        }
+
+        Db.TestCases.RemoveRange(cases);
+        await Db.SaveChangesAsync();
+
+        _bulkCaseMessage = $"Deleted {cases.Count} test case(s).";
+        _bulkCaseError = false;
+        _selectedCaseIds.RemoveWhere(ids.Contains);
+        await LoadAsync();
     }
 
     private async Task SaveCase()

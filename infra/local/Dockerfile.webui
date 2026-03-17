@@ -44,7 +44,7 @@ COPY --from=publish /app/publish .
 COPY VERSION /app/VERSION
 
 # Install curl for the health check and create data directories
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN apt-get update && apt-get install -y --no-install-recommends curl tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/data/blobs /app/data/backups /app/logs
 

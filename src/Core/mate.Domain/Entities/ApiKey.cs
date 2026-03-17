@@ -20,7 +20,7 @@ public class ApiKey
     /// <summary>SHA-256 hex of the full raw key. Used for constant-time lookup.</summary>
     public string KeyHash { get; set; } = string.Empty;
 
-    /// <summary>Admin | Tester | Viewer</summary>
+    /// <summary>SuperAdmin | TenantAdmin | Tester | Viewer</summary>
     public string Role { get; set; } = "Tester";
 
     public bool IsActive { get; set; } = true;

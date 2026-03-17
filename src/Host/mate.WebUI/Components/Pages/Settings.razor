@@ -23,9 +23,7 @@
 
 <PageTitle>Settings — @BrandInfo.BrandName</PageTitle>
 
-<div class="mate-header">
-    <h1>Settings</h1>
-</div>
+<PageHeader Title="Settings" Description="Configure modules, judges, question generation, API keys, appearance, data, and authentication." />
 <div class="mate-page">
 
 <div class="tab-pills mb-4">
@@ -892,7 +890,8 @@
             <select class="form-control" @bind="_newKeyRole">
                 <option value="Viewer">Viewer</option>
                 <option value="Tester">Tester</option>
-                <option value="Admin">Admin</option>
+                <option value="TenantAdmin">TenantAdmin</option>
+                <option value="SuperAdmin">SuperAdmin</option>
             </select>
 
             @if (!string.IsNullOrWhiteSpace(_keyError))
@@ -1071,7 +1070,7 @@
         {
             <div class="alert alert-warning mb-4" style="font-size:13px">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>Development mode active.</strong> All requests are automatically authenticated as Admin.
+                <strong>Development mode active.</strong> All requests are automatically authenticated as SuperAdmin.
                 This mode must not be used in production.
             </div>
         }
@@ -1618,6 +1617,11 @@ OAuth__Audience=your-api-audience</pre>
     {
         _keyError = string.Empty;
         if (string.IsNullOrWhiteSpace(_newKeyName)) { _keyError = "Name is required."; return; }
+        var allowedKeyRoles = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "SuperAdmin", "TenantAdmin", "Tester", "Viewer"
+        };
+        if (!allowedKeyRoles.Contains(_newKeyRole)) { _keyError = "Role must be one of: SuperAdmin, TenantAdmin, Tester, Viewer."; return; }
         var rawKey = $"mate_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
         var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
         var apiKey = new ApiKey
@@ -1675,7 +1679,7 @@ OAuth__Audience=your-api-audience</pre>
 
     private static string AuthSchemeDescription(string scheme) => scheme switch
     {
-        "None" or "Generic" => "All requests are automatically authenticated as Admin — development use only.",
+        "None" or "Generic" => "All requests are automatically authenticated as SuperAdmin — development use only.",
         "EntraId"           => "Validates Microsoft Entra ID (Azure AD) tokens. Recommended for production.",
         "OAuth"             => "Validates JWT tokens from any OIDC-compliant identity provider (Okta, Auth0, Keycloak, …).",
         _                   => "Unknown authentication scheme."
@@ -1774,7 +1778,7 @@ OAuth__Audience=your-api-audience</pre>
         {
             var cutoff   = DateTime.UtcNow.AddDays(-_pruningDays);
             var toDelete = await Db.Runs
-                .Where(r => r.StartedAt < cutoff && r.Status != "running")
+                .Where(r => r.StartedAt < cutoff && (r.Status == "completed" || r.Status == "failed"))
                 .ToListAsync();
             if (toDelete.Count == 0)
             {
@@ -1782,9 +1786,15 @@ OAuth__Audience=your-api-audience</pre>
             }
             else
             {
+                var runIds = toDelete.Select(r => r.Id).ToList();
+                var resultCount = await Db.Results.CountAsync(r => runIds.Contains(r.RunId));
+                var transcriptCount = await Db.TranscriptMessages
+                    .Join(Db.Results, t => t.ResultId, r => r.Id, (t, r) => new { t, r.RunId })
+                    .CountAsync(x => runIds.Contains(x.RunId));
+
                 Db.Runs.RemoveRange(toDelete);
                 await Db.SaveChangesAsync();
-                _pruneResult = $"\u2713 Deleted {toDelete.Count} run(s) older than {_pruningDays} days.";
+                _pruneResult = $"\u2713 Deleted {toDelete.Count} run(s), {resultCount} result(s), and {transcriptCount} transcript message(s) older than {_pruningDays} days.";
             }
         }
         catch (Exception ex)

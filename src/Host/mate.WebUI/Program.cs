@@ -168,9 +168,17 @@ try
     builder.Services.AddmateGenericRedTeaming();
 
     // ── Authentication ───────────────────────────────────────────────────────
+    var redmondMode = config.GetValue<bool>("RedmondMode", false);
     var authScheme = config["Authentication:Scheme"] ?? "EntraId";
+    // "None" is treated as development bypass auth and should use the Generic handler.
+    var resolvedAuthScheme = authScheme is "None" ? "Generic" : authScheme;
 
-    IAuthModule authModule = authScheme switch
+    if (redmondMode && !string.Equals(resolvedAuthScheme, "EntraId", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("RedmondMode requires Authentication:Scheme=EntraId.");
+    }
+
+    IAuthModule authModule = resolvedAuthScheme switch
     {
         "None" or "Generic" => new mate.Modules.Auth.Generic.GenericAuthModule(),
         "EntraId" or _ => new mate.Modules.Auth.EntraId.EntraIdAuthModule(),
@@ -181,14 +189,14 @@ try
     // DefaultScheme=Cookies, DefaultChallengeScheme=OpenIdConnect.
     // Overriding those options explicitly (as we did before) can conflict with
     // what the library configures in its own IConfigureOptions pass.
-    AuthenticationBuilder authBuilder = authScheme is "EntraId"
+    AuthenticationBuilder authBuilder = resolvedAuthScheme is "EntraId"
         ? builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-        : builder.Services.AddAuthentication(authScheme);
+        : builder.Services.AddAuthentication(authModule.SchemeName);
 
     authModule.ConfigureAuthentication(authBuilder, config);
 
     // EntraId browser sign-in: register /MicrosoftIdentity/Account/* controller routes
-    if (authScheme is "EntraId")
+    if (resolvedAuthScheme is "EntraId")
         mate.Modules.Auth.EntraId.EntraIdAuthModule.AddMicrosoftIdentityUI(builder.Services);
 
     // No extra AddScheme — API key is handled by inline middleware only.
@@ -314,7 +322,7 @@ try
     // GET (HTTP 301), stripping the body → state is null → "message.State is null or empty".
     // For EntraId: nginx terminates TLS (prod) or the container runs plain HTTP (dev/Docker);
     // in both cases no HTTPS redirect is needed or safe.
-    if (authScheme is not "EntraId")
+    if (resolvedAuthScheme is not "EntraId")
     {
         app.UseHttpsRedirection();
     }
@@ -331,7 +339,7 @@ try
     app.UseAuthentication();
 
     // API key authentication middleware.
-    if (authScheme is not "Generic" and not "None")
+    if (resolvedAuthScheme is not "Generic")
     {
         app.Use(async (ctx, next) =>
         {
@@ -370,7 +378,7 @@ try
 
     // EntraId: map /MicrosoftIdentity/Account/{SignIn,SignOut,AccessDenied} controller routes
     // Registered AFTER UseAntiforgery.
-    if (authScheme is "EntraId")
+    if (resolvedAuthScheme is "EntraId")
         app.MapControllers();
 
     // ── Platform endpoints ───────────────────────────────────────────────────
@@ -696,6 +704,18 @@ try
         var agent = await db.Agents.Include(a => a.ConnectorConfigs).FirstOrDefaultAsync(a => a.Id == req.AgentId);
         if (agent is null) return Results.NotFound("Agent not found.");
 
+        var requestedCaseIds = req.TestCaseIds?.Distinct().ToList() ?? [];
+        var selectedCases = requestedCaseIds.Count > 0
+            ? suite.TestCases.Where(tc => requestedCaseIds.Contains(tc.Id)).ToList()
+            : suite.TestCases.Where(tc => tc.IsActive).ToList();
+
+        if (selectedCases.Count == 0)
+            return Results.BadRequest("No eligible test cases found for this run.");
+
+        var selectedCaseMetadata = requestedCaseIds.Count > 0
+            ? $"selected-testcases:{string.Join(',', selectedCases.Select(tc => tc.Id))}"
+            : null;
+
         var run = new Run
         {
             Id = Guid.NewGuid(),
@@ -703,9 +723,10 @@ try
             SuiteId = req.SuiteId,
             AgentId = req.AgentId,
             Status = "pending",
-            TotalTestCases = suite.TestCases.Count(tc => tc.IsActive),
+            TotalTestCases = selectedCases.Count,
             RequestedBy = req.RequestedBy.Length > 0 ? req.RequestedBy : (user.Identity?.Name ?? "api"),
-            StartedAt = DateTime.UtcNow
+            StartedAt = DateTime.UtcNow,
+            ErrorMessage = selectedCaseMetadata
         };
         db.Runs.Add(run);
         AuditHelper.Log(db, tenant.TenantId, "RunStarted", "Run", run.Id, user.Identity?.Name, $"Suite: {suite.Name}");
@@ -717,7 +738,7 @@ try
             SuiteId: req.SuiteId,
             AgentId: req.AgentId,
             RequestedBy: run.RequestedBy,
-            TestCaseIds: null);
+            TestCaseIds: requestedCaseIds.Count > 0 ? selectedCases.Select(tc => tc.Id).ToList() : null);
         await queue.EnqueueAsync("test-runs", job);
 
         return Results.Created($"/api/runs/{run.Id}", new { run.Id });
@@ -949,8 +970,15 @@ try
 
     api.MapPost("/admin/api-keys", async (CreateApiKeyRequest req, mateDbContext db, ITenantContext tenant, ClaimsPrincipal user) =>
     {
+        var allowedRoles = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "SuperAdmin", "TenantAdmin", "Tester", "Viewer"
+        };
+
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.BadRequest("Name is required.");
+        if (!allowedRoles.Contains(req.Role))
+            return Results.BadRequest("Role must be one of: SuperAdmin, TenantAdmin, Tester, Viewer.");
         var rawKey = $"{BrandInfo.ApiKeyPrefix}{Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
         var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawKey))).ToLowerInvariant();
         var prefix = rawKey[..12];
@@ -972,7 +1000,7 @@ try
         return Results.Created($"/api/admin/api-keys/{apiKey.Id}", new { apiKey.Id, apiKey.Name, apiKey.Prefix, RawKey = rawKey });
     }).WithName("CreateApiKey").WithTags("Admin")
         .WithSummary("Create an API key")
-        .WithDescription("Generates a new API key for the given name and role. **The raw key value (`rawKey`) is returned only once in this response — store it securely.** Role must be `admin` or `user`.");
+        .WithDescription("Generates a new API key for the given name and role. **The raw key value (`rawKey`) is returned only once in this response — store it securely.** Role must be one of: `SuperAdmin`, `TenantAdmin`, `Tester`, `Viewer`.");
 
     api.MapDelete("/admin/api-keys/{id:guid}", async (Guid id, mateDbContext db) =>
     {

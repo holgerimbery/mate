@@ -111,6 +111,17 @@
                     }
                 </div>
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                    <span class="text-muted"><i class="bi bi-building-gear me-1"></i>Enterprise</span>
+                    @if (_redmondMode)
+                    {
+                        <span class="badge badge-pass">True</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-neutral">False</span>
+                    }
+                </div>
+                <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-gear me-1"></i>ASP.NET Env</span>
                     <span class="badge badge-purple">@HostEnv.EnvironmentName</span>
                 </div>
@@ -198,6 +209,7 @@
     private bool   _inContainer;
     private bool   _authEnabled;
     private string _authScheme     = "";
+    private bool   _redmondMode;
     private string _databaseMode   = "Unknown";
     private bool   _forwardedHeaders;
 
@@ -213,6 +225,7 @@
 
         _authScheme  = Configuration["Authentication:Scheme"] ?? "None";
         _authEnabled = string.Equals(_authScheme, "EntraId", StringComparison.OrdinalIgnoreCase);
+        _redmondMode = Configuration.GetValue<bool>("RedmondMode", false);
 
         var providerName = Db.Database.ProviderName ?? string.Empty;
         _databaseMode = providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase)

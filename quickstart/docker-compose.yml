@@ -54,6 +54,7 @@ services:
       Branding__LogoUrl: "${Branding__LogoUrl:-/mate-logo.png}"
       Branding__LogoWideUrl: "${Branding__LogoWideUrl:-/mate-logo-wide.png}"
       Branding__ApiKeyPrefix: "${Branding__ApiKeyPrefix:-mate_}"
+      RedmondMode: "false"
       ConnectionStrings__Default: "Host=postgres;Database=mate;Username=mate;Password=mate_db_pw"
       AzureInfrastructure__BlobConnectionString: "UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite"
       AzureInfrastructure__BlobContainerName: mate-blobs
@@ -79,6 +80,7 @@ services:
     env_file: .env
     environment:
       DOTNET_ENVIRONMENT: Production
+      RedmondMode: "false"
       ConnectionStrings__Default: "Host=postgres;Database=mate;Username=mate;Password=mate_db_pw"
       AzureInfrastructure__BlobConnectionString: "UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite"
       AzureInfrastructure__BlobContainerName: mate-blobs
