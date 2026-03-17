@@ -6,6 +6,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Tenant role assignment foundation (E25-Item-1)** - Added `TenantRoleAssignment` entity, EF mapping, and migration (`AddTenantRoleAssignment`) with `mateDbContext` integration (DbSet + tenant query filter) as the persistence base for upcoming tenant-scoped authorization.
+
+### Changed
+- **WebUI EF tooling dependency (E25-Item-1)** - Added `Microsoft.EntityFrameworkCore.Design` package reference to `mate.WebUI` to enable startup-project-backed migration generation.
+
 ## [v0.8.0] — 2026-03-16
 
 ### Added
