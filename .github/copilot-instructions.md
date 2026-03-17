@@ -167,4 +167,35 @@ For all enterprise feature work in `mate-enterprise`:
 4. Keep enterprise strategic backlog intent in enterprise `BACKLOG.md` only; do not duplicate enterprise strategic backlog details in core backlog/wiki.
 5. During handover, explicitly report which enterprise docs were updated and why, matching the same evidence-first style used for core updates.
 
+## 16. Mandatory Azure Tenant Safety Confirmation
+
+For ANY deployment template, infrastructure code, or script that modifies, creates, or deletes Azure resources:
+
+1. **Before implementing any change**, identify the target Azure context:
+   - Subscription ID (from user input or environment, **never hardcoded**)
+   - Tenant ID (from user input or environment, **never hardcoded**)
+   - Resource Group name
+   - Environment (dev/test/prod)
+
+2. **Always ask explicit confirmation** before proceeding:
+   - State the exact subscription, tenant, and resource group that will be modified
+   - Ask the user to confirm: "Proceed with changes to [Subscription ID] / [Tenant ID] / [Resource Group]?"
+   - Do NOT assume the user wants changes to the default/current tenant
+
+3. **During implementation**:
+   - Include tenant/subscription ID as **runtime parameters**, never bake them into code or templates
+   - Use **managed identity** or **Key Vault references** instead of hardcoded credentials
+   - Add explicit tenant/subscription checks in deployment scripts before making any Azure API calls
+
+4. **In code review or verification**:
+   - If a deployment or script ran, report which subscription/tenant/RG was targeted
+   - If ANY resources were created/modified/deleted, list them with their locations and tenant associations
+   - Confirm the user sees what was actually deployed before moving forward
+
+5. **Special case — Redmond Mode / Enterprise**:
+   - If enterprise deployments target **customer tenants**, always confirm the customer tenant identity
+   - Do NOT cross-tenant operations without explicit user approval per operation
+
+**Rationale:** Azure is multi-tenant. One typo in tenant ID or subscription selection can deploy to the wrong customer or production environment. Explicit confirmation at every step prevents catastrophic mistakes.
+
 Use the general repository conventions and avoid introducing repository-specific process policy in this file.
