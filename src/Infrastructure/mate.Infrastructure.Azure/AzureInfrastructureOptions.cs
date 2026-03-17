@@ -36,4 +36,21 @@ public sealed class AzureInfrastructureOptions
     /// When false (default), secrets remain database-backed for compatibility.
     /// </summary>
     public bool UseKeyVaultForSecrets { get; set; }
+
+    /// <summary>
+    /// Enables enterprise multi-vault routing when Key Vault mode is active.
+    /// Default false preserves single-vault behavior.
+    /// </summary>
+    public bool UseMultiVaultForSecrets { get; set; }
+
+    /// <summary>
+    /// Platform vault URI used for platform-scoped secret operations.
+    /// </summary>
+    public string? PlatformVaultUri { get; set; }
+
+    /// <summary>
+    /// Tenant vault URL template with {tenantId} placeholder.
+    /// Example: https://tenant-{tenantId}-kv.vault.azure.net/
+    /// </summary>
+    public string? TenantVaultUriTemplate { get; set; }
 }

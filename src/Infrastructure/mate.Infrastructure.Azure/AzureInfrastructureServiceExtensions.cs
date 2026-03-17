@@ -2,8 +2,10 @@
 // Licensed under the mate Custom License. See LICENSE in the project root.
 // Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using Azure.Identity;
+using Azure.Core;
 using Azure.Security.KeyVault.Secrets;
 using mate.Domain.Contracts.Infrastructure;
+using mate.Domain.Contracts;
 using mate.Infrastructure.Local;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,17 +36,29 @@ public static class AzureInfrastructureServiceExtensions
         // Blob: Azure Blob Storage or Azurite (same code, different connection string)
         services.AddScoped<IBlobStorageService, AzureBlobStorageService>();
 
+        services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
+
         // Secrets: route to Azure Key Vault when explicitly enabled; otherwise DB-backed.
         services.AddScoped<DatabaseSecretService>();
         services.AddScoped<AzureKeyVaultSecretService>();
+        services.AddScoped<AzureKeyVaultMultiVaultSecretService>();
         services.AddScoped<ISecretService>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<AzureInfrastructureOptions>>().Value;
 
             if (!options.UseKeyVaultForSecrets || string.IsNullOrWhiteSpace(options.KeyVaultUri))
-                return sp.GetRequiredService<DatabaseSecretService>();
+            {
+                if (options.UseMultiVaultForSecrets)
+                    return sp.GetRequiredService<DatabaseSecretService>();
 
-            var client = new SecretClient(new Uri(options.KeyVaultUri), new DefaultAzureCredential());
+                return sp.GetRequiredService<DatabaseSecretService>();
+            }
+
+            if (options.UseMultiVaultForSecrets)
+                return sp.GetRequiredService<AzureKeyVaultMultiVaultSecretService>();
+
+            var credential = sp.GetRequiredService<TokenCredential>();
+            var client = new SecretClient(new Uri(options.KeyVaultUri), credential);
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<AzureKeyVaultSecretService>>();
             return new AzureKeyVaultSecretService(client, logger);
         });
