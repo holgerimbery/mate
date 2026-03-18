@@ -77,6 +77,12 @@ services:
       # "Azure"     = Azure Database for PostgreSQL + Azure Blob Storage
       - Infrastructure__Provider=${Infrastructure__Provider:-Container}
       - RedmondMode=false
+      - AzureInfrastructure__UseKeyVaultForSecrets=${AzureInfrastructure__UseKeyVaultForSecrets:-false}
+      - AzureInfrastructure__KeyVaultUri=${AzureInfrastructure__KeyVaultUri:-}
+      # Azure credentials — required when UseKeyVaultForSecrets=true (single-vault mode)
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET:-}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
       - ConnectionStrings__Default=Host=postgres;Database=mate;Username=mate;Password=mate_local_pw
       - AzureInfrastructure__BlobConnectionString=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite
       - AzureInfrastructure__BlobContainerName=mate-blobs
@@ -106,6 +112,12 @@ services:
       - TZ=${MATE_TIMEZONE:-Europe/Berlin}
       - Infrastructure__Provider=${Infrastructure__Provider:-Container}
       - RedmondMode=false
+      - AzureInfrastructure__UseKeyVaultForSecrets=${AzureInfrastructure__UseKeyVaultForSecrets:-false}
+      - AzureInfrastructure__KeyVaultUri=${AzureInfrastructure__KeyVaultUri:-}
+      # Azure credentials — required when UseKeyVaultForSecrets=true (single-vault mode)
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET:-}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
       - ConnectionStrings__Default=Host=postgres;Database=mate;Username=mate;Password=mate_local_pw
       - AzureInfrastructure__BlobConnectionString=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite
       - AzureInfrastructure__BlobContainerName=mate-blobs

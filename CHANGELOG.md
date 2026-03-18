@@ -11,9 +11,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Tenant authorization service (E25-Item-2)** - Added `ITenantAuthorizationService` interface and `TenantAuthorizationService` implementation for platform-level role resolution from `TenantRoleAssignments`. Uses null-tenantContext pattern to bypass global query filter. Registered as `Scoped` in `CoreServiceExtensions`. Returns safe empty defaults in standard deployments.
 - **Azure Key Vault secret service foundation (E25-Item-3)** - Added `AzureKeyVaultSecretService` and opt-in Azure infrastructure routing for `ISecretService` (`AzureInfrastructure:UseKeyVaultForSecrets` + `AzureInfrastructure:KeyVaultUri`) while preserving database-backed secret behavior as default fallback.
 - **Help page secrets mode badge (E25-Item-3)** - Added `Secrets Mode` runtime badge on `/help` to indicate whether the app is running in `Key Vault` mode or `Database` mode.
+- **Single-vault RBAC operation modes (E25)** - Extended `infra/local/provision-singlevault.ps1` with `-Mode EnsureRbac|VerifyOnly|GrantOnly`, idempotent RBAC verification/assignment, configurable role/principal resolution, and propagation re-check.
 
 ### Changed
 - **WebUI EF tooling dependency (E25-Item-1)** - Added `Microsoft.EntityFrameworkCore.Design` package reference to `mate.WebUI` to enable startup-project-backed migration generation.
+- **Core compose Azure credential pass-through (E25)** - Added `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` environment pass-through for `webui` and `worker` in `infra/local/docker-compose.yml` so single-vault mode can authenticate via `EnvironmentCredential` inside containers.
+- **Single-vault provisioning target vault resolution (E25)** - `provision-singlevault.ps1` now uses `AzureInfrastructure__KeyVaultUri` from `infra/local/.env` when present (custom-suffixed vaults), with fallback to canonical `mate-<environment>-kv` naming.
+- **Copilot Studio Web Channel token acquisition robustness (E25)** - Added fallback token endpoint path for Web Channel mode and enhanced token-failure diagnostics to include mode/botId/secretRef/endpoint context.
+
+### Fixed
+- **Key Vault secret name compatibility in single-vault mode (E25)** - `AzureKeyVaultSecretService` now normalizes DB-style secret references to valid Key Vault secret names (hyphen-only) for get/set/delete, matching multi-vault normalization behavior.
 
 ## [v0.8.0] — 2026-03-16
 
