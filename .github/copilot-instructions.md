@@ -134,6 +134,8 @@ For `RedmondMode` and `mate-enterprise` topics:
 3. In the main repo, only keep minimal integration hooks and safe defaults required for core behavior.
 4. Treat core mode (`RedmondMode=false`) as the default for all deployment paths unless explicitly overridden by enterprise-specific deployment assets.
 5. Document all enterprise architecture, rollout, and operations details in the `mate-enterprise` repository.
+6. Place all `enterprise-mode` / `RedmondMode` user and developer documentation in the enterprise wiki at `enterprise/mate-enterprise/docs/wiki`.
+7. If documentation exists in non-wiki Markdown files for enterprise topics, treat those as migration sources and move canonical documentation into the enterprise wiki.
 
 ## 13. Mandatory Redmond-Mode Commit Naming
 
