@@ -30,10 +30,11 @@ public sealed class AzureKeyVaultSecretService : ISecretService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(secretRef);
 
+        var kvName = NormalizeSecretName(secretRef);
         try
         {
-            var secret = await _secretClient.GetSecretAsync(secretRef, cancellationToken: ct);
-            _logger.LogDebug("Resolved secret reference '{SecretRef}' from Azure Key Vault.", secretRef);
+            var secret = await _secretClient.GetSecretAsync(kvName, cancellationToken: ct);
+            _logger.LogDebug("Resolved secret reference '{SecretRef}' (vault name: '{KvName}') from Azure Key Vault.", secretRef, kvName);
             return secret.Value.Value;
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
@@ -45,9 +46,9 @@ public sealed class AzureKeyVaultSecretService : ISecretService
                 return envValue;
             }
 
-            _logger.LogWarning("Secret reference '{SecretRef}' not found in Azure Key Vault or environment.", secretRef);
+            _logger.LogWarning("Secret reference '{SecretRef}' (vault name: '{KvName}') not found in Azure Key Vault or environment.", secretRef, kvName);
             throw new InvalidOperationException(
-                $"Secret '{secretRef}' is not configured in Azure Key Vault and no fallback environment variable exists.",
+                $"Secret '{secretRef}' (vault name: '{kvName}') is not configured in Azure Key Vault and no fallback environment variable exists.",
                 ex);
         }
     }
@@ -57,8 +58,9 @@ public sealed class AzureKeyVaultSecretService : ISecretService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(secretRef);
 
-        await _secretClient.SetSecretAsync(secretRef, secretValue, ct);
-        _logger.LogInformation("Stored secret reference '{SecretRef}' in Azure Key Vault.", secretRef);
+        var kvName = NormalizeSecretName(secretRef);
+        await _secretClient.SetSecretAsync(kvName, secretValue, ct);
+        _logger.LogInformation("Stored secret reference '{SecretRef}' (vault name: '{KvName}') in Azure Key Vault.", secretRef, kvName);
     }
 
     /// <inheritdoc />
@@ -66,14 +68,37 @@ public sealed class AzureKeyVaultSecretService : ISecretService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(secretRef);
 
+        var kvName = NormalizeSecretName(secretRef);
         try
         {
-            await _secretClient.StartDeleteSecretAsync(secretRef, ct);
-            _logger.LogInformation("Deleted secret reference '{SecretRef}' from Azure Key Vault.", secretRef);
+            await _secretClient.StartDeleteSecretAsync(kvName, ct);
+            _logger.LogInformation("Deleted secret reference '{SecretRef}' (vault name: '{KvName}') from Azure Key Vault.", secretRef, kvName);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
-            _logger.LogDebug("Secret reference '{SecretRef}' not present in Azure Key Vault. Nothing to delete.", secretRef);
+            _logger.LogDebug("Secret reference '{SecretRef}' (vault name: '{KvName}') not present in Azure Key Vault. Nothing to delete.", secretRef, kvName);
         }
+    }
+
+    /// <summary>
+    /// Converts a DB-style secret reference (underscores, special chars) to a valid
+    /// Azure Key Vault secret name (alphanumeric + hyphens only).
+    /// Matches the normalization logic in <see cref="AzureKeyVaultMultiVaultSecretService"/>.
+    /// </summary>
+    private static string NormalizeSecretName(string secretRef)
+    {
+        var normalized = new string(secretRef
+            .Trim()
+            .Select(c => char.IsLetterOrDigit(c) || c == '-' ? c : '-')
+            .ToArray());
+
+        while (normalized.Contains("--", StringComparison.Ordinal))
+            normalized = normalized.Replace("--", "-", StringComparison.Ordinal);
+
+        normalized = normalized.Trim('-');
+        if (string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException("Secret reference resolves to an empty Key Vault secret name.", nameof(secretRef));
+
+        return normalized;
     }
 }

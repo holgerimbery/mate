@@ -92,56 +92,9 @@ try
     // ── Tenant resolution ───────────────────────────────────────────────────
     builder.Services.AddHttpContextAccessor();
     // TenantLookupService maps ExternalTenantId (from auth claim) → internal Tenant.Id (from DB).
-    // This ensures continuity when switching auth schemes (Generic ↔ EntraId):
-    // as long as the Tenants table has a row with the correct ExternalTenantId, data is accessible.
-    builder.Services.AddScoped<ITenantContext>(sp =>
-    {
-        // Primary: HttpContext (works for REST API requests and SSR pre-render)
-        var user = sp.GetService<IHttpContextAccessor>()?.HttpContext?.User;
-
-        // Fallback: AuthenticationStateProvider (required for Blazor Server interactive circuits
-        // where IHttpContextAccessor.HttpContext is null per ASP.NET Core Blazor docs).
-        // ServerAuthenticationStateProvider returns a pre-completed Task backed by the user
-        // captured during the initial HTTP connection, so GetAwaiter().GetResult() is safe.
-        if (user?.Identity?.IsAuthenticated != true)
-        {
-            var asp = sp.GetService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
-            if (asp is not null)
-            {
-                try
-                {
-                    var authState = asp.GetAuthenticationStateAsync().GetAwaiter().GetResult();
-                    user = authState.User;
-                }
-                catch { /* not in a Blazor context — ignore */ }
-            }
-        }
-
-        if (user?.Identity?.IsAuthenticated == true)
-        {
-            var externalId = user.FindFirstValue("mate:externalTenantId")
-                          ?? user.FindFirstValue("tid");
-            if (!string.IsNullOrEmpty(externalId))
-            {
-                var lookup = sp.GetService<TenantLookupService>();
-                if (lookup is not null)
-                {
-                    // Task.Run(): no captured SynchronizationContext → avoids deadlock
-                    // when called under Blazor's RendererSynchronizationContext.
-                    // TenantLookupService constructs mateDbContext directly with null
-                    // ITenantContext, breaking the circular DI chain entirely.
-                    var resolved = Task.Run(() => lookup.LookupByExternalIdAsync(externalId))
-                        .GetAwaiter().GetResult();
-                    if (resolved.HasValue)
-                        return new HttpTenantContext(resolved.Value);
-                }
-                // Fallback: try to use claim directly as GUID (Generic auth dev flow)
-                if (Guid.TryParse(externalId, out var tenantId))
-                    return new HttpTenantContext(tenantId);
-            }
-        }
-        return new StaticTenantContext(Guid.Empty);
-    });
+    // DynamicTenantContext re-resolves tenant identity on access so Blazor Server circuits
+    // do not get stuck with Guid.Empty when the initial scoped service is created too early.
+    builder.Services.AddScoped<ITenantContext, DynamicTenantContext>();
 
     // ── Infrastructure ───────────────────────────────────────────────────────
     // AzureBlobStorageService targets Azurite in Container mode and Azure Blob Storage in Azure mode.

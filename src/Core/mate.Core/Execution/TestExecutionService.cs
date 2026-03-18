@@ -7,6 +7,7 @@ using mate.Domain.Contracts.Modules;
 using mate.Domain.Contracts.Monitoring;
 using mate.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace mate.Core.Execution;
@@ -26,11 +27,13 @@ public sealed class TestExecutionService
     private readonly ISecretService _secrets;
     private readonly IMonitoringService? _monitoring;
     private readonly ILogger<TestExecutionService> _logger;
+    private readonly bool _allowRawSecretFallback;
 
     public TestExecutionService(
         mateDbContext db,
         mateModuleRegistry registry,
         ISecretService secrets,
+        IConfiguration config,
         ILogger<TestExecutionService> logger,
         IMonitoringService? monitoring = null)
     {
@@ -39,6 +42,7 @@ public sealed class TestExecutionService
         _secrets = secrets;
         _logger = logger;
         _monitoring = monitoring;
+        _allowRawSecretFallback = !config.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false);
     }
 
     /// <summary>
@@ -366,11 +370,11 @@ public sealed class TestExecutionService
     {
         var endpoint = string.IsNullOrWhiteSpace(setting.EndpointRef)
             ? null
-            : await TryGetSecretAsync(setting.EndpointRef, ct);
+            : await TryGetSecretAsync(setting.EndpointRef, ct, allowRawFallback: true);
 
         var apiKey = string.IsNullOrWhiteSpace(setting.ApiKeyRef)
             ? null
-            : await TryGetSecretAsync(setting.ApiKeyRef, ct);
+            : await TryGetSecretAsync(setting.ApiKeyRef, ct, allowRawFallback: _allowRawSecretFallback);
 
         return (endpoint, apiKey);
     }
@@ -396,12 +400,14 @@ public sealed class TestExecutionService
             if (!configNode.TryGetPropertyValue(field.Key, out var node) || node is null) continue;
             var refName = node.GetValue<string>();
             if (string.IsNullOrWhiteSpace(refName)) continue;
-            resolved[refName] = await TryGetSecretAsync(refName, ct) ?? refName;
+            var resolvedValue = await TryGetSecretAsync(refName, ct, allowRawFallback: _allowRawSecretFallback);
+            if (!string.IsNullOrWhiteSpace(resolvedValue))
+                resolved[refName] = resolvedValue;
         }
         return resolved;
     }
 
-    private async Task<string?> TryGetSecretAsync(string secretRef, CancellationToken ct)
+    private async Task<string?> TryGetSecretAsync(string secretRef, CancellationToken ct, bool allowRawFallback)
     {
         try
         {
@@ -409,10 +415,17 @@ public sealed class TestExecutionService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Secret reference '{SecretRef}' could not be resolved; treating ref as raw value.", secretRef);
-            // Fall back to treating the ref itself as the raw value.
-            // This supports legacy configs where raw keys were stored directly in the ref field.
-            return secretRef;
+            if (allowRawFallback)
+            {
+                _logger.LogWarning(ex, "Secret reference '{SecretRef}' could not be resolved; treating ref as raw value.", secretRef);
+                // Fall back to treating the ref itself as the raw value.
+                // This supports legacy configs where raw keys were stored directly in the ref field.
+                return secretRef;
+            }
+
+            throw new InvalidOperationException(
+                $"Secret reference '{secretRef}' could not be resolved in key-vault mode. Store the secret via Settings/Wizard so a valid reference is persisted.",
+                ex);
         }
     }
 

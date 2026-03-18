@@ -40,22 +40,29 @@ public static class AzureInfrastructureServiceExtensions
 
         // Secrets: route to Azure Key Vault when explicitly enabled; otherwise DB-backed.
         services.AddScoped<DatabaseSecretService>();
-        services.AddScoped<AzureKeyVaultSecretService>();
         services.AddScoped<AzureKeyVaultMultiVaultSecretService>();
         services.AddScoped<ISecretService>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<AzureInfrastructureOptions>>().Value;
 
-            if (!options.UseKeyVaultForSecrets || string.IsNullOrWhiteSpace(options.KeyVaultUri))
-            {
-                if (options.UseMultiVaultForSecrets)
-                    return sp.GetRequiredService<DatabaseSecretService>();
-
+            if (!options.UseKeyVaultForSecrets)
                 return sp.GetRequiredService<DatabaseSecretService>();
-            }
 
             if (options.UseMultiVaultForSecrets)
+            {
+                var hasMultiVaultConfig =
+                    !string.IsNullOrWhiteSpace(options.KeyVaultUri) ||
+                    (!string.IsNullOrWhiteSpace(options.PlatformVaultUri) &&
+                     !string.IsNullOrWhiteSpace(options.TenantVaultUriTemplate));
+
+                if (!hasMultiVaultConfig)
+                    return sp.GetRequiredService<DatabaseSecretService>();
+
                 return sp.GetRequiredService<AzureKeyVaultMultiVaultSecretService>();
+            }
+
+            if (string.IsNullOrWhiteSpace(options.KeyVaultUri))
+                return sp.GetRequiredService<DatabaseSecretService>();
 
             var credential = sp.GetRequiredService<TokenCredential>();
             var client = new SecretClient(new Uri(options.KeyVaultUri), credential);
