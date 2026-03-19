@@ -204,6 +204,18 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'Azure'
             }
             {
+              name: 'AzureInfrastructure__UseKeyVaultForSecrets'
+              value: 'true'
+            }
+            {
+              name: 'AzureInfrastructure__KeyVaultUri'
+              value: keyVaultUri
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: webIdentity.properties.clientId
+            }
+            {
               name: 'RedmondMode'
               value: 'false'
             }
@@ -291,6 +303,18 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'Infrastructure__Provider'
               value: 'Azure'
+            }
+            {
+              name: 'AzureInfrastructure__UseKeyVaultForSecrets'
+              value: 'true'
+            }
+            {
+              name: 'AzureInfrastructure__KeyVaultUri'
+              value: keyVaultUri
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: workerIdentity.properties.clientId
             }
             {
               name: 'RedmondMode'

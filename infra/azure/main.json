@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "11717144022913115453"
+      "templateHash": "10422254768917794043"
     }
   },
   "parameters": {
@@ -831,7 +831,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "17344422323441229027"
+              "templateHash": "17762863880946979038"
             }
           },
           "parameters": {
@@ -1102,6 +1102,18 @@
                           "value": "Azure"
                         },
                         {
+                          "name": "AzureInfrastructure__UseKeyVaultForSecrets",
+                          "value": "true"
+                        },
+                        {
+                          "name": "AzureInfrastructure__KeyVaultUri",
+                          "value": "[parameters('keyVaultUri')]"
+                        },
+                        {
+                          "name": "AZURE_CLIENT_ID",
+                          "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128)), '2023-01-31').clientId]"
+                        },
+                        {
                           "name": "RedmondMode",
                           "value": "false"
                         },
@@ -1195,6 +1207,18 @@
                         {
                           "name": "Infrastructure__Provider",
                           "value": "Azure"
+                        },
+                        {
+                          "name": "AzureInfrastructure__UseKeyVaultForSecrets",
+                          "value": "true"
+                        },
+                        {
+                          "name": "AzureInfrastructure__KeyVaultUri",
+                          "value": "[parameters('keyVaultUri')]"
+                        },
+                        {
+                          "name": "AZURE_CLIENT_ID",
+                          "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128)), '2023-01-31').clientId]"
                         },
                         {
                           "name": "RedmondMode",
