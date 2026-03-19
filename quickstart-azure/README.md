@@ -2,6 +2,10 @@
 
 Deploy **mate** to Microsoft Azure with a managed infrastructure setup including Azure Container Apps, PostgreSQL Flexible Server, Blob Storage, Key Vault, and Application Insights.
 
+This quickstart is **repository-coupled** and uses canonical deployment scripts from `infra/azure/scripts` in the same repository checkout.
+
+Release zip note: `mate-quickstart-azure-<version>.zip` is docs-only. Run scripts from a full repository checkout.
+
 ## Prerequisites
 
 **Before you start:**
@@ -27,13 +31,13 @@ az bicep version
 
 ## Deployment Steps
 
-All scripts are included in this package. Follow these 5 steps:
+From a full `mate` repository checkout, run these 5 steps:
 
 ### 1. Prepare Environment
 
 ```powershell
 # Review prerequisites (validates Azure CLI, Bicep, PowerShell)
-pwsh ./check-prerequisites.ps1
+pwsh ./infra/azure/scripts/check-prerequisites.ps1
 ```
 
 This validates that Azure CLI, Bicep, and PowerShell are installed.
@@ -41,7 +45,7 @@ This validates that Azure CLI, Bicep, and PowerShell are installed.
 ### 2. Configure Environment Variables
 
 ```powershell
-pwsh ./setup-env.ps1
+pwsh ./infra/azure/scripts/setup-env.ps1
 ```
 
 This creates a `.env` file with your Azure credentials. You'll be prompted for:
@@ -58,7 +62,7 @@ This creates a `.env` file with your Azure credentials. You'll be prompted for:
 ### 3. Preview Changes (Recommended)
 
 ```powershell
-pwsh ./deploy-whatif.ps1
+pwsh ./infra/azure/scripts/deploy-whatif.ps1
 ```
 
 This performs a **dry-run** showing exactly which Azure resources would be created. Review the output carefully before proceeding.
@@ -66,7 +70,7 @@ This performs a **dry-run** showing exactly which Azure resources would be creat
 ### 4. Deploy Infrastructure
 
 ```powershell
-pwsh ./deploy.ps1
+pwsh ./infra/azure/scripts/deploy.ps1
 ```
 
 This command:
@@ -77,7 +81,7 @@ This command:
 4. ✅ Sets up Blob Storage (documents)
 5. ✅ Configures Key Vault for secrets
 6. ✅ Creates Application Insights monitoring
-7. ✅ **Automatically configures runtime secrets** (DB + Blob connection strings)
+7. ✅ Runtime secret references are configured by Bicep + Key Vault references
 8. ✅ **Automatically creates PostgreSQL firewall rules**
 
 **Typical deployment time:** 3–5 minutes
@@ -87,26 +91,26 @@ This command:
 After a new version is released, quickly update the container images:
 
 ```powershell
-pwsh ./update-container-images.ps1  # Defaults to 'latest'
+pwsh ./infra/azure/scripts/update-container-images.ps1  # Defaults to 'latest'
 ```
 
 Or specify a specific version tag:
 
 ```powershell
-pwsh ./update-container-images.ps1 -ImageTag '<version>'  # e.g. 'v0.6.2'
+pwsh ./infra/azure/scripts/update-container-images.ps1 -ImageTag '<version>'  # e.g. '0.9.0-rc.1'
 ```
 
 This performs a **zero-downtime rolling update**:
 - ✅ Updates `.env` (maintains Bicep state)
 - ✅ Deploys new container revisions and waits for completion
 - ✅ Traffic automatically switches when ready
-- ✅ Runs `repair-runtime-secrets.ps1` automatically after deployment
+- ✅ Runtime secret wiring remains managed by Bicep + Key Vault references
 - ⏱️ **Typical runtime:** 5–10 minutes
 
 > **Custom domain note:** `update-container-images.ps1` redeploys Container App configuration from Bicep state. If your custom hostname is not tracked in IaC, rebind it after the update.
 >
 > ```powershell
-> pwsh ../infra/azure/scripts/bind-custom-domain.ps1 -DomainName '<your-custom-domain>'
+> pwsh ./infra/azure/scripts/bind-custom-domain.ps1 -DomainName '<your-custom-domain>'
 > ```
 >
 > Example values: `app.example.com`, `portal.contoso.com`
@@ -119,13 +123,13 @@ This performs a **zero-downtime rolling update**:
 **Preview first:**
 
 ```powershell
-pwsh ./update-container-images.ps1 -ImageTag '<version>' -WhatIf  # e.g. 'v0.6.2'
+pwsh ./infra/azure/scripts/update-container-images.ps1 -ImageTag '<version>' -WhatIf  # e.g. '0.9.0-rc.1'
 ```
 
 ---
 
 ```powershell
-pwsh ./setup-keyvault-secrets.ps1
+pwsh ./infra/azure/scripts/setup-keyvault-secrets.ps1
 ```
 
 This script:
@@ -168,7 +172,7 @@ Choose a size profile based on your use case:
 To use a different profile, pass `-Profile` when running `deploy.ps1`:
 
 ```powershell
-pwsh ./deploy.ps1 -Profile m
+pwsh ./infra/azure/scripts/deploy.ps1 -Profile m
 ```
 
 Or set in `.env`:
@@ -218,7 +222,7 @@ AZURE_PROFILE=m
 To **delete all Azure resources**:
 
 ```powershell
-pwsh ./cleanup-rg.ps1
+pwsh ./infra/azure/scripts/cleanup-rg.ps1
 ```
 
 This removes all resources in the resource group **except the resource group itself** (allowing re-deployment to the same RG).
@@ -304,7 +308,7 @@ By default, mate uses **no authentication** in local/dev mode. To enable **Entra
    ```
 3. Get the **client secret** from Azure AD and store in Key Vault:
    ```powershell
-   pwsh ./setup-keyvault-secrets.ps1
+   pwsh ./infra/azure/scripts/setup-keyvault-secrets.ps1
    ```
 
 ### Scale the Deployment
@@ -315,7 +319,7 @@ Edit `.env` and change `AZURE_PROFILE`, then run `deploy.ps1` again:
 
 ```powershell
 $env:AZURE_PROFILE = 'm'  # Upgrade to medium
-pwsh ./deploy.ps1
+pwsh ./infra/azure/scripts/deploy.ps1
 ```
 
 ### Access Monitoring Data
