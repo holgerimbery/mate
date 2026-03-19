@@ -266,29 +266,21 @@ Write-Host "  Template: $(Split-Path -Leaf $mainTemplate)" -ForegroundColor Gree
 Write-Host "  Parameters: $(Split-Path -Leaf $parameterFile)" -ForegroundColor Green
 Write-Host ""
 
-# Detect PostgreSQL and load credentials to maintain state
-Write-Host "Checking PostgreSQL state..." -ForegroundColor Gray
-$postgresExists = $false
+# Load PostgreSQL credentials (required by current Bicep template)
+Write-Host "Loading PostgreSQL credentials..." -ForegroundColor Gray
 $postgresPassword = ''
-
-$postgresServers = az postgres flexible-server list --resource-group $ResourceGroupName --query "[].name" --output tsv 2>$null
-if ($LASTEXITCODE -eq 0 -and $postgresServers) {
-    $postgresExists = $true
-    Write-Host "  PostgreSQL detected - will maintain existing deployment" -ForegroundColor Gray
-    
-    # Load password from .pg-password file (like deploy.ps1 does)
-    $pgPasswordFile = Join-Path $scriptDir ".pg-password"
-    if (Test-Path $pgPasswordFile) {
-        $postgresPassword = Get-Content $pgPasswordFile -Raw | ForEach-Object { $_.Trim() }
-        Write-Host "  ✓ Loaded PostgreSQL credentials from .pg-password" -ForegroundColor Green
-    } else {
-        Write-Host "  ⚠ PostgreSQL exists but .pg-password file not found" -ForegroundColor Yellow
-        Write-Host "    Deployment may fail if postgres parameters are required" -ForegroundColor Yellow
-        $postgresPassword = Read-Host "Enter PostgreSQL admin password" -AsSecureString
-        $postgresPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($postgresPassword))
-    }
+$pgPasswordFile = Join-Path $scriptDir ".pg-password"
+if (Test-Path $pgPasswordFile) {
+    $postgresPassword = Get-Content $pgPasswordFile -Raw | ForEach-Object { $_.Trim() }
+    Write-Host "  ✓ Loaded PostgreSQL credentials from .pg-password" -ForegroundColor Green
 } else {
-    Write-Host "  No PostgreSQL detected - will skip postgres deployment" -ForegroundColor Gray
+    Write-Host "  .pg-password not found. Prompting for PostgreSQL admin password..." -ForegroundColor Yellow
+    $postgresPasswordSecure = Read-Host "Enter PostgreSQL admin password" -AsSecureString
+    $postgresPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($postgresPasswordSecure))
+}
+
+if (-not $postgresPassword) {
+    Write-Error "PostgreSQL admin password is required for deployment updates."
 }
 
 Write-Host ""
@@ -301,11 +293,7 @@ try {
     Write-Host "  ✓ .env has been updated with AZURE_IMAGE_TAG=$ImageTag"
     Write-Host "  ✓ Bicep state is maintained - next deploy.ps1 will use this tag"
     Write-Host "  ✓ Running deployment to apply changes immediately"
-    if ($postgresExists) {
-        Write-Host "  ✓ PostgreSQL parameters included to maintain existing deployment" -ForegroundColor Yellow
-    } else {
-        Write-Host "  ✓ PostgreSQL deployment disabled (no existing postgres found)" -ForegroundColor Yellow
-    }
+    Write-Host "  ✓ PostgreSQL parameters included (required by template)" -ForegroundColor Yellow
     Write-Host ""
 
     # Build secure deployment parameters (using array like deploy.ps1)
@@ -314,14 +302,8 @@ try {
         'location'        = $Location
         'imageTag'        = $ImageTag
         'aadClientId'     = $AadClientId
-    }
-    
-    if ($postgresExists -and $postgresPassword) {
-        $deploymentParams['deployPostgres'] = $true
-        $deploymentParams['postgresAdminLogin'] = 'pgadmin'
-        $deploymentParams['postgresAdminPassword'] = $postgresPassword
-    } else {
-        $deploymentParams['deployPostgres'] = $false
+        'postgresAdminLogin' = 'pgadmin'
+        'postgresAdminPassword' = $postgresPassword
     }
     
     # Build argument array (secure method - no password exposure in command line)
@@ -346,23 +328,7 @@ try {
 
     Write-Host "  ✓ Bicep deployment completed" -ForegroundColor Green
 
-    Write-Host ""
-    Write-Host "Configuring runtime secret references..." -ForegroundColor Cyan
-    $repairScript = Join-Path $scriptDir "repair-runtime-secrets.ps1"
-    if (-not (Test-Path $repairScript)) {
-        throw "Runtime secret helper script not found: $repairScript"
-    }
-
-    & $repairScript `
-        -ResourceGroupName $ResourceGroupName `
-        -EnvironmentName $EnvironmentName `
-        -PostgresPassword $postgresPassword
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "Runtime secret wiring script failed with exit code $LASTEXITCODE"
-    }
-
-    Write-Host "  ✓ Runtime secret wiring completed." -ForegroundColor Green
+    Write-Host "  ✓ Runtime secret wiring is managed by Bicep + Key Vault references." -ForegroundColor Green
 } catch {
     Write-Error "Failed to deploy with Bicep: $_"
 }

@@ -8,7 +8,7 @@
 mate connects to multiple AI agents, runs automated evaluation suites against them, tracks quality over time, and red-teams them for adversarial vulnerabilities. It supports Microsoft Copilot Studio, Azure AI Foundry*, generic HTTP agents*, and Parloa* out of the box — and is extensible with custom connector, judge, and red-team modules.   
 > *backlog item   
 
-Current version: **v0.8.0**  
+Current version: **v0.9.0**  
 
 
 
@@ -220,6 +220,11 @@ All settings are controlled via environment variables (or `appsettings.json`):
 | `Infrastructure__Provider` | `Container` | `Container` (PostgreSQL + Azurite, default) · `Azure` (Azure Database for PostgreSQL + Azure Blob Storage) |
 | `ConnectionStrings__Default` | *(PostgreSQL)*  | PostgreSQL connection string — set automatically by docker-compose; override for custom deployments |
 | `AzureInfrastructure__BlobConnectionString` | — | Required when `Infrastructure__Provider` is `Container` or `Azure` |
+| `AzureInfrastructure__UseKeyVaultForSecrets` | `false` | Core secrets mode switch: `false` = database-backed secrets, `true` = single Azure Key Vault |
+| `AzureInfrastructure__KeyVaultUri` | — | Required when `AzureInfrastructure__UseKeyVaultForSecrets=true` |
+| `AZURE_CLIENT_ID` | — | Required in Docker single-vault mode (service principal client ID) |
+| `AZURE_CLIENT_SECRET` | — | Required in Docker single-vault mode (service principal secret) |
+| `AZURE_TENANT_ID` | — | Required in Docker single-vault mode (tenant/directory ID) |
 | `AzureAd__TenantId` | — | Required for EntraId auth |
 | `AzureAd__ClientId` | — | Required for EntraId auth |
 | `AzureAd__ClientSecret` | — | Required for EntraId auth |
@@ -227,6 +232,25 @@ All settings are controlled via environment variables (or `appsettings.json`):
 | `JudgeSettings__ApiKey` | — | API key for LLM judge |
 
 See `infra/local/.env.template` for the full list.
+
+### Core Secrets Modes (Database vs Single Vault)
+
+Core deployments support two secret storage modes:
+
+- **Database mode (default)**
+  - `AzureInfrastructure__UseKeyVaultForSecrets=false`
+  - Judge/QGen/Agent secrets are stored in PostgreSQL (`AppSecrets` table).
+- **Single-vault mode**
+  - `AzureInfrastructure__UseKeyVaultForSecrets=true`
+  - `AzureInfrastructure__KeyVaultUri=https://<your-vault>.vault.azure.net/`
+  - `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` must be set for container auth.
+
+Switch modes by updating `infra/local/.env` and rebuilding:
+
+```powershell
+./debug-container.ps1 -Stop
+./debug-container.ps1 -Source build -Rebuild
+```
 
 ---
 

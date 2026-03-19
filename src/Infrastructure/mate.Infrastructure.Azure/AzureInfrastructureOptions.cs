@@ -24,4 +24,33 @@ public sealed class AzureInfrastructureOptions
     /// Default blob container name for document storage. Default: "mate-blobs".
     /// </summary>
     public string BlobContainerName { get; set; } = "mate-blobs";
+
+    /// <summary>
+    /// Optional Key Vault URI used by <see cref="AzureKeyVaultSecretService"/>.
+    /// Example: https://my-vault.vault.azure.net/
+    /// </summary>
+    public string? KeyVaultUri { get; set; }
+
+    /// <summary>
+    /// When true and <see cref="KeyVaultUri"/> is set, secrets are resolved via Azure Key Vault.
+    /// When false (default), secrets remain database-backed for compatibility.
+    /// </summary>
+    public bool UseKeyVaultForSecrets { get; set; }
+
+    /// <summary>
+    /// Enables enterprise multi-vault routing when Key Vault mode is active.
+    /// Default false preserves single-vault behavior.
+    /// </summary>
+    public bool UseMultiVaultForSecrets { get; set; }
+
+    /// <summary>
+    /// Platform vault URI used for platform-scoped secret operations.
+    /// </summary>
+    public string? PlatformVaultUri { get; set; }
+
+    /// <summary>
+    /// Tenant vault URL template with {tenantId} placeholder.
+    /// Example: https://tenant-{tenantId}-kv.vault.azure.net/
+    /// </summary>
+    public string? TenantVaultUriTemplate { get; set; }
 }

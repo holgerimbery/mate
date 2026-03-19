@@ -5,7 +5,9 @@ param administratorLogin string
 param administratorPassword string
 param databaseName string = 'mate'
 
-var serverName = take('${baseName}-pg', 63)
+var serverNameSuffix = take(uniqueString(subscription().subscriptionId, resourceGroup().name, baseName, location), 6)
+var serverNameBase = take('${baseName}-pg', 56)
+var serverName = '${serverNameBase}-${serverNameSuffix}'
 var dbName = databaseName
 
 resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {

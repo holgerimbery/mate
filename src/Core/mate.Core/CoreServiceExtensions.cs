@@ -33,6 +33,7 @@ public static class CoreServiceExtensions
         services.AddScoped<TenantLookupService>();
         services.AddScoped<TenantResolver>();
         services.AddScoped<IQuotaService, QuotaService>();
+        services.AddScoped<ITenantAuthorizationService, TenantAuthorizationService>();
 
         // Document processing
         services.AddScoped<DocumentChunker>();

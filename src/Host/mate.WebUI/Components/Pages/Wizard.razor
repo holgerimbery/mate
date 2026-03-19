@@ -5,12 +5,14 @@
 @using mate.Domain.Contracts.Modules
 @using Microsoft.EntityFrameworkCore
 @using System.Text.Json
+@using Microsoft.Extensions.Configuration
 @using Microsoft.AspNetCore.Components.Authorization
 @inject mateDbContext Db
 @inject mate.Core.mateModuleRegistry Registry
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject mate.Domain.Contracts.Infrastructure.ISecretService SecretSvc
+@inject IConfiguration Config
 @inject ITenantContext TenantCtx
 
 <PageTitle>Setup Wizard — @BrandInfo.BrandName</PageTitle>
@@ -294,9 +296,12 @@
     /// Prevents "cannot convert string to bool/int" deserialization errors.
     /// </summary>
     private string BuildConfigJson()
+        => BuildConfigJson(_configValues);
+
+    private string BuildConfigJson(IReadOnlyDictionary<string, string> sourceValues)
     {
         var node = new System.Text.Json.Nodes.JsonObject();
-        foreach (var kv in _configValues)
+        foreach (var kv in sourceValues)
         {
             var fieldDef = _configFields.FirstOrDefault(f => f.Key == kv.Key);
             if (fieldDef?.FieldType == "boolean")
@@ -315,6 +320,56 @@
             }
         }
         return node.ToJsonString();
+    }
+
+    private async Task<Dictionary<string, string>> PersistConnectorSecretRefsAsync(Guid agentId)
+    {
+        var persisted = new Dictionary<string, string>(_configValues, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in _configFields.Where(f => f.FieldType is "secret" or "password"))
+        {
+            if (!persisted.TryGetValue(field.Key, out var rawOrRef) || string.IsNullOrWhiteSpace(rawOrRef))
+                continue;
+
+            var candidate = rawOrRef.Trim();
+
+            try
+            {
+                _ = await SecretSvc.GetSecretAsync(candidate);
+                persisted[field.Key] = candidate;
+                continue;
+            }
+            catch
+            {
+                // Treat unresolved value as raw secret input.
+            }
+
+            var connectorToken = NormalizeSecretToken(_selectedConnectorType, 24);
+            var fieldToken = NormalizeSecretToken(field.Key, 32);
+            var secretRef = $"agent_{agentId:N}_{connectorToken}_{fieldToken}_key";
+
+            await SecretSvc.SetSecretAsync(secretRef, candidate);
+            persisted[field.Key] = secretRef;
+        }
+
+        return persisted;
+    }
+
+    private static string NormalizeSecretToken(string value, int maxLen)
+    {
+        var chars = value
+            .ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '_')
+            .ToArray();
+
+        var token = new string(chars).Trim('_');
+        while (token.Contains("__", StringComparison.Ordinal))
+            token = token.Replace("__", "_", StringComparison.Ordinal);
+
+        if (token.Length > maxLen)
+            token = token[..maxLen];
+
+        return string.IsNullOrWhiteSpace(token) ? "field" : token;
     }
 
     private void GoStep2()
@@ -351,6 +406,7 @@
         StateHasChanged();
         try
         {
+            var allowRawSecretFallback = !Config.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false);
             // Resolve secrets for any field typed 'secret' or 'password'.
             // Tries the secret store first (env var); falls back to using the entered value directly.
             var resolvedSecrets = new Dictionary<string, string>();
@@ -359,7 +415,17 @@
                 var refName = GetConfigValue(field.Key);
                 if (string.IsNullOrWhiteSpace(refName)) continue;
                 try { resolvedSecrets[refName] = await SecretSvc.GetSecretAsync(refName); }
-                catch { resolvedSecrets[refName] = refName; } // direct-value fallback
+                catch
+                {
+                    if (allowRawSecretFallback)
+                    {
+                        resolvedSecrets[refName] = refName; // direct-value fallback
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Secret reference '{refName}' could not be resolved in key-vault mode.");
+                    }
+                }
             }
 
             var module = _modules.FirstOrDefault(m => m.ConnectorType == _selectedConnectorType);
@@ -404,9 +470,13 @@
     private async Task SaveAgent()
     {
         if (_createdAgentId != Guid.Empty) return;
+        var agentId = Guid.NewGuid();
+        var persistedConfigValues = await PersistConnectorSecretRefsAsync(agentId);
+        _configValues = persistedConfigValues;
+
         var agent = new Agent
         {
-            Id = Guid.NewGuid(),
+            Id = agentId,
             TenantId = TenantCtx.TenantId,
             Name = _agentName,
             Description = _agentDescription,
@@ -422,7 +492,7 @@
             AgentId = agent.Id,
             TenantId = TenantCtx.TenantId,
             ConnectorType = _selectedConnectorType,
-            ConfigJson = BuildConfigJson(),
+            ConfigJson = BuildConfigJson(persistedConfigValues),
             IsActive = true
         });
         Db.Agents.Add(agent);
@@ -441,7 +511,7 @@
             var suite = new TestSuite
             {
                 Id = suiteId,
-                TenantId = Guid.Empty,
+                TenantId = TenantCtx.TenantId,
                 Name = _suiteName,
                 Description = _suiteDescription,
                 PassThreshold = _passThreshold,
@@ -454,7 +524,7 @@
             {
                 TestSuiteId = suiteId,
                 AgentId = _createdAgentId,
-                TenantId = Guid.Empty
+                TenantId = TenantCtx.TenantId
             });
             await Db.SaveChangesAsync();
         }

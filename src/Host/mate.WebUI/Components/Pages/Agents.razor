@@ -6,10 +6,12 @@
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Text.Json
+@using Microsoft.Extensions.Configuration
 @inject mateDbContext Db
 @inject mate.Core.mateModuleRegistry Registry
 @inject AuthenticationStateProvider AuthStateProvider
 @inject mate.Domain.Contracts.Infrastructure.ISecretService SecretSvc
+@inject IConfiguration Config
 @inject ITenantContext TenantCtx
 
 <PageTitle>Agents — @BrandInfo.BrandName</PageTitle>
@@ -454,9 +456,12 @@ else
     }
 
     private string BuildFormConfigJson()
+        => BuildFormConfigJson(_configValues);
+
+    private string BuildFormConfigJson(IReadOnlyDictionary<string, string> sourceValues)
     {
         var node = new System.Text.Json.Nodes.JsonObject();
-        foreach (var kv in _configValues)
+        foreach (var kv in sourceValues)
         {
             var fieldDef = _configFields.Concat(_editConnectorFields).FirstOrDefault(f => f.Key == kv.Key);
             if (fieldDef?.FieldType == "boolean")
@@ -469,6 +474,60 @@ else
                 node[kv.Key] = kv.Value;
         }
         return node.ToJsonString();
+    }
+
+    private async Task<Dictionary<string, string>> PersistConnectorSecretRefsAsync(
+        Guid agentId,
+        string connectorType,
+        IReadOnlyList<ConfigFieldDefinition> fields)
+    {
+        var persisted = new Dictionary<string, string>(_configValues, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in fields.Where(f => f.FieldType is "secret" or "password"))
+        {
+            if (!persisted.TryGetValue(field.Key, out var rawOrRef) || string.IsNullOrWhiteSpace(rawOrRef))
+                continue;
+
+            var candidate = rawOrRef.Trim();
+
+            // If it already resolves, treat it as a reference and keep it untouched.
+            try
+            {
+                _ = await SecretSvc.GetSecretAsync(candidate);
+                persisted[field.Key] = candidate;
+                continue;
+            }
+            catch
+            {
+                // Not a resolvable reference in current mode; treat as raw secret input.
+            }
+
+            var connectorToken = NormalizeSecretToken(connectorType, 24);
+            var fieldToken = NormalizeSecretToken(field.Key, 32);
+            var secretRef = $"agent_{agentId:N}_{connectorToken}_{fieldToken}_key";
+
+            await SecretSvc.SetSecretAsync(secretRef, candidate);
+            persisted[field.Key] = secretRef;
+        }
+
+        return persisted;
+    }
+
+    private static string NormalizeSecretToken(string value, int maxLen)
+    {
+        var chars = value
+            .ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '_')
+            .ToArray();
+
+        var token = new string(chars).Trim('_');
+        while (token.Contains("__", StringComparison.Ordinal))
+            token = token.Replace("__", "_", StringComparison.Ordinal);
+
+        if (token.Length > maxLen)
+            token = token[..maxLen];
+
+        return string.IsNullOrWhiteSpace(token) ? "field" : token;
     }
 
     protected override async Task OnInitializedAsync()
@@ -566,6 +625,17 @@ else
         var tags = _form.TagsRaw
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+        var targetAgentId = _editAgent?.Id ?? Guid.NewGuid();
+        var saveConnectorType = _editAgent is null ? _form.ConnectorType : _editConnectorType;
+        var saveFields = _editAgent is null ? _configFields : _editConnectorFields;
+        var persistedConfigValues = _configValues;
+
+        if (!string.IsNullOrWhiteSpace(saveConnectorType) && saveFields.Any())
+        {
+            persistedConfigValues = await PersistConnectorSecretRefsAsync(targetAgentId, saveConnectorType, saveFields);
+            _configValues = persistedConfigValues;
+        }
+
         if (_editAgent is null)
         {
             // Validate connector config
@@ -586,7 +656,7 @@ else
             // Create
             var agent = new Agent
             {
-                Id = Guid.NewGuid(),
+                Id = targetAgentId,
                 TenantId = TenantCtx.TenantId,
                 Name = _form.Name,
                 Description = _form.Description,
@@ -604,7 +674,7 @@ else
                     AgentId = agent.Id,
                     TenantId = TenantCtx.TenantId,
                     ConnectorType = _form.ConnectorType,
-                    ConfigJson = BuildFormConfigJson(),
+                    ConfigJson = BuildFormConfigJson(persistedConfigValues),
                     IsActive = true
                 });
             }
@@ -625,7 +695,7 @@ else
             var firstConn = _editAgent.ConnectorConfigs.FirstOrDefault();
             if (firstConn != null && _editConnectorFields.Any())
             {
-                firstConn.ConfigJson = BuildFormConfigJson();
+                firstConn.ConfigJson = BuildFormConfigJson(persistedConfigValues);
             }
             AuditHelper.Log(Db, _editAgent.TenantId, "Updated", "Agent", _editAgent.Id, _userId, _editAgent.Name);
         }
@@ -643,6 +713,7 @@ else
         StateHasChanged();
         try
         {
+            var allowRawSecretFallback = !Config.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false);
             var connectorType = _editAgent is null ? _form.ConnectorType : _editConnectorType;
             var fields = _editAgent is null ? _configFields : _editConnectorFields;
             var module = _connectorModules.FirstOrDefault(m => m.ConnectorType == connectorType);
@@ -658,7 +729,17 @@ else
                 var refName = GetFormConfigValue(field.Key);
                 if (string.IsNullOrWhiteSpace(refName)) continue;
                 try { resolvedSecrets[refName] = await SecretSvc.GetSecretAsync(refName); }
-                catch { resolvedSecrets[refName] = refName; }
+                catch
+                {
+                    if (allowRawSecretFallback)
+                    {
+                        resolvedSecrets[refName] = refName;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Secret reference '{refName}' could not be resolved in key-vault mode.");
+                    }
+                }
             }
             var connConfig = new mate.Domain.Contracts.Modules.AgentConnectionConfig
             {

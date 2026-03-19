@@ -37,6 +37,15 @@
     <button class="tab-pill @(_tab == "auth" ? "active" : "")" @onclick='() => _tab = "auth"'><i class="bi bi-shield-lock me-1"></i>Authentication</button>
 </div>
 
+@if (Config.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false) &&
+     Config.GetValue<bool>("AzureInfrastructure:UseMultiVaultForSecrets", false))
+{
+    <div class="alert alert-warning mb-3">
+        <i class="bi bi-info-circle me-1"></i>
+        Multi-vault tenant context: <strong>@TenantCtx.TenantId</strong>
+    </div>
+}
+
 @* ── Modules overview ──────────────────────────────────────────────────────── *@
 @if (_tab == "modules")
 {
@@ -1283,6 +1292,19 @@ OAuth__Audience=your-api-audience</pre>
     {
         if (string.IsNullOrWhiteSpace(_judgeForm.Name)) { _judgeFormError = "Name is required."; return; }
 
+        var isKeyVaultMode = Config.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false);
+        var isMultiVaultMode = Config.GetValue<bool>("AzureInfrastructure:UseMultiVaultForSecrets", false);
+        var platformTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        if (isKeyVaultMode && isMultiVaultMode &&
+            (TenantCtx.TenantId == Guid.Empty || TenantCtx.TenantId == platformTenantId))
+        {
+            _judgeFormError = "Cannot store tenant secret: tenant context is not resolved (platform/empty). Sign in with a tenant-mapped identity and refresh Settings.";
+            return;
+        }
+
+        try
+        {
+
         if (_judgeForm.IsDefault)
         {
             var others = _judgeSettings.Where(j => j.IsDefault && j.Id != _editJudge?.Id);
@@ -1352,9 +1374,14 @@ OAuth__Audience=your-api-audience</pre>
             _editJudge.UpdatedAt = DateTime.UtcNow;
             AuditHelper.Log(Db, _editJudge.TenantId, "Updated", "JudgeSetting", _editJudge.Id, _userId, _editJudge.Name);
         }
-        await Db.SaveChangesAsync();
-        CloseJudgeForm();
-        await LoadAllAsync();
+            await Db.SaveChangesAsync();
+            CloseJudgeForm();
+            await LoadAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _judgeFormError = ex.InnerException?.Message ?? ex.Message;
+        }
     }
 
     private void CloseJudgeForm()
@@ -1467,6 +1494,19 @@ OAuth__Audience=your-api-audience</pre>
     {
         if (string.IsNullOrWhiteSpace(_qgenForm.Name)) { _qgenFormError = "Name is required."; return; }
 
+        var isKeyVaultMode = Config.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false);
+        var isMultiVaultMode = Config.GetValue<bool>("AzureInfrastructure:UseMultiVaultForSecrets", false);
+        var platformTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        if (isKeyVaultMode && isMultiVaultMode &&
+            (TenantCtx.TenantId == Guid.Empty || TenantCtx.TenantId == platformTenantId))
+        {
+            _qgenFormError = "Cannot store tenant secret: tenant context is not resolved (platform/empty). Sign in with a tenant-mapped identity and refresh Settings.";
+            return;
+        }
+
+        try
+        {
+
         if (_qgenForm.IsDefault)
         {
             var others = _qgenSettings.Where(q => q.IsDefault && q.Id != _editQGen?.Id);
@@ -1520,9 +1560,14 @@ OAuth__Audience=your-api-audience</pre>
             _editQGen.UpdatedAt       = DateTime.UtcNow;
             AuditHelper.Log(Db, _editQGen.TenantId, "Updated", "QGenSetting", _editQGen.Id, _userId, _editQGen.Name);
         }
-        await Db.SaveChangesAsync();
-        CloseQGenForm();
-        await LoadAllAsync();
+            await Db.SaveChangesAsync();
+            CloseQGenForm();
+            await LoadAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _qgenFormError = ex.InnerException?.Message ?? ex.Message;
+        }
     }
 
     private void ConfirmDeleteQGen(GlobalQuestionGenerationSetting qs) => _deleteQGen = qs;

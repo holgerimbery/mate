@@ -4,14 +4,21 @@
 
 <#
 .SYNOPSIS
-Post-deployment setup: Store client secret in Key Vault and configure RBAC.
+Repair/recovery script: re-seed Key Vault secrets for an existing mate deployment.
 
 .DESCRIPTION
-After the infrastructure is deployed, this script:
-1. Stores the Entra ID client secret in Azure Key Vault
-2. Configures managed identity RBAC (Key Vault Secrets User role)
-3. Verifies the setup works
-4. Provides instructions for next steps
+Use this script when secrets need to be re-stored after rotation or after a failed
+initial deployment. During a normal first-time deployment, deploy.ps1 (Phase 0)
+hands this responsibility automatically.
+
+This script:
+1. Verifies the Key Vault exists and the caller has the required role
+2. Stores/refreshes the Entra ID client secret (azuread-client-secret)
+3. Stores/refreshes the PostgreSQL admin password (postgres-admin-password)
+
+Note: Blob, postgres connection string, and servicebus connection string secrets
+are managed inline by the Bicep deployment. Managed identity RBAC (Key Vault
+Secrets User) is also assigned inline by Bicep.
 
 .EXAMPLE
 .\setup-keyvault-secrets.ps1
@@ -175,85 +182,11 @@ catch {
 
 Write-Host ""
 
-# Step 4: Configure managed identity RBAC
-Write-Host "Step 4: Configuring managed identity permissions..." -ForegroundColor Cyan
-try {
-    $webMiName = "$environmentName-web-mi"
-    
-    Write-Host "  Getting managed identity '$webMiName'..." -ForegroundColor Gray
-    $webMiPrincipalId = az identity show `
-        --resource-group $resourceGroup `
-        --name $webMiName `
-        --query principalId -o tsv
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to get managed identity '$webMiName'"
-    }
-    
-    Write-Host "  Principal ID: $webMiPrincipalId" -ForegroundColor Gray
-    
-    Write-Host "  Granting 'Key Vault Secrets User' role..." -ForegroundColor Gray
+# Step 4 is handled inline by Bicep (managed identity RBAC + blob/postgres/servicebus connection strings).
+# This script only manages the manually-bootstrapped secrets.
 
-    $existingMiAssignmentCount = az role assignment list `
-        --assignee-object-id $webMiPrincipalId `
-        --scope $kvId `
-        --query "[?roleDefinitionName=='Key Vault Secrets User'] | length(@)" -o tsv
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Could not verify existing managed identity assignment; attempting assignment"
-        $existingMiAssignmentCount = '0'
-    }
-
-    if ($existingMiAssignmentCount -eq '0') {
-        $miAssignOutput = az role assignment create `
-            --assignee-object-id $webMiPrincipalId `
-            --assignee-principal-type ServicePrincipal `
-            --role "Key Vault Secrets User" `
-            --scope $kvId `
-            -o json 2>&1
-
-        if ($LASTEXITCODE -ne 0) {
-            $miAssignText = ($miAssignOutput | Out-String).Trim()
-            Write-Error "Failed to assign Key Vault Secrets User to managed identity. Error: $miAssignText"
-        }
-
-        Write-Host "  Role assignment created" -ForegroundColor Gray
-    }
-    else {
-        Write-Host "  Managed identity already has Key Vault Secrets User role" -ForegroundColor Gray
-    }
-    
-    Write-Host "✓ Managed identity configured" -ForegroundColor Green
-}
-catch {
-    Write-Error "Failed to configure RBAC: $_"
-}
-
-Write-Host ""
-
-# Step 5: Verify secret access
-Write-Host "Step 5: Verifying secret access..." -ForegroundColor Cyan
-try {
-    $secret = az keyvault secret show `
-        --vault-name $keyVaultName `
-        --name "azuread-client-secret" `
-        --query value -o tsv
-    
-    if ($secret -and $secret -eq $aadClientSecret) {
-        Write-Host "✓ Secret verified successfully" -ForegroundColor Green
-    }
-    else {
-        Write-Error "Secret verification failed - values don't match"
-    }
-}
-catch {
-    Write-Error "Failed to verify secret: $_"
-}
-
-Write-Host ""
-
-# Step 6: Optional - Store PostgreSQL password
-Write-Host "Step 6: Storing PostgreSQL password (optional)..." -ForegroundColor Cyan
+# Step 4: Optional — Store/refresh PostgreSQL password
+Write-Host "Step 4: Storing PostgreSQL password (optional refresh)..." -ForegroundColor Cyan
 if (Test-Path $pgPassFile) {
     try {
         $pgPassword = Get-Content $pgPassFile -Raw
@@ -286,17 +219,11 @@ else {
 
 Write-Host ""
 
-# Step 7: Redeploy container apps
-Write-Host "Step 7: Redeploying Container Apps..." -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Now that the client secret is in Key Vault, the Container Apps can access it." -ForegroundColor Yellow
-Write-Host "Run the deployment to create the WebUI and Worker containers:" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "  .\deploy.ps1" -ForegroundColor Magenta
-Write-Host ""
-
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Setup Complete!" -ForegroundColor Green
+Write-Host "Repair Complete!" -ForegroundColor Green
+Write-Host "  azuread-client-secret refreshed in Key Vault: $keyVaultName" -ForegroundColor Green
+Write-Host "  Blob/postgres/servicebus connection strings are managed by Bicep." -ForegroundColor Gray
+Write-Host "  Managed identity RBAC (Key Vault Secrets User) is managed by Bicep." -ForegroundColor Gray
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Next:" -ForegroundColor Cyan

@@ -6,6 +6,29 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Tenant role assignment foundation (E25-Item-1)** - Added `TenantRoleAssignment` entity, EF mapping, and migration (`AddTenantRoleAssignment`) with `mateDbContext` integration (DbSet + tenant query filter) as the persistence base for upcoming tenant-scoped authorization.
+- **Tenant authorization service (E25-Item-2)** - Added `ITenantAuthorizationService` interface and `TenantAuthorizationService` implementation for platform-level role resolution from `TenantRoleAssignments`. Uses null-tenantContext pattern to bypass global query filter. Registered as `Scoped` in `CoreServiceExtensions`. Returns safe empty defaults in standard deployments.
+- **Azure Key Vault secret service foundation (E25-Item-3)** - Added `AzureKeyVaultSecretService` and opt-in Azure infrastructure routing for `ISecretService` (`AzureInfrastructure:UseKeyVaultForSecrets` + `AzureInfrastructure:KeyVaultUri`) while preserving database-backed secret behavior as default fallback.
+- **Help page secrets mode badge (E25-Item-3)** - Added `Secrets Mode` runtime badge on `/help` to indicate whether the app is running in `Key Vault` mode or `Database` mode.
+- **Single-vault RBAC operation modes (E25)** - Extended `infra/local/provision-singlevault.ps1` with `-Mode EnsureRbac|VerifyOnly|GrantOnly`, idempotent RBAC verification/assignment, configurable role/principal resolution, and propagation re-check.
+
+### Changed
+- **BREAKING: Azure deployment requires PostgreSQL (E4-keyvault)** — The `deployPostgres` flag and related optional-postgres conditional logic have been removed from `infra/azure/main.bicep`. PostgreSQL is now always deployed; `postgresAdminLogin` defaults to `pgadmin` and `postgresAdminPassword` is a mandatory parameter with no default. Existing deployments that passed `deployPostgres=false` will now provision a PostgreSQL Flexible Server on next deploy.
+- **BREAKING: `.env` variable renamed `AZURE_CONTAINER_IMAGE_TAG` → `AZURE_IMAGE_TAG` (E4-keyvault)** — The container image tag variable in `infra/azure/.env.template` and `quickstart-azure/.env.template` has been renamed. Existing `.env` files must be updated from `AZURE_CONTAINER_IMAGE_TAG` to `AZURE_IMAGE_TAG` before running deploy scripts.
+- **WebUI EF tooling dependency (E25-Item-1)** - Added `Microsoft.EntityFrameworkCore.Design` package reference to `mate.WebUI` to enable startup-project-backed migration generation.
+- **Azure quickstart packaging model (E4-keyvault)** — `quickstart-azure` was reorganized to docs-only, and canonical automation now lives in `infra/azure/scripts`.
+- **Release workflow quickstart artifact (E4-keyvault)** — `mate-quickstart-azure-<version>.zip` generation in GitHub Actions now packages docs/config only and no longer copies script files from `quickstart-azure`.
+- **Bicep Key Vault secret mode injection (E25-Item-3)** — `infra/azure/modules/container-apps.bicep` (and compiled `main.json`) now inject `AzureInfrastructure__UseKeyVaultForSecrets=true`, `AzureInfrastructure__KeyVaultUri`, and `AZURE_CLIENT_ID` (managed identity client ID) into both WebUI and Worker container apps, enabling Key Vault secret mode automatically without manual environment configuration.
+- **Update-container-images script simplified (E25-Item-3)** — `infra/azure/scripts/update-container-images.ps1` removes conditional PostgreSQL detection in favour of always loading credentials from `.pg-password` (or prompting), and removes the post-deploy `repair-runtime-secrets.ps1` call; runtime secret wiring is now owned by Bicep + Key Vault references.
+- **Azure .env.template Key Vault note (E25-Item-3)** — Added inline documentation to `infra/azure/.env.template` clarifying that Key Vault secret mode is configured by Bicep at deploy time; no additional `.env` toggle is required.
+- **Core compose Azure credential pass-through (E25)** - Added `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` environment pass-through for `webui` and `worker` in `infra/local/docker-compose.yml` so single-vault mode can authenticate via `EnvironmentCredential` inside containers.
+- **Single-vault provisioning target vault resolution (E25)** - `provision-singlevault.ps1` now uses `AzureInfrastructure__KeyVaultUri` from `infra/local/.env` when present (custom-suffixed vaults), with fallback to canonical `mate-<environment>-kv` naming.
+- **Copilot Studio Web Channel token acquisition robustness (E25)** - Added fallback token endpoint path for Web Channel mode and enhanced token-failure diagnostics to include mode/botId/secretRef/endpoint context.
+
+### Fixed
+- **Key Vault secret name compatibility in single-vault mode (E25)** - `AzureKeyVaultSecretService` now normalizes DB-style secret references to valid Key Vault secret names (hyphen-only) for get/set/delete, matching multi-vault normalization behavior.
+
 ## [v0.8.0] — 2026-03-16
 
 ### Added

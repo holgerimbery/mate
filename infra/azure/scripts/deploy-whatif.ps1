@@ -207,7 +207,66 @@ function Wait-ForProvisioningPostgres {
     }
 }
 
-# Prompt for values needed when deployPostgres=true
+function Test-PostgresLocationOffer {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetLocation
+    )
+
+    Write-Host "Checking PostgreSQL offer availability for location '$TargetLocation'..." -ForegroundColor Cyan
+
+    $skuOutput = az postgres flexible-server list-skus --location $TargetLocation --output json --only-show-errors
+    if ($LASTEXITCODE -ne 0) {
+        $errorText = ($skuOutput | Out-String).Trim()
+        Write-Error "Failed to verify PostgreSQL offer availability for location '$TargetLocation'. Azure CLI output: $errorText"
+    }
+
+    try {
+        $skuData = @($skuOutput | ConvertFrom-Json)
+    }
+    catch {
+        Write-Error "Failed to parse PostgreSQL SKU response for location '$TargetLocation'. Raw response: $($skuOutput | Out-String)"
+    }
+
+    if ($skuData.Count -eq 0) {
+        Write-Error "PostgreSQL SKU API returned no data for location '$TargetLocation'. Cannot continue safely."
+    }
+
+    $capabilities = $skuData | Where-Object { $_.name -eq 'FlexibleServerCapabilities' } | Select-Object -First 1
+    if (-not $capabilities) {
+        Write-Error "PostgreSQL capabilities response is missing for location '$TargetLocation'. Cannot continue safely."
+    }
+
+    $offerRestrictedFlag = $null
+    if ($capabilities.supportedFeatures) {
+        $offerFeature = @($capabilities.supportedFeatures | Where-Object { $_.name -eq 'OfferRestricted' } | Select-Object -First 1)
+        if ($offerFeature.Count -gt 0) {
+            $offerRestrictedFlag = [string]$offerFeature[0].status
+        }
+    }
+
+    $restrictionReason = [string]$capabilities.reason
+    if ($offerRestrictedFlag -eq 'Enabled' -or ($restrictionReason -and $restrictionReason -match 'restricted')) {
+        Write-Host "PostgreSQL offer check failed for location '$TargetLocation'." -ForegroundColor Red
+        if ($restrictionReason) {
+            Write-Host "  Provider reason: $restrictionReason" -ForegroundColor DarkYellow
+        }
+        Write-Error "Location '$TargetLocation' is restricted for this subscription's PostgreSQL offer. Choose another region (for example: northeurope)."
+    }
+
+    Write-Host "  PostgreSQL offer is available in '$TargetLocation'." -ForegroundColor Green
+}
+
+# Set subscription / tenant context before sensitive prompts and preflight checks
+az account set --subscription $SubscriptionId --only-show-errors
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to set subscription context. Run 'az login --tenant $TenantId' first."
+}
+
+# Fast-fail check for subscription-level PostgreSQL offer restrictions
+Test-PostgresLocationOffer -TargetLocation $Location
+
+# Prompt for secure value needed for parameter completeness
 $pgPasswordFile = Join-Path $scriptDir '.pg-password'
 $postgresPasswordPlain = $null
 if (Test-Path $pgPasswordFile) {
@@ -231,16 +290,12 @@ $deploymentParams = @{
     'aadClientId'           = $AadClientId
     'postgresAdminLogin'    = 'pgadmin'
     'postgresAdminPassword' = $postgresPasswordPlain
-    'deployPostgres'        = $true
 }
 
 Write-Host "Preparing what-if deployment..." -ForegroundColor Cyan
 Write-Host ""
 Write-Host "1. Setting subscription context..." -ForegroundColor Magenta
-az account set --subscription $SubscriptionId --only-show-errors
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to set subscription context. Run 'az login --tenant $TenantId' first."
-}
+Write-Host "  Already validated." -ForegroundColor Gray
 
 Write-Host "2. Ensuring resource group exists..." -ForegroundColor Magenta
 $rgExists = az group exists --name $ResourceGroupName --only-show-errors

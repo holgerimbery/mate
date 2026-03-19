@@ -1,6 +1,10 @@
 # Azure Deployment Workflow
 
-This directory contains PowerShell helper scripts to deploy the Mate infrastructure to Azure.
+This directory contains deployment workflow documentation for Azure.
+
+Deployment is repository-coupled and uses canonical scripts from `infra/azure/scripts` in the same repository checkout.
+
+Release zip note: `mate-quickstart-azure-<version>.zip` is docs-only. Run scripts from a full repository checkout.
 
 ## Overview
 
@@ -34,7 +38,7 @@ The deployment process is split into two phases:
 Store your Azure tenant, subscription, and resource group information locally (never in git):
 
 ```powershell
-.\setup-env.ps1
+.\infra\azure\scripts\setup-env.ps1
 ```
 
 This interactive wizard creates a `.env` file with your settings:
@@ -47,7 +51,7 @@ See `.env.template` for all available configuration options.
 ### 2. Check Prerequisites
 
 ```powershell
-.\check-prerequisites.ps1
+.\infra\azure\scripts\check-prerequisites.ps1
 ```
 
 Validates that Azure CLI, Bicep, and PowerShell are installed.
@@ -55,7 +59,7 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 ### 3. Preview Deployment (What-If)
 
 ```powershell
-.\deploy-whatif.ps1
+.\infra\azure\scripts\deploy-whatif.ps1
 ```
 
 **This will:**
@@ -68,7 +72,7 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 **To override .env values**, pass parameters:
 
 ```powershell
-.\deploy-whatif.ps1 -Location 'westeurope' -Profile 'm'
+.\infra\azure\scripts\deploy-whatif.ps1 -Location 'westeurope' -Profile 'm'
 ```
 
 **Output:** Review carefully for:
@@ -79,7 +83,7 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 ### 4. Deploy to Azure (Live)
 
 ```powershell
-.\deploy.ps1
+.\infra\azure\scripts\deploy.ps1
 ```
 
 **This will:**
@@ -95,7 +99,7 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 **To override .env values**, pass parameters:
 
 ```powershell
-.\deploy.ps1 -Location 'westeurope' -Profile 'm'
+.\infra\azure\scripts\deploy.ps1 -Location 'westeurope' -Profile 'm'
 ```
 
 ---
@@ -105,13 +109,13 @@ Validates that Azure CLI, Bicep, and PowerShell are installed.
 After a new version is released, update the container images without redeploying the entire infrastructure:
 
 ```powershell
-.\update-container-images.ps1  # Defaults to 'latest'
+.\infra\azure\scripts\update-container-images.ps1  # Defaults to 'latest'
 ```
 
 Or specify a specific version tag:
 
 ```powershell
-.\update-container-images.ps1 -ImageTag '<version>'  # e.g. 'v0.6.2'
+.\infra\azure\scripts\update-container-images.ps1 -ImageTag '<version>'  # e.g. '0.9.0-rc.1'
 ```
 
 **This will:**
@@ -122,7 +126,7 @@ Or specify a specific version tag:
 - Maintain full Bicep state tracking for future deployments
 
 > **💡 Deployment Note:** The script waits for deployment completion before returning. Typical runtime is **5–10 minutes**.
-> It also runs `repair-runtime-secrets.ps1` automatically after deployment to enforce DB/blob secret references.
+> Runtime secret wiring is managed by Bicep + Key Vault references.
 > Monitor progress (if needed) with:
 > ```powershell
 > az deployment group show --name main --resource-group <your-rg> --query "{State:properties.provisioningState, Duration:properties.duration}" -o table
@@ -131,13 +135,13 @@ Or specify a specific version tag:
 **Preview changes first:**
 
 ```powershell
-.\update-container-images.ps1 -ImageTag '<version>' -WhatIf  # e.g. 'v0.6.2'
+.\infra\azure\scripts\update-container-images.ps1 -ImageTag '<version>' -WhatIf  # e.g. '0.9.0-rc.1'
 ```
 
 **Update to latest without specifying tag:**
 
 ```powershell
-.\update-container-images.ps1  # Defaults to 'latest'
+.\infra\azure\scripts\update-container-images.ps1  # Defaults to 'latest'
 ```
 
 ### When to Use Each Script
@@ -245,48 +249,22 @@ az postgres flexible-server firewall-rule list --resource-group <rg-name> --name
 
 **Symptoms:** New revision unhealthy (Degraded), app returns 404 "Container App stopped" after image update.
 
-**Root cause:** Runtime secret wiring may have failed; new revision trying to start with broken placeholder values (`USE-KEYVAULT-REFERENCE`).
+**Most common causes:**
+- Incorrect image tag (image pull failure)
+- Missing Key Vault RBAC for managed identity
+- Missing/incorrect PostgreSQL password input for deployment parameters
 
-**Solution — Auto (Recommended):**
-```powershell
-# Rerun the update script, which automatically wires secrets
-.\update-container-images.ps1  # Defaults to 'latest'
-```
-
-**Solution — Manual (If script fails):**
-
-1. **Retrieve PostgreSQL password from safe file:**
+**Recommended recovery:**
+1. Re-run image update with the expected tag and explicit password input:
    ```powershell
-   $pgPassword = (Get-Content '.\.pg-password' -Raw).Trim()
+   .\infra\azure\scripts\update-container-images.ps1 -ImageTag '<expected-tag>'
    ```
-
-2. **Build connection strings with password:**
+2. Check active revision health and logs:
    ```powershell
-   $rg = '<your-resource-group>'
-   $env = '<environment-name>'  # e.g. 'mate-dev'
-   
-   $storage = az resource list --resource-group $rg --resource-type 'Microsoft.Storage/storageAccounts' --query '[0].name' -o tsv
-   $storageKey = az storage account keys list --resource-group $rg --account-name $storage --query '[0].value' -o tsv
-   
-   $dbConnectionString = "Host=$env-pg.postgres.database.azure.com;Database=mate;Username=pgadmin;Password=$pgPassword;SSL Mode=Require"
-   $blobConnectionString = "DefaultEndpointsProtocol=https;AccountName=$storage;AccountKey=$storageKey;EndpointSuffix=core.windows.net"
+   az containerapp revision list --resource-group <rg-name> --name <env>-webui -o table
+   az containerapp logs show --resource-group <rg-name> --name <env>-webui --type console --tail 120
    ```
-
-3. **Set runtime secrets on both container apps:**
-   ```powershell
-   foreach ($appName in @("$env-webui", "$env-worker")) {
-       az containerapp secret set --resource-group $rg --name $appName --secrets "postgres-conn=$dbConnectionString" "blob-conn=$blobConnectionString" -o none
-       az containerapp update --resource-group $rg --name $appName --set-env-vars "ConnectionStrings__Default=secretref:postgres-conn" "AzureInfrastructure__BlobConnectionString=secretref:blob-conn" -o none
-       Write-Host "Secrets configured on $appName"
-   }
-   ```
-
-4. **New revisions should start within 1–2 minutes:**
-   ```powershell
-   az containerapp revision list --resource-group $rg --name <env>-webui --query "[].{Name:name, Health:properties.healthState, Running:properties.runningState}" -o table
-   ```
-
-**Prevention:** Use `update-container-images.ps1` (does this automatically). Avoid manual image updates without running the secret wiring step.
+3. Verify Key Vault access and secret references are present on the container app revision.
 
 ## Environment Variables & Configuration
 
@@ -308,7 +286,7 @@ az postgres flexible-server firewall-rule list --resource-group <rg-name> --name
 To clean everything inside a resource group without deleting the resource group itself:
 
 ```powershell
-.\cleanup-rg.ps1 -ResourceGroupName <rg-name>
+.\infra\azure\scripts\cleanup-rg.ps1 -ResourceGroupName <rg-name>
 ```
 
 This script deletes live resources, removes deployment records, purges RG-scoped soft-deleted Key Vault entries, and verifies the RG is empty at the end.

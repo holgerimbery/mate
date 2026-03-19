@@ -96,6 +96,17 @@
                     }
                 </div>
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                    <span class="text-muted"><i class="bi bi-key me-1"></i>Secrets Mode</span>
+                    @if (_keyVaultMode)
+                    {
+                        <span class="badge badge-pass"><i class="bi bi-shield-lock me-1"></i>Key Vault</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-info"><i class="bi bi-database me-1"></i>Database</span>
+                    }
+                </div>
+                <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-shield-lock me-1"></i>Authentication</span>
                     @if (_authEnabled)
                     {
@@ -121,6 +132,20 @@
                         <span class="badge badge-neutral">False</span>
                     }
                 </div>
+                @if (_redmondMode)
+                {
+                    <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
+                        <span class="text-muted"><i class="bi bi-diagram-3 me-1"></i>Tenant ID</span>
+                        @if (string.IsNullOrWhiteSpace(_tenantIdDisplay))
+                        {
+                            <span class="badge badge-neutral">Not configured</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-info">@_tenantIdDisplay</span>
+                        }
+                    </div>
+                }
                 <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
                     <span class="text-muted"><i class="bi bi-gear me-1"></i>ASP.NET Env</span>
                     <span class="badge badge-purple">@HostEnv.EnvironmentName</span>
@@ -210,8 +235,10 @@
     private bool   _authEnabled;
     private string _authScheme     = "";
     private bool   _redmondMode;
+    private string _tenantIdDisplay = "";
     private string _databaseMode   = "Unknown";
     private bool   _forwardedHeaders;
+    private bool   _keyVaultMode;
 
     protected override void OnInitialized()
     {
@@ -226,6 +253,11 @@
         _authScheme  = Configuration["Authentication:Scheme"] ?? "None";
         _authEnabled = string.Equals(_authScheme, "EntraId", StringComparison.OrdinalIgnoreCase);
         _redmondMode = Configuration.GetValue<bool>("RedmondMode", false);
+        _tenantIdDisplay = Configuration["AzureContext:TenantId"]
+            ?? Configuration["AzureAd:TenantId"]
+            ?? Environment.GetEnvironmentVariable("AzureContext__TenantId")
+            ?? Environment.GetEnvironmentVariable("AzureAd__TenantId")
+            ?? string.Empty;
 
         var providerName = Db.Database.ProviderName ?? string.Empty;
         _databaseMode = providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase)
@@ -237,6 +269,19 @@
         _forwardedHeaders = string.Equals(
             Environment.GetEnvironmentVariable("ASPNETCORE_FORWARDEDHEADERS_ENABLED"), "true",
             StringComparison.OrdinalIgnoreCase);
+
+        var useKeyVaultForSecrets = Configuration.GetValue<bool>("AzureInfrastructure:UseKeyVaultForSecrets", false);
+        var useMultiVaultForSecrets = Configuration.GetValue<bool>("AzureInfrastructure:UseMultiVaultForSecrets", false);
+        var keyVaultUri = Configuration["AzureInfrastructure:KeyVaultUri"];
+        var platformVaultUri = Configuration["AzureInfrastructure:PlatformVaultUri"];
+        var tenantVaultUriTemplate = Configuration["AzureInfrastructure:TenantVaultUriTemplate"];
+
+        var hasSingleVaultConfig = !string.IsNullOrWhiteSpace(keyVaultUri);
+        var hasMultiVaultConfig = useMultiVaultForSecrets &&
+                                  !string.IsNullOrWhiteSpace(platformVaultUri) &&
+                                  !string.IsNullOrWhiteSpace(tenantVaultUriTemplate);
+
+        _keyVaultMode = useKeyVaultForSecrets && (hasSingleVaultConfig || hasMultiVaultConfig);
     }
 
     private static string NormalizeVersion(string? version)

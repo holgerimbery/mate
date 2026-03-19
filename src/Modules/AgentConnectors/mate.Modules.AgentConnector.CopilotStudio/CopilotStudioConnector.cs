@@ -23,6 +23,7 @@ namespace mate.Modules.AgentConnector.CopilotStudio;
 internal sealed class CopilotStudioConnector : IAgentConnector
 {
     private const string DirectLineEndpoint = "https://directline.botframework.com/v3/directline";
+    private const string CopilotStudioTokenEndpoint = "https://powerva.microsoft.com/api/botmanagement/v1/directline/directlinetoken";
     private const int MaxRetries = 2;
     private const int BackoffBaseSeconds = 4;
 
@@ -200,38 +201,77 @@ internal sealed class CopilotStudioConnector : IAgentConnector
 
     private async Task<string> GenerateConversationTokenAsync(CancellationToken ct)
     {
-        // Web Channel Security secret and Direct Line secret both use the same
-        // /tokens/generate endpoint — the difference is only which secret is passed.
+        var mode = _config.UseWebChannelSecret ? "WebChannel" : "DirectLine";
+        var refName = _config.UseWebChannelSecret
+            ? _config.WebChannelSecretRef
+            : _config.DirectLineSecretRef;
+
         var secret = _config.UseWebChannelSecret
             ? _config.WebChannelSecret
             : _config.DirectLineSecret;
 
-        var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{DirectLineEndpoint}/tokens/generate");
+        // Primary path: standard Direct Line token endpoint.
+        var (success, token, response, body, endpoint) = await TryGenerateTokenAsync(
+            $"{DirectLineEndpoint}/tokens/generate", secret, ct);
 
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
-
-        var response = await _http.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
+        // WebChannel fallback: Copilot Studio token endpoint that requires botId.
+        if (!success &&
+            _config.UseWebChannelSecret &&
+            (response.StatusCode == System.Net.HttpStatusCode.Unauthorized || response.StatusCode == System.Net.HttpStatusCode.Forbidden) &&
+            !string.IsNullOrWhiteSpace(_config.BotId))
         {
-            var body = await response.Content.ReadAsStringAsync(ct);
+            var fallbackUrl = $"{CopilotStudioTokenEndpoint}?botId={Uri.EscapeDataString(_config.BotId)}";
+            var fallback = await TryGenerateTokenAsync(fallbackUrl, secret, ct);
+            if (fallback.success)
+            {
+                _logger.LogInformation("Generated token via Copilot Studio endpoint fallback for bot '{BotId}'.", _config.BotId);
+                return fallback.token;
+            }
+
+            success = fallback.success;
+            token = fallback.token;
+            response = fallback.response;
+            body = fallback.body;
+            endpoint = fallback.endpoint;
+        }
+
+        if (!success)
+        {
             var detail = response.StatusCode switch
             {
                 System.Net.HttpStatusCode.Unauthorized => _config.UseWebChannelSecret
                     ? "Invalid or expired Web Channel Security secret. Verify it in Copilot Studio → Settings → Security → Web channel security."
                     : "Invalid or expired Direct Line secret.",
-                System.Net.HttpStatusCode.Forbidden => "Access denied — check bot ID and secret.",
+                System.Net.HttpStatusCode.Forbidden => "Access denied — check Bot ID and secret pair.",
                 _ => $"HTTP {(int)response.StatusCode}: {body}",
             };
-            throw new InvalidOperationException($"Failed to generate conversation token: {detail}");
+            throw new InvalidOperationException(
+                $"Failed to generate conversation token: {detail} " +
+                $"(mode={mode}, botId={_config.BotId}, secretRef={refName}, endpoint={endpoint})");
         }
 
-        var json  = await response.Content.ReadAsStringAsync(ct);
-        var token = JsonSerializer.Deserialize<DirectLineTokenResponse>(json, _jsonOptions);
+        return token;
+    }
 
-        return token?.Token
-            ?? throw new InvalidOperationException("Token endpoint returned no token.");
+    private async Task<(bool success, string token, HttpResponseMessage response, string body, string endpoint)> TryGenerateTokenAsync(
+        string endpoint,
+        string secret,
+        CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+
+        var response = await _http.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, string.Empty, response, body, endpoint);
+
+        var token = JsonSerializer.Deserialize<DirectLineTokenResponse>(body, _jsonOptions)?.Token;
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException($"Token endpoint '{endpoint}' returned no token.");
+
+        return (true, token, response, body, endpoint);
     }
 
     private HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string url)

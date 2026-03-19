@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "17009714941461450900"
+      "templateHash": "10422254768917794043"
     }
   },
   "parameters": {
@@ -93,25 +93,17 @@
         "description": "Service Bus queue activation threshold for worker scaling"
       }
     },
-    "deployPostgres": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "If true, create PostgreSQL resources. Keep false until secure admin values are provided."
-      }
-    },
     "postgresAdminLogin": {
       "type": "string",
-      "defaultValue": "",
+      "defaultValue": "pgadmin",
       "metadata": {
-        "description": "PostgreSQL admin login (required only when deployPostgres=true)"
+        "description": "PostgreSQL admin login"
       }
     },
     "postgresAdminPassword": {
       "type": "securestring",
-      "defaultValue": "",
       "metadata": {
-        "description": "PostgreSQL admin password (required only when deployPostgres=true)"
+        "description": "PostgreSQL admin password"
       }
     },
     "aadClientId": {
@@ -139,6 +131,48 @@
       "defaultValue": "test-runs",
       "metadata": {
         "description": "Service Bus queue name for test runs"
+      }
+    },
+    "brandingBrandName": {
+      "type": "string",
+      "defaultValue": "mate",
+      "metadata": {
+        "description": "Instance-wide brand name shown in UI and API metadata"
+      }
+    },
+    "brandingBrandTagline": {
+      "type": "string",
+      "defaultValue": "Multi-Agent Testing Environment - AI agent quality testing platform",
+      "metadata": {
+        "description": "Instance-wide brand tagline shown on the home page"
+      }
+    },
+    "brandingBrandCliDescription": {
+      "type": "string",
+      "defaultValue": "quality testing tool for conversational AI agents",
+      "metadata": {
+        "description": "CLI short description used in help text"
+      }
+    },
+    "brandingLogoUrl": {
+      "type": "string",
+      "defaultValue": "/mate-logo.png",
+      "metadata": {
+        "description": "Square logo URL/path (for favicon and compact sidebar)"
+      }
+    },
+    "brandingLogoWideUrl": {
+      "type": "string",
+      "defaultValue": "/mate-logo-wide.png",
+      "metadata": {
+        "description": "Wide logo URL/path (for expanded sidebar)"
+      }
+    },
+    "brandingApiKeyPrefix": {
+      "type": "string",
+      "defaultValue": "mate_",
+      "metadata": {
+        "description": "API key visible prefix (for example mate_)"
       }
     },
     "postgresDatabaseName": {
@@ -441,7 +475,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "17251467704421812372"
+              "templateHash": "8268934495177367100"
             }
           },
           "parameters": {
@@ -484,13 +518,16 @@
             "keyVaultId": {
               "type": "string",
               "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
             }
           }
         }
       }
     },
     {
-      "condition": "[parameters('deployPostgres')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('postgres-{0}', variables('env'))]",
@@ -523,7 +560,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "7628411096591491134"
+              "templateHash": "13779926914186495806"
             }
           },
           "parameters": {
@@ -545,7 +582,9 @@
             }
           },
           "variables": {
-            "serverName": "[take(format('{0}-pg', parameters('baseName')), 63)]",
+            "serverNameSuffix": "[take(uniqueString(subscription().subscriptionId, resourceGroup().name, parameters('baseName'), parameters('location')), 6)]",
+            "serverNameBase": "[take(format('{0}-pg', parameters('baseName')), 56)]",
+            "serverName": "[format('{0}-{1}', variables('serverNameBase'), variables('serverNameSuffix'))]",
             "dbName": "[parameters('databaseName')]"
           },
           "resources": [
@@ -599,6 +638,106 @@
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
+      "name": "[format('kvsecrets-{0}', variables('env'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "keyVaultName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', variables('env'))), '2025-04-01').outputs.keyVaultName.value]"
+          },
+          "storageAccountName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('storage-{0}', variables('env'))), '2025-04-01').outputs.accountName.value]"
+          },
+          "serviceBusNamespaceName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('servicebus-{0}', variables('env'))), '2025-04-01').outputs.namespaceName.value]"
+          },
+          "postgresServerName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('postgres-{0}', variables('env'))), '2025-04-01').outputs.serverName.value]"
+          },
+          "postgresDatabaseName": {
+            "value": "[parameters('postgresDatabaseName')]"
+          },
+          "postgresAdminLogin": {
+            "value": "[parameters('postgresAdminLogin')]"
+          },
+          "postgresAdminPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "17035822047631550751"
+            }
+          },
+          "parameters": {
+            "keyVaultName": {
+              "type": "string"
+            },
+            "storageAccountName": {
+              "type": "string"
+            },
+            "serviceBusNamespaceName": {
+              "type": "string"
+            },
+            "postgresServerName": {
+              "type": "string"
+            },
+            "postgresDatabaseName": {
+              "type": "string"
+            },
+            "postgresAdminLogin": {
+              "type": "string"
+            },
+            "postgresAdminPassword": {
+              "type": "securestring"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'blob-connection-string')]",
+              "properties": {
+                "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', parameters('storageAccountName'), listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value, environment().suffixes.storage)]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgres-connection-string')]",
+              "properties": {
+                "value": "[format('Host={0}.postgres.database.azure.com;Database={1};Username={2};Password={3};SSL Mode=Require', parameters('postgresServerName'), parameters('postgresDatabaseName'), parameters('postgresAdminLogin'), parameters('postgresAdminPassword'))]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'servicebus-connection-string')]",
+              "properties": {
+                "value": "[listKeys(resourceId('Microsoft.ServiceBus/namespaces/AuthorizationRules', parameters('serviceBusNamespaceName'), 'RootManageSharedAccessKey'), '2023-01-01-preview').primaryConnectionString]"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', variables('env')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('postgres-{0}', variables('env')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('servicebus-{0}', variables('env')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('storage-{0}', variables('env')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
       "name": "[format('aca-{0}', variables('env'))]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -629,6 +768,9 @@
           },
           "keyVaultName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', variables('env'))), '2025-04-01').outputs.keyVaultName.value]"
+          },
+          "keyVaultUri": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', variables('env'))), '2025-04-01').outputs.keyVaultUri.value]"
           },
           "aadClientId": {
             "value": "[parameters('aadClientId')]"
@@ -663,13 +805,23 @@
           "queueActivationThreshold": {
             "value": "[parameters('queueActivationThreshold')]"
           },
-          "postgresServerName": "[if(parameters('deployPostgres'), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('postgres-{0}', variables('env'))), '2025-04-01').outputs.serverName.value), createObject('value', ''))]",
-          "postgresDatabaseName": "[if(parameters('deployPostgres'), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('postgres-{0}', variables('env'))), '2025-04-01').outputs.databaseName.value), createObject('value', ''))]",
-          "postgresAdminLogin": {
-            "value": "[parameters('postgresAdminLogin')]"
+          "brandingBrandName": {
+            "value": "[parameters('brandingBrandName')]"
           },
-          "postgresEnabled": {
-            "value": "[parameters('deployPostgres')]"
+          "brandingBrandTagline": {
+            "value": "[parameters('brandingBrandTagline')]"
+          },
+          "brandingBrandCliDescription": {
+            "value": "[parameters('brandingBrandCliDescription')]"
+          },
+          "brandingLogoUrl": {
+            "value": "[parameters('brandingLogoUrl')]"
+          },
+          "brandingLogoWideUrl": {
+            "value": "[parameters('brandingLogoWideUrl')]"
+          },
+          "brandingApiKeyPrefix": {
+            "value": "[parameters('brandingApiKeyPrefix')]"
           }
         },
         "template": {
@@ -679,7 +831,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "9142176545377805943"
+              "templateHash": "17762863880946979038"
             }
           },
           "parameters": {
@@ -705,6 +857,9 @@
               "type": "string"
             },
             "keyVaultName": {
+              "type": "string"
+            },
+            "keyVaultUri": {
               "type": "string"
             },
             "aadClientId": {
@@ -740,28 +895,31 @@
             "queueActivationThreshold": {
               "type": "int"
             },
-            "postgresServerName": {
-              "type": "string",
-              "defaultValue": ""
+            "brandingBrandName": {
+              "type": "string"
             },
-            "postgresDatabaseName": {
-              "type": "string",
-              "defaultValue": ""
+            "brandingBrandTagline": {
+              "type": "string"
             },
-            "postgresAdminLogin": {
-              "type": "string",
-              "defaultValue": ""
+            "brandingBrandCliDescription": {
+              "type": "string"
             },
-            "postgresEnabled": {
-              "type": "bool",
-              "defaultValue": false
+            "brandingLogoUrl": {
+              "type": "string"
+            },
+            "brandingLogoWideUrl": {
+              "type": "string"
+            },
+            "brandingApiKeyPrefix": {
+              "type": "string"
             }
           },
           "variables": {
             "caeName": "[take(format('{0}-cae', parameters('baseName')), 32)]",
             "webAppName": "[take(format('{0}-webui', parameters('baseName')), 32)]",
             "workerAppName": "[take(format('{0}-worker', parameters('baseName')), 32)]",
-            "ghcrBase": "ghcr.io/holgerimbery"
+            "ghcrBase": "ghcr.io/holgerimbery",
+            "keyVaultSecretsUserRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]"
           },
           "resources": [
             {
@@ -792,6 +950,34 @@
               "location": "[parameters('location')]"
             },
             {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'KeyVaultSecretsUser', take(format('{0}-web-mi', parameters('baseName')), 128))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128)), '2023-01-31').principalId]",
+                "roleDefinitionId": "[variables('keyVaultSecretsUserRoleDefinitionId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'KeyVaultSecretsUser', take(format('{0}-worker-mi', parameters('baseName')), 128))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128)), '2023-01-31').principalId]",
+                "roleDefinitionId": "[variables('keyVaultSecretsUserRoleDefinitionId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128))]"
+              ]
+            },
+            {
               "type": "Microsoft.App/containerApps",
               "apiVersion": "2024-03-01",
               "name": "[variables('webAppName')]",
@@ -815,7 +1001,17 @@
                     {
                       "name": "azuread-client-secret",
                       "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128))]",
-                      "keyVaultUrl": "[format('https://{0}{1}/secrets/azuread-client-secret', parameters('keyVaultName'), environment().suffixes.keyvaultDns)]"
+                      "keyVaultUrl": "[format('{0}secrets/azuread-client-secret', parameters('keyVaultUri'))]"
+                    },
+                    {
+                      "name": "blob-connection-string",
+                      "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128))]",
+                      "keyVaultUrl": "[format('{0}secrets/blob-connection-string', parameters('keyVaultUri'))]"
+                    },
+                    {
+                      "name": "postgres-connection-string",
+                      "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128))]",
+                      "keyVaultUrl": "[format('{0}secrets/postgres-connection-string', parameters('keyVaultUri'))]"
                     }
                   ]
                 },
@@ -874,6 +1070,30 @@
                           "value": "ApplicationInsights"
                         },
                         {
+                          "name": "Branding__BrandName",
+                          "value": "[parameters('brandingBrandName')]"
+                        },
+                        {
+                          "name": "Branding__BrandTagline",
+                          "value": "[parameters('brandingBrandTagline')]"
+                        },
+                        {
+                          "name": "Branding__BrandCliDescription",
+                          "value": "[parameters('brandingBrandCliDescription')]"
+                        },
+                        {
+                          "name": "Branding__LogoUrl",
+                          "value": "[parameters('brandingLogoUrl')]"
+                        },
+                        {
+                          "name": "Branding__LogoWideUrl",
+                          "value": "[parameters('brandingLogoWideUrl')]"
+                        },
+                        {
+                          "name": "Branding__ApiKeyPrefix",
+                          "value": "[parameters('brandingApiKeyPrefix')]"
+                        },
+                        {
                           "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
                           "value": "[parameters('appInsightsConnectionString')]"
                         },
@@ -882,16 +1102,32 @@
                           "value": "Azure"
                         },
                         {
+                          "name": "AzureInfrastructure__UseKeyVaultForSecrets",
+                          "value": "true"
+                        },
+                        {
+                          "name": "AzureInfrastructure__KeyVaultUri",
+                          "value": "[parameters('keyVaultUri')]"
+                        },
+                        {
+                          "name": "AZURE_CLIENT_ID",
+                          "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128)), '2023-01-31').clientId]"
+                        },
+                        {
+                          "name": "RedmondMode",
+                          "value": "false"
+                        },
+                        {
                           "name": "AzureInfrastructure__BlobContainerName",
                           "value": "mate-blobs"
                         },
                         {
                           "name": "AzureInfrastructure__BlobConnectionString",
-                          "value": "USE-KEYVAULT-REFERENCE"
+                          "secretRef": "blob-connection-string"
                         },
                         {
                           "name": "ConnectionStrings__Default",
-                          "value": "[if(parameters('postgresEnabled'), format('Host={0}.postgres.database.azure.com;Database={1};Username={2};Password=USE-KEYVAULT-REFERENCE;SSL Mode=Require', parameters('postgresServerName'), parameters('postgresDatabaseName'), parameters('postgresAdminLogin')), '')]"
+                          "secretRef": "postgres-connection-string"
                         }
                       ]
                     }
@@ -904,7 +1140,8 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.App/managedEnvironments', variables('caeName'))]",
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128))]"
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-web-mi', parameters('baseName')), 128))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'KeyVaultSecretsUser', take(format('{0}-web-mi', parameters('baseName')), 128)))]"
               ]
             },
             {
@@ -934,7 +1171,24 @@
               "properties": {
                 "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('caeName'))]",
                 "configuration": {
-                  "activeRevisionsMode": "Single"
+                  "activeRevisionsMode": "Single",
+                  "secrets": [
+                    {
+                      "name": "blob-connection-string",
+                      "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128))]",
+                      "keyVaultUrl": "[format('{0}secrets/blob-connection-string', parameters('keyVaultUri'))]"
+                    },
+                    {
+                      "name": "postgres-connection-string",
+                      "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128))]",
+                      "keyVaultUrl": "[format('{0}secrets/postgres-connection-string', parameters('keyVaultUri'))]"
+                    },
+                    {
+                      "name": "servicebus-connection-string",
+                      "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128))]",
+                      "keyVaultUrl": "[format('{0}secrets/servicebus-connection-string', parameters('keyVaultUri'))]"
+                    }
+                  ]
                 },
                 "template": {
                   "containers": [
@@ -955,16 +1209,32 @@
                           "value": "Azure"
                         },
                         {
+                          "name": "AzureInfrastructure__UseKeyVaultForSecrets",
+                          "value": "true"
+                        },
+                        {
+                          "name": "AzureInfrastructure__KeyVaultUri",
+                          "value": "[parameters('keyVaultUri')]"
+                        },
+                        {
+                          "name": "AZURE_CLIENT_ID",
+                          "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128)), '2023-01-31').clientId]"
+                        },
+                        {
+                          "name": "RedmondMode",
+                          "value": "false"
+                        },
+                        {
                           "name": "AzureInfrastructure__BlobContainerName",
                           "value": "mate-blobs"
                         },
                         {
                           "name": "AzureInfrastructure__BlobConnectionString",
-                          "value": "USE-KEYVAULT-REFERENCE"
+                          "secretRef": "blob-connection-string"
                         },
                         {
                           "name": "ConnectionStrings__Default",
-                          "value": "[if(parameters('postgresEnabled'), format('Host={0}.postgres.database.azure.com;Database={1};Username={2};Password=USE-KEYVAULT-REFERENCE;SSL Mode=Require', parameters('postgresServerName'), parameters('postgresDatabaseName'), parameters('postgresAdminLogin')), '')]"
+                          "secretRef": "postgres-connection-string"
                         }
                       ]
                     }
@@ -984,7 +1254,7 @@
                           },
                           "auth": [
                             {
-                              "secretRef": "todo-servicebus-connection",
+                              "secretRef": "servicebus-connection-string",
                               "triggerParameter": "connection"
                             }
                           ]
@@ -996,7 +1266,8 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.App/managedEnvironments', variables('caeName'))]",
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128))]"
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', take(format('{0}-worker-mi', parameters('baseName')), 128))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), 'KeyVaultSecretsUser', take(format('{0}-worker-mi', parameters('baseName')), 128)))]"
               ]
             }
           ],
@@ -1022,8 +1293,8 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', variables('env')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('kvsecrets-{0}', variables('env')))]",
         "[resourceId('Microsoft.Resources/deployments', format('monitoring-{0}', variables('env')))]",
-        "[resourceId('Microsoft.Resources/deployments', format('postgres-{0}', variables('env')))]",
         "[resourceId('Microsoft.Resources/deployments', format('servicebus-{0}', variables('env')))]"
       ]
     }
@@ -1040,6 +1311,10 @@
     "keyVaultName": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', variables('env'))), '2025-04-01').outputs.keyVaultName.value]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', variables('env'))), '2025-04-01').outputs.keyVaultUri.value]"
     },
     "serviceBusNamespace": {
       "type": "string",
