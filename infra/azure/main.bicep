@@ -36,15 +36,12 @@ param workerMemory string = '1Gi'
 @description('Service Bus queue activation threshold for worker scaling')
 param queueActivationThreshold int = 1
 
-@description('If true, create PostgreSQL resources. Keep false until secure admin values are provided.')
-param deployPostgres bool = false
-
-@description('PostgreSQL admin login (required only when deployPostgres=true)')
-param postgresAdminLogin string = ''
+@description('PostgreSQL admin login')
+param postgresAdminLogin string = 'pgadmin'
 
 @secure()
-@description('PostgreSQL admin password (required only when deployPostgres=true)')
-param postgresAdminPassword string = ''
+@description('PostgreSQL admin password')
+param postgresAdminPassword string
 
 @description('Entra ID application (client) ID for WebUI Easy Auth authentication')
 param aadClientId string
@@ -116,7 +113,7 @@ module keyVault './modules/keyvault.bicep' = {
   }
 }
 
-module postgres './modules/postgres.bicep' = if (deployPostgres) {
+module postgres './modules/postgres.bicep' = {
   name: 'postgres-${env}'
   params: {
     location: location
@@ -127,8 +124,23 @@ module postgres './modules/postgres.bicep' = if (deployPostgres) {
   }
 }
 
+// ─── Key Vault secrets populated before Container Apps deploy ────────────────
+module kvSecrets './modules/keyvault-secrets.bicep' = {
+  name: 'kvsecrets-${env}'
+  params: {
+    keyVaultName: keyVault.outputs.keyVaultName
+    storageAccountName: storage.outputs.accountName
+    serviceBusNamespaceName: serviceBus.outputs.namespaceName
+    postgresServerName: postgres.outputs.serverName
+    postgresDatabaseName: postgresDatabaseName
+    postgresAdminLogin: postgresAdminLogin
+    postgresAdminPassword: postgresAdminPassword
+  }
+}
+
 module containerApps './modules/container-apps.bicep' = {
   name: 'aca-${env}'
+  dependsOn: [kvSecrets]
   params: {
     location: location
     baseName: baseName
@@ -138,6 +150,7 @@ module containerApps './modules/container-apps.bicep' = {
     serviceBusNamespaceName: serviceBus.outputs.namespaceName
     queueName: serviceBus.outputs.queueName
     keyVaultName: keyVault.outputs.keyVaultName
+    keyVaultUri: keyVault.outputs.keyVaultUri
     aadClientId: aadClientId
     aadTenantId: aadTenantId
     workerMinReplicas: workerMinReplicas
@@ -155,15 +168,12 @@ module containerApps './modules/container-apps.bicep' = {
     brandingLogoUrl: brandingLogoUrl
     brandingLogoWideUrl: brandingLogoWideUrl
     brandingApiKeyPrefix: brandingApiKeyPrefix
-    postgresServerName: deployPostgres ? postgres!.outputs.serverName : ''
-    postgresDatabaseName: deployPostgres ? postgres!.outputs.databaseName : ''
-    postgresAdminLogin: postgresAdminLogin
-    postgresEnabled: deployPostgres
   }
 }
 
 output containerAppEnvironmentName string = containerApps.outputs.containerAppEnvironmentName
 output webUiUrl string = containerApps.outputs.webUiUrl
 output keyVaultName string = keyVault.outputs.keyVaultName
+output keyVaultUri string = keyVault.outputs.keyVaultUri
 output serviceBusNamespace string = serviceBus.outputs.namespaceName
 output storageAccountName string = storage.outputs.accountName

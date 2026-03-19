@@ -251,6 +251,177 @@ function Wait-ForProvisioningPostgres {
     }
 }
 
+function Test-PostgresLocationOffer {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetLocation
+    )
+
+    Write-Host "Checking PostgreSQL offer availability for location '$TargetLocation'..." -ForegroundColor Cyan
+
+    $skuOutput = az postgres flexible-server list-skus --location $TargetLocation --output json --only-show-errors
+    if ($LASTEXITCODE -ne 0) {
+        $errorText = ($skuOutput | Out-String).Trim()
+        Write-Error "Failed to verify PostgreSQL offer availability for location '$TargetLocation'. Azure CLI output: $errorText"
+    }
+
+    try {
+        $skuData = @($skuOutput | ConvertFrom-Json)
+    }
+    catch {
+        Write-Error "Failed to parse PostgreSQL SKU response for location '$TargetLocation'. Raw response: $($skuOutput | Out-String)"
+    }
+
+    if ($skuData.Count -eq 0) {
+        Write-Error "PostgreSQL SKU API returned no data for location '$TargetLocation'. Cannot continue safely."
+    }
+
+    $capabilities = $skuData | Where-Object { $_.name -eq 'FlexibleServerCapabilities' } | Select-Object -First 1
+    if (-not $capabilities) {
+        Write-Error "PostgreSQL capabilities response is missing for location '$TargetLocation'. Cannot continue safely."
+    }
+
+    $offerRestrictedFlag = $null
+    if ($capabilities.supportedFeatures) {
+        $offerFeature = @($capabilities.supportedFeatures | Where-Object { $_.name -eq 'OfferRestricted' } | Select-Object -First 1)
+        if ($offerFeature.Count -gt 0) {
+            $offerRestrictedFlag = [string]$offerFeature[0].status
+        }
+    }
+
+    $restrictionReason = [string]$capabilities.reason
+    if ($offerRestrictedFlag -eq 'Enabled' -or ($restrictionReason -and $restrictionReason -match 'restricted')) {
+        Write-Host "PostgreSQL offer check failed for location '$TargetLocation'." -ForegroundColor Red
+        if ($restrictionReason) {
+            Write-Host "  Provider reason: $restrictionReason" -ForegroundColor DarkYellow
+        }
+        Write-Error "Location '$TargetLocation' is restricted for this subscription's PostgreSQL offer. Choose another region (for example: northeurope)."
+    }
+
+    Write-Host "  PostgreSQL offer is available in '$TargetLocation'." -ForegroundColor Green
+}
+
+function Get-DeletedVaultByName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$VaultName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetSubscriptionId
+    )
+
+    $deletedOutput = az keyvault list-deleted --subscription $TargetSubscriptionId --output json --only-show-errors
+    if ($LASTEXITCODE -ne 0) {
+        return $null
+    }
+
+    try {
+        $deletedVaults = @($deletedOutput | ConvertFrom-Json)
+        return ($deletedVaults | Where-Object { $_.name -eq $VaultName } | Select-Object -First 1)
+    }
+    catch {
+        return $null
+    }
+}
+
+function Wait-ForDeletedVaultGone {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$VaultName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetSubscriptionId,
+
+        [Parameter(Mandatory = $false)]
+        [int]$TimeoutMinutes = 12,
+
+        [Parameter(Mandatory = $false)]
+        [int]$PollSeconds = 10
+    )
+
+    $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+    while ($true) {
+        $deletedVault = Get-DeletedVaultByName -VaultName $VaultName -TargetSubscriptionId $TargetSubscriptionId
+        if (-not $deletedVault) {
+            return
+        }
+
+        $remaining = [math]::Max(0, [int](($deadline - (Get-Date)).TotalSeconds))
+        if ((Get-Date) -ge $deadline) {
+            Write-Error "Key Vault '$VaultName' is still in soft-delete state after waiting $TimeoutMinutes minutes. Try again later or purge manually."
+        }
+
+        Write-Host "Waiting for Key Vault name '$VaultName' to become reusable... ($remaining s remaining)" -ForegroundColor Yellow
+        Start-Sleep -Seconds $PollSeconds
+    }
+}
+
+function Ensure-KeyVaultNameReusable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$VaultName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetSubscriptionId
+    )
+
+    $deletedVault = Get-DeletedVaultByName -VaultName $VaultName -TargetSubscriptionId $TargetSubscriptionId
+    if (-not $deletedVault) {
+        return
+    }
+
+    Write-Host "Detected soft-deleted Key Vault '$VaultName'. Starting purge..." -ForegroundColor Yellow
+    az keyvault purge --name $VaultName --subscription $TargetSubscriptionId --no-wait --only-show-errors 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Could not start purge automatically. Verifying whether purge is already in progress..."
+    }
+
+    Wait-ForDeletedVaultGone -VaultName $VaultName -TargetSubscriptionId $TargetSubscriptionId
+    Write-Host "  ✓ Soft-deleted Key Vault '$VaultName' has been purged." -ForegroundColor Green
+}
+
+function Test-PostgresLocationConflict {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TargetResourceGroup,
+
+        [Parameter(Mandatory = $true)]
+        [string]$BaseName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TargetLocation
+    )
+
+    $rgExists = az group exists --name $TargetResourceGroup --only-show-errors
+    if ($rgExists -ne 'true') {
+        return
+    }
+
+    $postgresServerName = "$BaseName-pg"
+    $existingLocation = az postgres flexible-server list --resource-group $TargetResourceGroup --query "[?name=='$postgresServerName'].location | [0]" -o tsv --only-show-errors
+    if ($LASTEXITCODE -ne 0 -or -not $existingLocation) {
+        return
+    }
+
+    if ($existingLocation.ToLowerInvariant() -ne $TargetLocation.ToLowerInvariant()) {
+        Write-Error "Detected existing PostgreSQL server '$postgresServerName' in location '$existingLocation' within resource group '$TargetResourceGroup', but current deployment location is '$TargetLocation'. Delete the existing server or use the same location before rerunning deployment."
+    }
+
+    Write-Host "  PostgreSQL location check passed for existing server '$postgresServerName'." -ForegroundColor Green
+}
+
+# Set subscription / tenant context before sensitive prompts and preflight checks
+az account set --subscription $SubscriptionId --only-show-errors
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to set Azure subscription context. Run: az login --tenant $TenantId"
+}
+
+# Fast-fail check for subscription-level PostgreSQL offer restrictions
+Test-PostgresLocationOffer -TargetLocation $Location
+
+# Fast-fail check for cross-location name conflicts on existing PostgreSQL server
+Test-PostgresLocationConflict -TargetResourceGroup $ResourceGroupName -BaseName $EnvironmentName -TargetLocation $Location
+
 # Prompt for secure inputs
 Write-Host "SECURITY: Prompting for sensitive inputs..." -ForegroundColor Cyan
 $pgPasswordFile = Join-Path $scriptDir '.pg-password'
@@ -279,7 +450,6 @@ $deploymentParams = @{
     'aadClientId'           = $AadClientId
     'postgresAdminLogin'    = 'pgadmin'
     'postgresAdminPassword' = $postgresPasswordPlain
-    'deployPostgres'        = $true
 }
 
 Write-Host "Prerequisites check:" -ForegroundColor Cyan
@@ -303,6 +473,89 @@ Write-Host "4. Deploy infrastructure" -ForegroundColor Magenta
 Write-Host ""
 
 Write-Host "Executing deployment..." -ForegroundColor Cyan
+
+# Phase 0: Pre-provision Key Vault and seed secrets before Bicep runs
+Write-Host ""
+Write-Host "Phase 0: Pre-provisioning Key Vault..." -ForegroundColor Cyan
+$kvName = "$EnvironmentName-kv"
+
+# Create resource group early (KV needs it)
+$rgExists = az group exists --name $ResourceGroupName --only-show-errors
+if ($rgExists -ne 'true') {
+    Write-Host "Creating resource group '$ResourceGroupName' in '$Location'..." -ForegroundColor Gray
+    az group create --name $ResourceGroupName --location $Location --only-show-errors | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Error "Failed to create resource group '$ResourceGroupName'." }
+}
+
+# Create Key Vault if it does not exist
+$kvCount = az keyvault list --resource-group $ResourceGroupName --query "[?name=='$kvName'] | length(@)" -o tsv 2>$null
+if ($kvCount -ne '1') {
+    Ensure-KeyVaultNameReusable -VaultName $kvName -TargetSubscriptionId $SubscriptionId
+
+    Write-Host "Creating Key Vault '$kvName'..." -ForegroundColor Gray
+    $kvCreateOutput = az keyvault create --name $kvName --resource-group $ResourceGroupName --location $Location --enable-rbac-authorization --output none 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $createError = ($kvCreateOutput | Out-String)
+        if ($createError -match 'VaultAlreadyExists') {
+            Write-Host "Key Vault create hit VaultAlreadyExists. Re-checking soft-delete state and retrying once..." -ForegroundColor Yellow
+            Ensure-KeyVaultNameReusable -VaultName $kvName -TargetSubscriptionId $SubscriptionId
+            $kvCreateOutput = az keyvault create --name $kvName --resource-group $ResourceGroupName --location $Location --enable-rbac-authorization --output none 2>&1
+        }
+    }
+    if ($LASTEXITCODE -ne 0) { Write-Error "Failed to create Key Vault '$kvName'. Check name availability and permissions. Azure CLI output: $($kvCreateOutput | Out-String)" }
+    Write-Host "  ✓ Key Vault created." -ForegroundColor Green
+} else {
+    Write-Host "  ✓ Key Vault already exists: $kvName" -ForegroundColor Green
+}
+
+# Get Key Vault resource ID
+$kvId = az keyvault show --name $kvName --resource-group $ResourceGroupName --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or -not $kvId) { Write-Error "Failed to resolve Key Vault resource ID for '$kvName'." }
+
+# Assign Key Vault Secrets Officer to current caller (idempotent)
+Write-Host "Ensuring Key Vault Secrets Officer role for current caller..." -ForegroundColor Gray
+$callerOid = az ad signed-in-user show --query id -o tsv 2>$null
+if ($LASTEXITCODE -ne 0 -or -not $callerOid) {
+    $callerOid = az account show --query 'user.name' -o tsv 2>$null
+}
+if ($callerOid) {
+    $roleCount = az role assignment list --assignee-object-id $callerOid --scope $kvId --query "[?roleDefinitionName=='Key Vault Secrets Officer'] | length(@)" -o tsv 2>$null
+    if ($roleCount -ne '1') {
+        az role assignment create --role 'Key Vault Secrets Officer' --assignee-object-id $callerOid --scope $kvId --output none 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  ✓ Key Vault Secrets Officer assigned. Waiting 20s for RBAC propagation..." -ForegroundColor Green
+            Start-Sleep -Seconds 20
+        } else {
+            Write-Warning "RBAC assignment failed — you may need to assign 'Key Vault Secrets Officer' manually on '$kvName'."
+        }
+    } else {
+        Write-Host "  ✓ RBAC role already present." -ForegroundColor Green
+    }
+} else {
+    Write-Warning "Could not determine current caller OID — skipping RBAC assignment."
+}
+
+# Store azuread-client-secret in Key Vault
+$credentialsFile = Join-Path $scriptDir '.credentials'
+if (-not (Test-Path $credentialsFile)) {
+    Write-Error ".credentials file not found at $credentialsFile. Run: .\setup-env.ps1"
+}
+$creds = Get-Content $credentialsFile | ConvertFrom-Json
+$aadClientSecret = $creds.AAD_CLIENT_SECRET
+if (-not $aadClientSecret) {
+    Write-Error "AAD_CLIENT_SECRET missing in .credentials file. Run: .\setup-env.ps1"
+}
+Write-Host "Storing azuread-client-secret in Key Vault..." -ForegroundColor Gray
+az keyvault secret set --vault-name $kvName --name 'azuread-client-secret' --value $aadClientSecret --output none
+if ($LASTEXITCODE -ne 0) { Write-Error "Failed to store azuread-client-secret in Key Vault." }
+Write-Host "  ✓ azuread-client-secret stored." -ForegroundColor Green
+
+# Store postgres admin password in Key Vault (used by Bicep to construct connection string)
+Write-Host "Storing postgres-admin-password in Key Vault..." -ForegroundColor Gray
+az keyvault secret set --vault-name $kvName --name 'postgres-admin-password' --value $postgresPasswordPlain --output none
+if ($LASTEXITCODE -ne 0) { Write-Warning "Failed to store postgres-admin-password in Key Vault. Continuing..." }
+else { Write-Host "  ✓ postgres-admin-password stored." -ForegroundColor Green }
+Write-Host ""
 
 # 1) Validate template
 az bicep build --file $mainTemplate --only-show-errors
@@ -580,17 +833,25 @@ if ($LASTEXITCODE -eq 0) {
 $deploymentEndTime = Get-Date
 $totalDuration = ($deploymentEndTime - $deploymentStartTime).TotalSeconds
 
-# Post-deployment: ensure Container Apps use a real PostgreSQL connection string secret
-if ($deploymentParams['deployPostgres'] -eq $true -and $postgresPasswordPlain) {
-    Write-Host "Ensuring PostgreSQL connectivity for Azure-hosted Container Apps..." -ForegroundColor Gray
-
-    $postgresServerName = "$EnvironmentName-pg"
-    $publicNetworkAccess = az postgres flexible-server show `
+# Post-deployment: ensure PostgreSQL allows Azure services (firewall rule)
+if ($postgresPasswordPlain) {
+    $postgresServerName = az postgres flexible-server list `
         --resource-group $ResourceGroupName `
-        --name $postgresServerName `
-        --query 'network.publicNetworkAccess' -o tsv 2>$null
+        --query "[?starts_with(name, '$EnvironmentName-pg')].name | [0]" -o tsv 2>$null
 
-    if ($LASTEXITCODE -eq 0 -and $publicNetworkAccess -eq 'Enabled') {
+    if (-not $postgresServerName) {
+        Write-Host "Could not resolve PostgreSQL server name for prefix '$EnvironmentName-pg'; skipping firewall auto-configuration." -ForegroundColor Yellow
+    }
+
+    Write-Host "Ensuring PostgreSQL firewall allows Azure services..." -ForegroundColor Gray
+    if ($postgresServerName) {
+        $publicNetworkAccess = az postgres flexible-server show `
+            --resource-group $ResourceGroupName `
+            --name $postgresServerName `
+            --query 'network.publicNetworkAccess' -o tsv 2>$null
+    }
+
+    if ($postgresServerName -and $LASTEXITCODE -eq 0 -and $publicNetworkAccess -eq 'Enabled') {
         $allowAzureRuleCount = az postgres flexible-server firewall-rule list `
             --resource-group $ResourceGroupName `
             --name $postgresServerName `
@@ -617,84 +878,9 @@ if ($deploymentParams['deployPostgres'] -eq $true -and $postgresPasswordPlain) {
             Write-Host "  PostgreSQL firewall already allows Azure services." -ForegroundColor Gray
         }
     }
-    elseif ($LASTEXITCODE -eq 0) {
+    elseif ($postgresServerName -and $LASTEXITCODE -eq 0) {
         Write-Host "  PostgreSQL public network access is disabled; expecting private networking configuration." -ForegroundColor Gray
     }
-
-    Write-Host "Configuring Container Apps runtime secret references..." -ForegroundColor Gray
-
-    $dbConnectionString = "Host=$EnvironmentName-pg.postgres.database.azure.com;Database=mate;Username=pgadmin;Password=$postgresPasswordPlain;SSL Mode=Require"
-
-    $storageAccountName = az resource list `
-        --resource-group $ResourceGroupName `
-        --resource-type 'Microsoft.Storage/storageAccounts' `
-        --query "[0].name" -o tsv 2>$null
-
-    $blobConnectionString = $null
-    if ($LASTEXITCODE -eq 0 -and $storageAccountName) {
-        $storageKey = az storage account keys list `
-            --resource-group $ResourceGroupName `
-            --account-name $storageAccountName `
-            --query "[0].value" -o tsv 2>$null
-
-        if ($LASTEXITCODE -eq 0 -and $storageKey) {
-            $blobConnectionString = "DefaultEndpointsProtocol=https;AccountName=$storageAccountName;AccountKey=$storageKey;EndpointSuffix=core.windows.net"
-        }
-        else {
-            Write-Host "  Could not resolve storage account key automatically; blob runtime secret will not be updated." -ForegroundColor Yellow
-        }
-    }
-    else {
-        Write-Host "  No storage account found in resource group; blob runtime secret will not be updated." -ForegroundColor Yellow
-    }
-
-    $containerApps = @("$EnvironmentName-webui", "$EnvironmentName-worker")
-
-    foreach ($appName in $containerApps) {
-        $appId = az containerapp show --resource-group $ResourceGroupName --name $appName --query id -o tsv 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $appId) {
-            Write-Host "  Skipping '$appName' (not found in RG)." -ForegroundColor DarkYellow
-            continue
-        }
-
-        $secrets = @("postgres-conn=$dbConnectionString")
-        if ($blobConnectionString) {
-            $secrets += "blob-conn=$blobConnectionString"
-        }
-
-        az containerapp secret set `
-            --resource-group $ResourceGroupName `
-            --name $appName `
-            --secrets $secrets `
-            -o none 2>$null
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  Failed to set runtime secrets on '$appName'." -ForegroundColor Yellow
-            continue
-        }
-
-        $envUpdates = @("ConnectionStrings__Default=secretref:postgres-conn")
-        if ($blobConnectionString) {
-            $envUpdates += "AzureInfrastructure__BlobConnectionString=secretref:blob-conn"
-        }
-        $envUpdates += "RedmondMode=false"
-
-        az containerapp update `
-            --resource-group $ResourceGroupName `
-            --name $appName `
-            --set-env-vars $envUpdates `
-            -o none 2>$null
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  Failed to update runtime env on '$appName'." -ForegroundColor Yellow
-            continue
-        }
-
-        Write-Host "  Configured runtime secret references on '$appName'." -ForegroundColor Green
-    }
-
-    Write-Host "Container App runtime secret configuration completed." -ForegroundColor Gray
-    Write-Host ""
 }
 
 Write-Host ""
@@ -703,5 +889,6 @@ Write-Host "✓ Deployment completed successfully" -ForegroundColor Green
 Write-Host "  Duration: $('{0:mm\:ss}' -f [timespan]::FromSeconds($totalDuration))" -ForegroundColor Green
 Write-Host "═" * 60 -ForegroundColor Green
 Write-Host ""
-Write-Host "Key Vault secret bootstrap and retry are handled automatically when .credentials is available." -ForegroundColor Gray
+Write-Host "Key Vault secrets (blob, postgres, servicebus) were populated by the Bicep deployment." -ForegroundColor Gray
+Write-Host "Managed identity RBAC is assigned inline. Container Apps reference all secrets from Key Vault." -ForegroundColor Gray
 Write-Host ""

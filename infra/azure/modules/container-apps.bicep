@@ -6,6 +6,7 @@ param appInsightsConnectionString string
 param serviceBusNamespaceName string
 param queueName string
 param keyVaultName string
+param keyVaultUri string
 param aadClientId string
 param aadTenantId string
 param workerMinReplicas int
@@ -23,15 +24,15 @@ param brandingBrandCliDescription string
 param brandingLogoUrl string
 param brandingLogoWideUrl string
 param brandingApiKeyPrefix string
-param postgresServerName string = ''
-param postgresDatabaseName string = ''
-param postgresAdminLogin string = ''
-param postgresEnabled bool = false
-
 var caeName = take('${baseName}-cae', 32)
 var webAppName = take('${baseName}-webui', 32)
 var workerAppName = take('${baseName}-worker', 32)
 var ghcrBase = 'ghcr.io/holgerimbery'
+var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: keyVaultName
+}
 
 resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: caeName
@@ -57,9 +58,32 @@ resource workerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-0
   location: location
 }
 
+resource webIdentityKvRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, 'KeyVaultSecretsUser', webIdentity.name)
+  scope: keyVault
+  properties: {
+    principalId: webIdentity.properties.principalId
+    roleDefinitionId: keyVaultSecretsUserRoleDefinitionId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource workerIdentityKvRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, 'KeyVaultSecretsUser', workerIdentity.name)
+  scope: keyVault
+  properties: {
+    principalId: workerIdentity.properties.principalId
+    roleDefinitionId: keyVaultSecretsUserRoleDefinitionId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: webAppName
   location: location
+  dependsOn: [
+    webIdentityKvRole
+  ]
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -79,7 +103,17 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'azuread-client-secret'
           identity: webIdentity.id
-          keyVaultUrl: 'https://${keyVaultName}${environment().suffixes.keyvaultDns}/secrets/azuread-client-secret'
+          keyVaultUrl: '${keyVaultUri}secrets/azuread-client-secret'
+        }
+        {
+          name: 'blob-connection-string'
+          identity: webIdentity.id
+          keyVaultUrl: '${keyVaultUri}secrets/blob-connection-string'
+        }
+        {
+          name: 'postgres-connection-string'
+          identity: webIdentity.id
+          keyVaultUrl: '${keyVaultUri}secrets/postgres-connection-string'
         }
       ]
     }
@@ -179,11 +213,11 @@ resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'AzureInfrastructure__BlobConnectionString'
-              value: 'USE-KEYVAULT-REFERENCE'
+              secretRef: 'blob-connection-string'
             }
             {
               name: 'ConnectionStrings__Default'
-              value: postgresEnabled ? 'Host=${postgresServerName}.postgres.database.azure.com;Database=${postgresDatabaseName};Username=${postgresAdminLogin};Password=USE-KEYVAULT-REFERENCE;SSL Mode=Require' : ''
+              secretRef: 'postgres-connection-string'
             }
           ]
         }
@@ -209,6 +243,9 @@ resource webAppAuthConfig 'Microsoft.App/containerApps/authConfigs@2024-03-01' =
 resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: workerAppName
   location: location
+  dependsOn: [
+    workerIdentityKvRole
+  ]
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -219,6 +256,23 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
     environmentId: cae.id
     configuration: {
       activeRevisionsMode: 'Single'
+      secrets: [
+        {
+          name: 'blob-connection-string'
+          identity: workerIdentity.id
+          keyVaultUrl: '${keyVaultUri}secrets/blob-connection-string'
+        }
+        {
+          name: 'postgres-connection-string'
+          identity: workerIdentity.id
+          keyVaultUrl: '${keyVaultUri}secrets/postgres-connection-string'
+        }
+        {
+          name: 'servicebus-connection-string'
+          identity: workerIdentity.id
+          keyVaultUrl: '${keyVaultUri}secrets/servicebus-connection-string'
+        }
+      ]
     }
     template: {
       containers: [
@@ -248,11 +302,11 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'AzureInfrastructure__BlobConnectionString'
-              value: 'USE-KEYVAULT-REFERENCE'
+              secretRef: 'blob-connection-string'
             }
             {
               name: 'ConnectionStrings__Default'
-              value: postgresEnabled ? 'Host=${postgresServerName}.postgres.database.azure.com;Database=${postgresDatabaseName};Username=${postgresAdminLogin};Password=USE-KEYVAULT-REFERENCE;SSL Mode=Require' : ''
+              secretRef: 'postgres-connection-string'
             }
           ]
         }
@@ -272,7 +326,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
               }
               auth: [
                 {
-                  secretRef: 'todo-servicebus-connection'
+                  secretRef: 'servicebus-connection-string'
                   triggerParameter: 'connection'
                 }
               ]
