@@ -400,11 +400,36 @@ public sealed class TestExecutionService
             if (!configNode.TryGetPropertyValue(field.Key, out var node) || node is null) continue;
             var refName = node.GetValue<string>();
             if (string.IsNullOrWhiteSpace(refName)) continue;
-            var resolvedValue = await TryGetSecretAsync(refName, ct, allowRawFallback: _allowRawSecretFallback);
+            string? resolvedValue;
+            try
+            {
+                resolvedValue = await TryGetSecretAsync(refName, ct, allowRawFallback: _allowRawSecretFallback);
+            }
+            catch (InvalidOperationException) when (!_allowRawSecretFallback && !LooksLikeManagedSecretReference(refName))
+            {
+                // Backward compatibility: some connector configs store a raw secret value
+                // directly in *SecretRef fields. Keep strict key-vault behavior for
+                // managed refs, but allow direct-value fallback for non-ref values.
+                _logger.LogWarning(
+                    "Connector secret value for field '{FieldKey}' is not a resolvable key-vault reference. Falling back to direct value for compatibility.",
+                    field.Key);
+                resolvedValue = refName;
+            }
             if (!string.IsNullOrWhiteSpace(resolvedValue))
                 resolved[refName] = resolvedValue;
         }
         return resolved;
+    }
+
+    private static bool LooksLikeManagedSecretReference(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        var trimmed = value.Trim();
+        return trimmed.StartsWith("agent_", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("judge_", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("qgen_", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("conn_", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string?> TryGetSecretAsync(string secretRef, CancellationToken ct, bool allowRawFallback)
