@@ -47,7 +47,7 @@ Issue-level execution is tracked in GitHub Projects.
 - E7-E9: connector and evaluation extensibility with API management.
 - E10-E11: operational reliability, health, and observability.
 - E14-E19: security, scale, plugin architecture, and red-team capabilities.
-- E20-E25: completed milestones and current deployment hardening stream.
+- E20-E25: completed milestones and current deployment hardening stream, including Azure Key Vault secret bootstrap and private GHCR pull authentication flow for enterprise images.
 
 ---
 

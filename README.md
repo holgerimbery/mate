@@ -99,6 +99,11 @@ pwsh ./setup-keyvault-secrets.ps1   # Configure secrets & RBAC
 
 See [quickstart-azure/README.md](quickstart-azure/README.md) for full deployment guide, troubleshooting, architecture details, and cost estimates.
 
+Enterprise note:
+- Enterprise images are published as private GHCR packages (`ghcr.io/holgerimbery/mate-enterprise-webui` and `ghcr.io/holgerimbery/mate-enterprise-worker`).
+- Enterprise Azure setup/deploy bootstraps GHCR pull auth via `setup-env.ps1` + `deploy.ps1` (username + PAT stored in Key Vault).
+- See `enterprise/mate-enterprise/docs/wiki/Developer-Build-Pipeline` for the full enterprise runbook.
+
 > **Prerequisites:** Azure CLI, PowerShell 7+, Bicep CLI. Estimated deployment time: 3–5 minutes.
 
 ### Option C — Build from source
