@@ -27,6 +27,7 @@ COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.Generic/mate.Modules.Monit
 COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.OpenTelemetry/mate.Modules.Monitoring.OpenTelemetry.csproj",         "src/Modules/Monitoring/mate.Modules.Monitoring.OpenTelemetry/"]
 COPY ["src/Modules/Monitoring/mate.Modules.Monitoring.ApplicationInsights/mate.Modules.Monitoring.ApplicationInsights.csproj", "src/Modules/Monitoring/mate.Modules.Monitoring.ApplicationInsights/"]
 COPY ["src/Host/mate.WebUI/mate.WebUI.csproj",                                                               "src/Host/mate.WebUI/"]
+COPY ["enterprise/mate-enterprise/src/Host/mate.Enterprise.WebUI/mate.Enterprise.WebUI.csproj",            "enterprise/mate-enterprise/src/Host/mate.Enterprise.WebUI/"]
 
 RUN dotnet restore "src/Host/mate.WebUI/mate.WebUI.csproj"
 

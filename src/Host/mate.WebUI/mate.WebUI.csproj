@@ -46,4 +46,10 @@
     <ProjectReference Include="..\..\Modules\Monitoring\mate.Modules.Monitoring.ApplicationInsights\mate.Modules.Monitoring.ApplicationInsights.csproj" />
     <ProjectReference Include="..\..\Modules\RedTeaming\mate.Modules.RedTeaming.Generic\mate.Modules.RedTeaming.Generic.csproj" />
   </ItemGroup>
+
+  <!-- Enterprise integration hook: absent in core-only builds, present in enterprise builds -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\enterprise\mate-enterprise\src\Host\mate.Enterprise.WebUI\mate.Enterprise.WebUI.csproj"
+                      Condition="Exists('..\..\..\enterprise\mate-enterprise\src\Host\mate.Enterprise.WebUI\mate.Enterprise.WebUI.csproj')" />
+  </ItemGroup>
 </Project>

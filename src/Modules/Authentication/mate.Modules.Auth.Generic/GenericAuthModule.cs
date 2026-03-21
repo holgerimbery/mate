@@ -36,6 +36,13 @@ public sealed class GenericAuthModule : IAuthModule
     public void ConfigureAuthorization(AuthorizationOptions options, IConfiguration config)
     {
         options.FallbackPolicy = null; // Allow everything in dev mode
+
+        // Keep policy names available in development so guarded routes can be exercised locally.
+        options.AddPolicy("AnyAuthenticated", p => p.RequireAuthenticatedUser());
+        options.AddPolicy("SuperAdminOnly",   p => p.RequireRole("SuperAdmin"));
+        options.AddPolicy("AdminOnly",        p => p.RequireRole("SuperAdmin", "TenantAdmin"));
+        options.AddPolicy("TesterOrAbove",    p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester"));
+        options.AddPolicy("ViewerOrAbove",    p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester", "Viewer"));
     }
 
     public Task<ClaimsPrincipal> TransformClaimsAsync(ClaimsPrincipal external)

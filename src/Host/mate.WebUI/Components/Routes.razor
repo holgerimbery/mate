@@ -1,6 +1,24 @@
 @using Microsoft.AspNetCore.Components.Routing
+@using System.Reflection
 
-<Router AppAssembly="@typeof(App).Assembly">
+@code {
+    // Explicitly load enterprise RCL when present so route discovery works in enterprise builds.
+    private static readonly IReadOnlyList<Assembly> _additionalAssemblies = ResolveAdditionalAssemblies();
+
+    private static IReadOnlyList<Assembly> ResolveAdditionalAssemblies()
+    {
+        try
+        {
+            return [Assembly.Load("mate.Enterprise.WebUI")];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+}
+
+<Router AppAssembly="@typeof(App).Assembly" AdditionalAssemblies="@_additionalAssemblies">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />

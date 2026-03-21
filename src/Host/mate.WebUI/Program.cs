@@ -3,6 +3,7 @@
 // Commercial use of this file, in whole or in part, is prohibited without prior written permission.
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -35,6 +36,7 @@ using mate.Modules.Testing.ModelQGen;
 using mate.Modules.Testing.RubricsJudge;
 using mate.Modules.RedTeaming.Generic;
 using mate.WebUI.Api;
+using mate.Enterprise.WebUI;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -122,6 +124,8 @@ try
 
     // ── Authentication ───────────────────────────────────────────────────────
     var redmondMode = config.GetValue<bool>("RedmondMode", false);
+    builder.Services.AddSingleton(new EnterpriseModeState(redmondMode));
+
     var authScheme = config["Authentication:Scheme"] ?? "EntraId";
     // "None" is treated as development bypass auth and should use the Generic handler.
     var resolvedAuthScheme = authScheme is "None" ? "Generic" : authScheme;
@@ -350,6 +354,16 @@ try
     var api = authScheme is not "Generic" and not "None"
         ? app.MapGroup("/api").RequireAuthorization("AnyAuthenticated")
         : app.MapGroup("/api");
+
+    // Enterprise admin guard wiring (no feature payload yet).
+    // Actual enterprise routes are registered by enterprise modules using the same guarded group.
+    var enterpriseAdmin = app.MapEnterpriseAdminGroup();
+    enterpriseAdmin.MapGet("/_guard", (EnterpriseModeState state) =>
+            Results.Ok(new { enterpriseMode = state.Enabled, scope = "SuperAdminOnly" }))
+        .WithName("EnterpriseAdminGuardProbe")
+        .WithTags("Admin")
+        .WithSummary("Enterprise admin guard probe")
+        .WithDescription("Validates enterprise-only + SuperAdmin guard composition. Returns 404 when enterprise mode is disabled and 403 for non-SuperAdmin users.");
 
     // Agents
     api.MapGet("/agents", async (mateDbContext db) =>
@@ -1024,8 +1038,19 @@ try
         .WithDescription("Replaces the current database with the provided backup file. **Destructive — all existing data will be overwritten.** Send a `multipart/form-data` request with a `file` field containing a file previously downloaded via `GET /api/admin/backup`.")
         .AllowAnonymous();
 
-    app.MapRazorComponents<mate.WebUI.Components.App>()
-       .AddInteractiveServerRenderMode();
+    var razorComponents = app.MapRazorComponents<mate.WebUI.Components.App>()
+        .AddInteractiveServerRenderMode();
+
+    // For first-request routing, the server endpoint map must include enterprise component assemblies.
+    try
+    {
+        var enterpriseAssembly = Assembly.Load("mate.Enterprise.WebUI");
+        razorComponents.AddAdditionalAssemblies(enterpriseAssembly);
+    }
+    catch
+    {
+        // Core-only build: enterprise assembly intentionally not present.
+    }
 
     app.Run();
     return 0;

@@ -89,6 +89,7 @@ public sealed class EntraIdAuthModule : IAuthModule, IClaimsTransformation
     {
         // No FallbackPolicy — each page declares [Authorize] individually.
         options.AddPolicy("AnyAuthenticated", p => p.RequireAuthenticatedUser());
+        options.AddPolicy("SuperAdminOnly",   p => p.RequireRole("SuperAdmin"));
         options.AddPolicy("AdminOnly",        p => p.RequireRole("SuperAdmin", "TenantAdmin"));
         options.AddPolicy("TesterOrAbove",    p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester"));
         options.AddPolicy("ViewerOrAbove",    p => p.RequireRole("SuperAdmin", "TenantAdmin", "Tester", "Viewer"));
