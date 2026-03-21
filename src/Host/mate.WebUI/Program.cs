@@ -125,6 +125,7 @@ try
     // ── Authentication ───────────────────────────────────────────────────────
     var redmondMode = config.GetValue<bool>("RedmondMode", false);
     builder.Services.AddSingleton(new EnterpriseModeState(redmondMode));
+    builder.Services.AddEnterpriseTenantStatus();
 
     var authScheme = config["Authentication:Scheme"] ?? "EntraId";
     // "None" is treated as development bypass auth and should use the Generic handler.
@@ -364,6 +365,7 @@ try
         .WithTags("Admin")
         .WithSummary("Enterprise admin guard probe")
         .WithDescription("Validates enterprise-only + SuperAdmin guard composition. Returns 404 when enterprise mode is disabled and 403 for non-SuperAdmin users.");
+    enterpriseAdmin.MapEnterpriseTenantStatusEndpoints();
 
     // Agents
     api.MapGet("/agents", async (mateDbContext db) =>
